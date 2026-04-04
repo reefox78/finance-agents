@@ -33,38 +33,39 @@ def macro_en_multiplicateur(score_macro: float) -> float:
     else:                     return 0.75
 
 
-def calculer_score(tech: dict, fund: dict, sent: dict, risk: dict,
-                   trends: dict = None, insider: dict = None,
-                   macro: dict = None) -> dict:
+def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
+                   risk: dict = None, trends: dict = None,
+                   insider: dict = None, macro: dict = None) -> dict:
     """
     Calcule le score pondéré global.
-    Utilise les scores continus des agents si disponibles.
+    Tous les agents sauf 'tech' et 'risk' sont optionnels (None = ignoré).
+    Les poids sont renormalisés automatiquement selon les agents actifs.
     """
-    s_tech     = tech.get("score_final",    signal_en_score(tech["signal"]))
-    s_fund     = fund.get("score_final",    signal_en_score(fund["signal"]))
-    s_sent     = signal_en_score(sent["signal"])
-    s_trends   = trends.get("score_final",  0.0) if trends  else 0.0
-    s_insider  = insider.get("score_final", 0.0) if insider else 0.0
-    s_macro    = macro.get("score_final",   0.0) if macro   else 0.0
-    mult_risk  = risk.get("multiplicateur", 1.0)
+    s_tech    = tech.get("score_final",    signal_en_score(tech["signal"]))
+    s_fund    = fund.get("score_final",    signal_en_score(fund["signal"])) if fund    else 0.0
+    s_sent    = signal_en_score(sent["signal"])                              if sent    else 0.0
+    s_trends  = trends.get("score_final",  0.0)                             if trends  else 0.0
+    s_insider = insider.get("score_final", 0.0)                             if insider else 0.0
+    s_macro   = macro.get("score_final",   0.0)                             if macro   else 0.0
+    mult_risk  = risk.get("multiplicateur", 1.0) if risk else 1.0
     mult_macro = macro_en_multiplicateur(s_macro) if macro else 1.0
 
     poids_actifs = (
         POIDS["technique"] +
-        POIDS["fondamental"] +
-        POIDS["sentiment"] +
-        (POIDS["trends"]  if trends  else 0) +
-        (POIDS["insider"] if insider else 0) +
-        (POIDS["macro"]   if macro   else 0)
+        (POIDS["fondamental"] if fund    else 0) +
+        (POIDS["sentiment"]   if sent    else 0) +
+        (POIDS["trends"]      if trends  else 0) +
+        (POIDS["insider"]     if insider else 0) +
+        (POIDS["macro"]       if macro   else 0)
     )
 
     score_brut = (
         s_tech    * POIDS["technique"] +
-        s_fund    * POIDS["fondamental"] +
-        s_sent    * POIDS["sentiment"] +
-        s_trends  * (POIDS["trends"]  if trends  else 0) +
-        s_insider * (POIDS["insider"] if insider else 0) +
-        s_macro   * (POIDS["macro"]   if macro   else 0)
+        s_fund    * (POIDS["fondamental"] if fund    else 0) +
+        s_sent    * (POIDS["sentiment"]   if sent    else 0) +
+        s_trends  * (POIDS["trends"]      if trends  else 0) +
+        s_insider * (POIDS["insider"]     if insider else 0) +
+        s_macro   * (POIDS["macro"]       if macro   else 0)
     ) / poids_actifs
 
     score_final = round(score_brut * mult_risk * mult_macro, 4)
