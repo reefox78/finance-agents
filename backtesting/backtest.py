@@ -421,10 +421,12 @@ def run_backtest(
     rendement    = round((valeur_fin - valeur_debut) / valeur_debut * 100, 2)
     trades       = results[0].analyzers.trades.get_analysis()
 
+    # Force le backend non-interactif pour éviter la fenêtre popup
+    plt.switch_backend("Agg")
     fig    = cerebro.plot(style="candlestick", iplot=False)[0][0]
     chemin = f"output/backtest_{ticker}.png"
-    fig.savefig(chemin)
-    plt.close(fig)
+    fig.savefig(chemin, dpi=120, bbox_inches="tight")
+    plt.close("all")
 
     equity          = [{"date": debut, "valeur": capital}]
     valeur_courante = capital

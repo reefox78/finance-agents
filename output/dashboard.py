@@ -411,6 +411,25 @@ with tab_backtest:
             )
             st.plotly_chart(fig_eq, use_container_width=True)
 
+        # --- Graphique Backtrader ---
+        graphique = bt_result.get("graphique")
+        if graphique and os.path.exists(graphique):
+            st.markdown("**Graphique Backtrader**")
+            with st.expander("Légende du graphique", expanded=False):
+                st.markdown("""
+| Élément | Signification |
+|---------|--------------|
+| 🔼 Triangle vert | Signal d'**achat** exécuté |
+| 🔽 Triangle rouge | Signal de **vente** exécuté |
+| 🔵 Point bleu | Trade **gagnant** |
+| 🔴 Point rouge | Trade **perdant** |
+| Ligne rouge (haut) | Valeur du **portefeuille** |
+| Bandes vertes | **Bollinger Bands** |
+| RSI | Oscille entre 0-100. < 30 = survendu, > 70 = suracheté |
+| MACD | Croisement ligne rouge/bleue = signal de tendance |
+                """)
+            st.image(graphique, use_container_width=True)
+
         if bt_result["trades"]:
             st.markdown("**Détail des trades**")
             df_trades = pd.DataFrame(bt_result["trades"])
