@@ -63,221 +63,205 @@ with tab_analyse:
     if not lancer:
         st.info("Entre un ticker dans la sidebar et clique sur **Analyser**.\n\n"
                 "Exemples : `AAPL` (US), `MC.PA` (Paris), `BTC-USD` (crypto), `EURUSD=X` (forex)")
-        st.stop()
 
-    asset_type = detect_asset_type(ticker)
+    if lancer:
+        asset_type = detect_asset_type(ticker)
 
-    # --- Analyse complète ---
-    with st.spinner(f"Analyse de {ticker} en cours..."):
-        resultat = run(ticker, with_llm=True)
+        # --- Analyse complète ---
+        with st.spinner(f"Analyse de {ticker} en cours..."):
+            resultat = run(ticker, with_llm=True)
 
-    tech    = resultat["tech"]
-    fund    = resultat["fund"]
-    sent    = resultat["sent"]
-    risk    = resultat["risk"]
-    trends  = resultat["trends"]
-    insider = resultat["insider"]
-    macro   = resultat["macro"]
-    scoring = resultat["scoring"]
+        tech    = resultat["tech"]
+        fund    = resultat["fund"]
+        sent    = resultat["sent"]
+        risk    = resultat["risk"]
+        trends  = resultat["trends"]
+        insider = resultat["insider"]
+        macro   = resultat["macro"]
+        scoring = resultat["scoring"]
 
-    # --- Header ---
-    try:
-        info = get_stock_info(ticker)
-        nom  = info.get("nom", ticker)
-        cap  = info.get("capitalisation", 0)
-        cap_str = f"{cap/1e9:.0f} Md$" if cap else "N/A"
-    except Exception:
-        nom, cap_str = ticker, "N/A"
+        # --- Header ---
+        try:
+            info = get_stock_info(ticker)
+            nom  = info.get("nom", ticker)
+            cap  = info.get("capitalisation", 0)
+            cap_str = f"{cap/1e9:.0f} Md$" if cap else "N/A"
+        except Exception:
+            info, nom, cap_str = {}, ticker, "N/A"
 
-    asset_labels = {
-        "us_stock": "🇺🇸 Action US",
-        "eu_stock":  "🇪🇺 Action EU",
-        "crypto":    "₿ Crypto",
-        "forex":     "💱 Forex",
-    }
+        asset_labels = {
+            "us_stock": "🇺🇸 Action US",
+            "eu_stock":  "🇪🇺 Action EU",
+            "crypto":    "₿ Crypto",
+            "forex":     "💱 Forex",
+        }
 
-    st.subheader(f"{nom} — {ticker}")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Prix actuel",  f"{tech['prix_actuel']}")
-    c2.metric("Type d'actif", asset_labels.get(asset_type, asset_type))
-    c3.metric("Capitalisation", cap_str)
-    if fund:
-        c4.metric("PER", f"{fund['per']}")
-    else:
-        c4.metric("Secteur", info.get("secteur", "N/A") if 'info' in dir() else "N/A")
-
-    st.divider()
-
-    # --- Contexte macro ---
-    if macro:
-        st.subheader("Contexte macroéconomique")
-        env   = macro["environnement"]
-        icone = _icone_signal(macro["signal"])
-
-        if macro.get("market") == "eu":
-            m1, m2, m3, m4, m5 = st.columns(5)
-            m1.metric("Taux BCE",    f"{macro.get('taux_bce', 'N/A')} %")
-            m2.metric("Chômage EU",  f"{macro.get('chomage', 'N/A')} %")
-            m3.metric("Confiance",   f"{macro.get('confiance', 'N/A')}")
-            m4.metric("Taux 10 ans", f"{macro.get('taux_10y', 'N/A')} %")
-            m5.metric("Environnement", f"{icone} {env}")
+        st.subheader(f"{nom} — {ticker}")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Prix actuel",  f"{tech['prix_actuel']}")
+        c2.metric("Type d'actif", asset_labels.get(asset_type, asset_type))
+        c3.metric("Capitalisation", cap_str)
+        if fund:
+            c4.metric("PER", f"{fund['per']}")
         else:
-            m1, m2, m3, m4, m5 = st.columns(5)
-            m1.metric("Taux Fed",    f"{macro.get('taux_fed', 'N/A')} %")
-            m2.metric("Chômage US",  f"{macro.get('chomage', 'N/A')} %")
-            m3.metric("Confiance",   f"{macro.get('confiance', 'N/A')}")
-            m4.metric("Spread 10/2", f"{macro.get('spread_10_2', 'N/A')}")
-            m5.metric("Environnement", f"{icone} {env}")
+            c4.metric("Secteur", info.get("secteur", "N/A"))
 
         st.divider()
 
-    # --- Graphique prix (uniquement pour les actifs avec OHLCV) ---
-    try:
-        df = get_stock_data(ticker, period=period)
-        if not df.empty:
-            st.subheader("Historique des prix")
+        # --- Contexte macro ---
+        if macro:
+            st.subheader("Contexte macroéconomique")
+            env   = macro["environnement"]
+            icone = _icone_signal(macro["signal"])
 
-            fig = go.Figure()
-            fig.add_trace(go.Candlestick(
-                x=df.index, open=df["Open"], high=df["High"],
-                low=df["Low"], close=df["Close"], name="Prix"
-            ))
+            if macro.get("market") == "eu":
+                m1, m2, m3, m4, m5 = st.columns(5)
+                m1.metric("Taux BCE",    f"{macro.get('taux_bce', 'N/A')} %")
+                m2.metric("Chômage EU",  f"{macro.get('chomage', 'N/A')} %")
+                m3.metric("Confiance",   f"{macro.get('confiance', 'N/A')}")
+                m4.metric("Taux 10 ans", f"{macro.get('taux_10y', 'N/A')} %")
+                m5.metric("Environnement", f"{icone} {env}")
+            else:
+                m1, m2, m3, m4, m5 = st.columns(5)
+                m1.metric("Taux Fed",    f"{macro.get('taux_fed', 'N/A')} %")
+                m2.metric("Chômage US",  f"{macro.get('chomage', 'N/A')} %")
+                m3.metric("Confiance",   f"{macro.get('confiance', 'N/A')}")
+                m4.metric("Spread 10/2", f"{macro.get('spread_10_2', 'N/A')}")
+                m5.metric("Environnement", f"{icone} {env}")
 
-            sma20    = SMAIndicator(df["Close"], window=20).sma_indicator()
-            sma50    = SMAIndicator(df["Close"], window=50).sma_indicator()
-            bb_ind   = BollingerBands(df["Close"], window=20, window_dev=2)
-
-            fig.add_trace(go.Scatter(x=df.index, y=sma20, name="SMA 20",
-                                     line=dict(color="orange", width=1.5)))
-            fig.add_trace(go.Scatter(x=df.index, y=sma50, name="SMA 50",
-                                     line=dict(color="blue", width=1.5)))
-            fig.add_trace(go.Scatter(x=df.index, y=bb_ind.bollinger_hband(),
-                                     name="BB Haute",
-                                     line=dict(color="rgba(150,150,150,0.6)", width=1, dash="dash")))
-            fig.add_trace(go.Scatter(x=df.index, y=bb_ind.bollinger_lband(),
-                                     name="BB Basse",
-                                     line=dict(color="rgba(150,150,150,0.6)", width=1, dash="dash"),
-                                     fill="tonexty", fillcolor="rgba(150,150,150,0.05)"))
-
-            fig.update_layout(xaxis_rangeslider_visible=False, height=450,
-                              margin=dict(l=0, r=0, t=0, b=0))
-            st.plotly_chart(fig, use_container_width=True)
             st.divider()
-    except Exception:
-        pass
 
-    # --- Signaux des agents ---
-    st.subheader("Signaux des agents")
+        # --- Graphique prix ---
+        try:
+            df = get_stock_data(ticker, period=period)
+            if not df.empty:
+                st.subheader("Historique des prix")
+                fig = go.Figure()
+                fig.add_trace(go.Candlestick(
+                    x=df.index, open=df["Open"], high=df["High"],
+                    low=df["Low"], close=df["Close"], name="Prix"
+                ))
+                sma20  = SMAIndicator(df["Close"], window=20).sma_indicator()
+                sma50  = SMAIndicator(df["Close"], window=50).sma_indicator()
+                bb_ind = BollingerBands(df["Close"], window=20, window_dev=2)
+                fig.add_trace(go.Scatter(x=df.index, y=sma20, name="SMA 20",
+                                         line=dict(color="orange", width=1.5)))
+                fig.add_trace(go.Scatter(x=df.index, y=sma50, name="SMA 50",
+                                         line=dict(color="blue", width=1.5)))
+                fig.add_trace(go.Scatter(x=df.index, y=bb_ind.bollinger_hband(),
+                                         name="BB Haute",
+                                         line=dict(color="rgba(150,150,150,0.6)", width=1, dash="dash")))
+                fig.add_trace(go.Scatter(x=df.index, y=bb_ind.bollinger_lband(),
+                                         name="BB Basse",
+                                         line=dict(color="rgba(150,150,150,0.6)", width=1, dash="dash"),
+                                         fill="tonexty", fillcolor="rgba(150,150,150,0.05)"))
+                fig.update_layout(xaxis_rangeslider_visible=False, height=450,
+                                  margin=dict(l=0, r=0, t=0, b=0))
+                st.plotly_chart(fig, use_container_width=True)
+                st.divider()
+        except Exception:
+            pass
 
-    agents_affiches = []
+        # --- Signaux des agents ---
+        st.subheader("Signaux des agents")
+        agents_affiches = []
+        agents_affiches.append(("Technique", tech["signal"],
+                                 f"RSI : {tech['rsi']} | MACD : {tech['macd']}",
+                                 f"Score : {tech.get('score_final', 'N/A')}"))
+        if fund:
+            agents_affiches.append(("Fondamental", fund["signal"],
+                                     f"PER : {fund['per']} | Div : {fund['dividende']}",
+                                     f"Score : {fund.get('score_final', 'N/A')}"))
+        if sent:
+            agents_affiches.append(("Sentiment", sent["signal"],
+                                     f"+{sent['positif']} / -{sent['negatif']} / ~{sent['neutre']}",
+                                     f"{sent['articles']} articles analysés"))
+        agents_affiches.append(("Risque", risk["risque"],
+                                 f"Vol : {risk['volatilite']}% | DD : {risk['drawdown_max']}%",
+                                 f"Score : {risk.get('score_final', 'N/A')}"))
+        if trends:
+            agents_affiches.append(("Trends", trends["signal"],
+                                     f"Tendance : {trends['tendance']}",
+                                     f"Variation : {trends['variation']}%"))
+        if insider:
+            agents_affiches.append(("Insider", insider["signal"],
+                                     f"Achats : {insider['nb_achats']} | Ventes : {insider['nb_ventes']}",
+                                     f"Ratio : {insider['ratio']}"))
+        if macro:
+            agents_affiches.append(("Macro", macro["signal"],
+                                     f"Environnement : {macro['environnement']}",
+                                     f"Score : {macro.get('score_final', 'N/A')}"))
 
-    agents_affiches.append(("Technique", tech["signal"],
-                             f"RSI : {tech['rsi']} | MACD : {tech['macd']}",
-                             f"Score : {tech.get('score_final', 'N/A')}"))
+        cols = st.columns(len(agents_affiches))
+        for col, (nom_agent, signal, ligne1, ligne2) in zip(cols, agents_affiches):
+            icone = _icone_signal(signal) if nom_agent != "Risque" else _icone_risque(signal)
+            with col:
+                st.metric(nom_agent, f"{icone} {signal}")
+                st.caption(ligne1)
+                st.caption(ligne2)
 
-    if fund:
-        agents_affiches.append(("Fondamental", fund["signal"],
-                                 f"PER : {fund['per']} | Div : {fund['dividende']}",
-                                 f"Score : {fund.get('score_final', 'N/A')}"))
-
-    if sent:
-        agents_affiches.append(("Sentiment", sent["signal"],
-                                 f"+{sent['positif']} / -{sent['negatif']} / ~{sent['neutre']}",
-                                 f"{sent['articles']} articles analysés"))
-
-    agents_affiches.append(("Risque", risk["risque"],
-                             f"Vol : {risk['volatilite']}% | DD : {risk['drawdown_max']}%",
-                             f"Score : {risk.get('score_final', 'N/A')}"))
-
-    if trends:
-        agents_affiches.append(("Trends", trends["signal"],
-                                 f"Tendance : {trends['tendance']}",
-                                 f"Variation : {trends['variation']}%"))
-
-    if insider:
-        agents_affiches.append(("Insider", insider["signal"],
-                                 f"Achats : {insider['nb_achats']} | Ventes : {insider['nb_ventes']}",
-                                 f"Ratio : {insider['ratio']}"))
-
-    if macro:
-        agents_affiches.append(("Macro", macro["signal"],
-                                 f"Environnement : {macro['environnement']}",
-                                 f"Score : {macro.get('score_final', 'N/A')}"))
-
-    cols = st.columns(len(agents_affiches))
-    for col, (nom_agent, signal, ligne1, ligne2) in zip(cols, agents_affiches):
-        icone = _icone_signal(signal) if nom_agent != "Risque" else _icone_risque(signal)
-        with col:
-            st.metric(nom_agent, f"{icone} {signal}")
-            st.caption(ligne1)
-            st.caption(ligne2)
-
-    st.divider()
-
-    # --- Score pondéré ---
-    st.subheader("Score pondéré final")
-
-    decision = scoring["decision"]
-    score    = scoring["score_final"]
-    couleur  = "green" if decision == "ACHETER" else ("red" if decision == "VENDRE" else "normal")
-
-    sc1, sc2, sc3, sc4 = st.columns(4)
-    sc1.metric("Score final",  f"{score} / 1.0")
-    sc2.metric("Décision",     f"{_icone_signal(decision)} {decision}")
-    sc3.metric("Mult risque",  scoring["scores"]["multiplicateur"])
-    sc4.metric("Mult macro",   scoring["scores"]["mult_macro"])
-
-    # Barre de score visuelle
-    fig_score = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=score,
-        gauge={
-            "axis": {"range": [-1, 1]},
-            "bar":  {"color": "#2ecc71" if score > 0.1 else ("#e74c3c" if score < -0.1 else "#f39c12")},
-            "steps": [
-                {"range": [-1, -0.1],  "color": "rgba(231,76,60,0.15)"},
-                {"range": [-0.1, 0.1], "color": "rgba(243,156,18,0.15)"},
-                {"range": [0.1, 1],    "color": "rgba(46,204,113,0.15)"},
-            ],
-            "threshold": {"line": {"color": "black", "width": 2}, "value": score}
-        },
-        number={"suffix": " / 1.0", "font": {"size": 28}},
-    ))
-    fig_score.update_layout(height=200, margin=dict(l=20, r=20, t=20, b=0))
-    st.plotly_chart(fig_score, use_container_width=True)
-
-    st.divider()
-
-    # --- Rapport LLM ---
-    st.subheader("Rapport de décision (IA)")
-    if resultat["rapport"]:
-        st.markdown(resultat["rapport"])
-    else:
-        st.info("Rapport non généré (mode rapide).")
-
-    st.divider()
-
-    # --- Insider transactions ---
-    if insider and insider.get("transactions"):
-        st.subheader("Transactions des dirigeants")
-        df_insider = pd.DataFrame(insider["transactions"])
-        df_insider["type"] = df_insider["type"].apply(
-            lambda x: "🟢 ACHAT" if x == "ACHAT" else "🔴 VENTE"
-        )
-        st.dataframe(df_insider, use_container_width=True)
         st.divider()
 
-    # --- News ---
-    st.subheader("Dernières news")
-    try:
-        news = get_news(ticker)
-        if news:
-            for article in news:
-                st.markdown(f"**{article['titre']}**  \n*{article['source']} — {article['date']}*")
+        # --- Score pondéré ---
+        st.subheader("Score pondéré final")
+        decision = scoring["decision"]
+        score    = scoring["score_final"]
+        sc1, sc2, sc3, sc4 = st.columns(4)
+        sc1.metric("Score final", f"{score} / 1.0")
+        sc2.metric("Décision",    f"{_icone_signal(decision)} {decision}")
+        sc3.metric("Mult risque", scoring["scores"]["multiplicateur"])
+        sc4.metric("Mult macro",  scoring["scores"]["mult_macro"])
+
+        fig_score = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=score,
+            gauge={
+                "axis": {"range": [-1, 1]},
+                "bar":  {"color": "#2ecc71" if score > 0.1 else ("#e74c3c" if score < -0.1 else "#f39c12")},
+                "steps": [
+                    {"range": [-1, -0.1],  "color": "rgba(231,76,60,0.15)"},
+                    {"range": [-0.1, 0.1], "color": "rgba(243,156,18,0.15)"},
+                    {"range": [0.1, 1],    "color": "rgba(46,204,113,0.15)"},
+                ],
+                "threshold": {"line": {"color": "black", "width": 2}, "value": score}
+            },
+            number={"suffix": " / 1.0", "font": {"size": 28}},
+        ))
+        fig_score.update_layout(height=200, margin=dict(l=20, r=20, t=20, b=0))
+        st.plotly_chart(fig_score, use_container_width=True)
+
+        st.divider()
+
+        # --- Rapport LLM ---
+        st.subheader("Rapport de décision (IA)")
+        if resultat["rapport"]:
+            st.markdown(resultat["rapport"])
         else:
-            st.info("Aucune news disponible.")
-    except Exception:
-        st.info("News non disponibles pour ce type d'actif.")
+            st.info("Rapport non généré (mode rapide).")
+
+        st.divider()
+
+        # --- Insider transactions ---
+        if insider and insider.get("transactions"):
+            st.subheader("Transactions des dirigeants")
+            df_insider = pd.DataFrame(insider["transactions"])
+            df_insider["type"] = df_insider["type"].apply(
+                lambda x: "🟢 ACHAT" if x == "ACHAT" else "🔴 VENTE"
+            )
+            st.dataframe(df_insider, use_container_width=True)
+            st.divider()
+
+        # --- News ---
+        st.subheader("Dernières news")
+        try:
+            news = get_news(ticker)
+            if news:
+                for article in news:
+                    st.markdown(f"**{article['titre']}**  \n*{article['source']} — {article['date']}*")
+            else:
+                st.info("Aucune news disponible.")
+        except Exception:
+            st.info("News non disponibles pour ce type d'actif.")
 
 
 # ===========================================================================
