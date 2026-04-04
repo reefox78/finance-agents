@@ -22,6 +22,42 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
+# Tickers prédéfinis par catégorie
+# ---------------------------------------------------------------------------
+
+TICKERS_PRESET = {
+    "🇺🇸 Actions US":  ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","TSLA","JPM","XOM","SPY"],
+    "🇪🇺 Actions EU":  ["MC.PA","TTE.PA","SAN.PA","BNP.PA","OR.PA","AI.PA","SAF.PA","ASML.AS","SAP.DE","SIE.DE"],
+    "₿ Crypto":        ["BTC-USD","ETH-USD","SOL-USD","BNB-USD","XRP-USD","ADA-USD","DOGE-USD","DOT-USD","AVAX-USD","LINK-USD"],
+    "💱 Forex":        ["EURUSD=X","GBPUSD=X","USDJPY=X","USDCHF=X","AUDUSD=X","USDCAD=X","NZDUSD=X","EURGBP=X","EURJPY=X","GBPJPY=X"],
+}
+
+_TOUS_TICKERS = ["Personnalisé..."] + [t for tickers in TICKERS_PRESET.values() for t in tickers]
+_OPTIONS_AFFICHAGE = (
+    ["Personnalisé..."]
+    + [f"── {cat} ──" for cat in TICKERS_PRESET]  # séparateurs visuels (non sélectionnables)
+)
+# Liste plate avec séparateurs pour l'affichage
+def _build_options():
+    opts = ["Personnalisé..."]
+    for cat, tickers in TICKERS_PRESET.items():
+        opts.append(f"── {cat} ──")
+        opts.extend(tickers)
+    return opts
+
+def _ticker_selectbox(label, key, default="AAPL"):
+    """Selectbox avec groupes de tickers + option Personnalisé."""
+    opts = _build_options()
+    idx  = opts.index(default) if default in opts else 0
+    choix = st.selectbox(label, opts, index=idx, key=key)
+    if choix.startswith("──"):          # séparateur cliqué → retombe sur Personnalisé
+        choix = "Personnalisé..."
+    if choix == "Personnalisé...":
+        return st.text_input("Ticker personnalisé", value=default,
+                             key=f"{key}_custom").upper().strip()
+    return choix
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -30,12 +66,6 @@ def _icone_signal(signal):
 
 def _icone_risque(risque):
     return {"FAIBLE": "🟢", "ELEVE": "🔴"}.get(risque, "🟡")
-
-def _badge(label, value, color="normal"):
-    colors = {"green": "#1a7a4a", "red": "#c0392b", "normal": "#333"}
-    bg     = {"green": "#d4edda", "red":  "#f8d7da", "normal": "#f0f0f0"}
-    return (f'<span style="background:{bg[color]};color:{colors[color]};'
-            f'padding:3px 10px;border-radius:12px;font-weight:600">{label}: {value}</span>')
 
 
 # ---------------------------------------------------------------------------
@@ -55,8 +85,7 @@ with tab_analyse:
     # --- Sidebar ---
     with st.sidebar:
         st.header("Paramètres")
-        ticker = st.text_input("Ticker", value="AAPL",
-                               help="AAPL, MC.PA, BTC-USD, EURUSD=X …").upper().strip()
+        ticker = _ticker_selectbox("Ticker", key="ticker_analyse")
         period = st.selectbox("Période graphique", ["1mo", "3mo", "6mo", "1y", "2y"], index=1)
         lancer = st.button("Analyser", type="primary", use_container_width=True)
 
@@ -372,9 +401,9 @@ with tab_backtest:
 
     bt1, bt2 = st.columns(2)
     with bt1:
-        bt_ticker = st.text_input("Ticker", value="AAPL", key="bt_ticker").upper()
-        bt_debut  = st.text_input("Début",  value="2023-01-01", key="bt_debut")
-        bt_fin    = st.text_input("Fin",    value="2024-12-31", key="bt_fin")
+        bt_ticker  = _ticker_selectbox("Ticker", key="ticker_backtest")
+        bt_debut   = st.text_input("Début", value="2023-01-01", key="bt_debut")
+        bt_fin     = st.text_input("Fin",   value="2024-12-31", key="bt_fin")
     with bt2:
         bt_mode    = st.radio("Mode", ["multi", "technique"],
                               help="multi = technique + macro + risque | technique = technique seul")
@@ -390,50 +419,79 @@ with tab_backtest:
             )
 
         col_b1, col_b2, col_b3, col_b4 = st.columns(4)
-        col_b1.metric("Capital final",  f"{bt_result['valeur_fin']:,} $")
-        col_b2.metric("Rendement",      f"{bt_result['rendement']} %")
-        col_b3.metric("Nb trades",      len(bt_result["trades"]))
-        col_b4.metric("Mode",           bt_result["mode"])
+        col_b1.metric("Capital final", f"{bt_result['valeur_fin']:,} $")
+        col_b2.metric("Rendement",     f"{bt_result['rendement']} %")
+        col_b3.metric("Nb trades",     len(bt_result["trades"]))
+        col_b4.metric("Mode",          bt_result["mode"])
 
+        # --- Graphique prix + signaux buy/sell (Plotly) ---
+        df_bt = bt_result.get("df")
+        if df_bt is not None and not df_bt.empty:
+            trades = bt_result["trades"]
+            achats = {t["date_achat"]: t["prix_achat"] for t in trades}
+            ventes = {t["date"]:       t["prix_vente"]  for t in trades}
+
+            dates_idx = [str(d)[:10] for d in df_bt.index]
+
+            fig_bt = go.Figure()
+            fig_bt.add_trace(go.Candlestick(
+                x=df_bt.index,
+                open=df_bt["Open"], high=df_bt["High"],
+                low=df_bt["Low"],   close=df_bt["Close"],
+                name="Prix", increasing_line_color="#2ecc71",
+                decreasing_line_color="#e74c3c"
+            ))
+
+            # Signaux achat (triangles verts)
+            if achats:
+                fig_bt.add_trace(go.Scatter(
+                    x=list(achats.keys()), y=list(achats.values()),
+                    mode="markers",
+                    marker=dict(symbol="triangle-up", size=14,
+                                color="#27ae60", line=dict(width=1, color="white")),
+                    name="Achat"
+                ))
+            # Signaux vente (triangles rouges)
+            if ventes:
+                fig_bt.add_trace(go.Scatter(
+                    x=list(ventes.keys()), y=list(ventes.values()),
+                    mode="markers",
+                    marker=dict(symbol="triangle-down", size=14,
+                                color="#e74c3c", line=dict(width=1, color="white")),
+                    name="Vente"
+                ))
+
+            fig_bt.update_layout(
+                title=f"Prix + signaux — {bt_ticker}",
+                xaxis_rangeslider_visible=False,
+                height=420,
+                margin=dict(l=0, r=0, t=40, b=0),
+                legend=dict(orientation="h", y=1.08)
+            )
+            st.plotly_chart(fig_bt, use_container_width=True)
+
+        # --- Courbe d'équité ---
         if bt_result["equity"]:
             fig_eq = go.Figure()
             fig_eq.add_trace(go.Scatter(
                 x=[e["date"]   for e in bt_result["equity"]],
                 y=[e["valeur"] for e in bt_result["equity"]],
-                mode="lines+markers",
-                name="Capital",
-                line=dict(color="#2ecc71", width=2)
+                mode="lines+markers", name="Capital",
+                line=dict(color="#2ecc71", width=2),
+                fill="tozeroy", fillcolor="rgba(46,204,113,0.08)"
             ))
-            fig_eq.update_layout(
-                title="Courbe d'équité",
-                height=300,
-                margin=dict(l=0, r=0, t=30, b=0)
-            )
+            fig_eq.update_layout(title="Courbe d'équité", height=260,
+                                 margin=dict(l=0, r=0, t=35, b=0))
             st.plotly_chart(fig_eq, use_container_width=True)
 
-        # --- Graphique Backtrader ---
-        graphique = bt_result.get("graphique")
-        if graphique and os.path.exists(graphique):
-            st.markdown("**Graphique Backtrader**")
-            with st.expander("Légende du graphique", expanded=False):
-                st.markdown("""
-| Élément | Signification |
-|---------|--------------|
-| 🔼 Triangle vert | Signal d'**achat** exécuté |
-| 🔽 Triangle rouge | Signal de **vente** exécuté |
-| 🔵 Point bleu | Trade **gagnant** |
-| 🔴 Point rouge | Trade **perdant** |
-| Ligne rouge (haut) | Valeur du **portefeuille** |
-| Bandes vertes | **Bollinger Bands** |
-| RSI | Oscille entre 0-100. < 30 = survendu, > 70 = suracheté |
-| MACD | Croisement ligne rouge/bleue = signal de tendance |
-                """)
-            st.image(graphique, use_container_width=True)
-
+        # --- Détail des trades ---
         if bt_result["trades"]:
             st.markdown("**Détail des trades**")
             df_trades = pd.DataFrame(bt_result["trades"])
             df_trades["résultat"] = df_trades["pnl"].apply(
                 lambda x: "✅" if x > 0 else "❌"
             )
-            st.dataframe(df_trades, use_container_width=True)
+            cols_ordre = ["résultat", "date_achat", "prix_achat",
+                          "date", "prix_vente", "pnl", "pnlnet"]
+            cols_ordre = [c for c in cols_ordre if c in df_trades.columns]
+            st.dataframe(df_trades[cols_ordre], use_container_width=True, hide_index=True)

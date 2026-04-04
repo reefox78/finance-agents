@@ -340,7 +340,7 @@ class StrategieMultiAgent(_TechniqueMixin, bt.Strategy):
 # ---------------------------------------------------------------------------
 
 class TradeLogger(bt.Analyzer):
-    """Enregistre chaque trade pour affichage dans le dashboard."""
+    """Enregistre chaque trade (entrée + sortie) pour affichage dans le dashboard."""
 
     def start(self):
         self.trades      = []
@@ -351,14 +351,17 @@ class TradeLogger(bt.Analyzer):
         pos = self.strategy.position
         if pos.size > 0 and self._open_price is None:
             self._open_price = pos.price
-            self._open_date  = self.strategy.datetime.date()
+            self._open_date  = self.strategy.datetime.date().strftime("%Y-%m-%d")
         elif pos.size == 0 and self._open_price is not None:
             close_price = self.strategy.data.close[0]
             pnl = round((close_price - self._open_price) * 10, 2)
             self.trades.append({
-                "date":   self.strategy.datetime.date().strftime("%Y-%m-%d"),
-                "pnl":    pnl,
-                "pnlnet": round(pnl * 0.999, 2),
+                "date_achat":  self._open_date,
+                "prix_achat":  round(self._open_price, 2),
+                "date":        self.strategy.datetime.date().strftime("%Y-%m-%d"),
+                "prix_vente":  round(close_price, 2),
+                "pnl":         pnl,
+                "pnlnet":      round(pnl * 0.999, 2),
             })
             self._open_price = None
             self._open_date  = None
@@ -421,12 +424,7 @@ def run_backtest(
     rendement    = round((valeur_fin - valeur_debut) / valeur_debut * 100, 2)
     trades       = results[0].analyzers.trades.get_analysis()
 
-    # Force le backend non-interactif pour éviter la fenêtre popup
-    plt.switch_backend("Agg")
-    fig    = cerebro.plot(style="candlestick", iplot=False)[0][0]
-    chemin = f"output/backtest_{ticker}.png"
-    fig.savefig(chemin, dpi=120, bbox_inches="tight")
-    plt.close("all")
+    # Pas de cerebro.plot() — le graphique est construit en Plotly dans le dashboard
 
     equity          = [{"date": debut, "valeur": capital}]
     valeur_courante = capital
@@ -446,7 +444,7 @@ def run_backtest(
         "rendement":  rendement,
         "trades":     trades,
         "equity":     equity,
-        "graphique":  chemin,
+        "df":         df,       # données OHLCV pour graphique Plotly
         "mode":       mode,
     }
 
