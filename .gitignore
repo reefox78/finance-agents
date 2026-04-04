@@ -1,0 +1,33 @@
+# Environnement virtuel
+venv/
+.venv/
+env/
+
+# Clés API et secrets
+config/.env
+.env
+*.env.local
+*.env.production
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Outputs générés
+output/*.png
+output/rapport_*.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Claude Code (settings locaux)
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
