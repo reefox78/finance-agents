@@ -1,0 +1,16 @@
+{
+  "us_stocks": [
+    "AAPL", "MSFT", "NVDA", "GOOGL", "META",
+    "AMZN", "JPM", "XOM", "SPY", "QQQ"
+  ],
+  "eu_stocks": [
+    "MC.PA", "TTE.PA", "SAN.PA", "BNP.PA", "OR.PA",
+    "AI.PA", "SAF.PA", "ASML.AS", "SAP.DE", "SIE.DE"
+  ],
+  "crypto": [
+    "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"
+  ],
+  "forex": [
+    "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCHF=X"
+  ]
+}

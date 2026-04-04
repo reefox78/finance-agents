@@ -147,15 +147,17 @@ def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
     return "\n".join(lines)
 
 
-def run(ticker: str) -> dict:
+def run(ticker: str, with_llm: bool = True) -> dict:
     """
     Orchestre les agents selon le type d'actif détecté,
     calcule le score pondéré et produit un rapport LLM.
+
+    with_llm=False : scoring uniquement, pas d'appel Groq (mode scanner rapide).
     """
     asset_type = detect_asset_type(ticker)
     config     = AGENTS_PAR_TYPE[asset_type]
 
-    print(f"Analyse de {ticker} [{asset_type}] en cours...\n")
+    print(f"Analyse de {ticker} [{asset_type}] en cours...")
 
     # --- Agents toujours actifs ---
     tech = analyze_technical(ticker)
@@ -171,20 +173,22 @@ def run(ticker: str) -> dict:
     # --- Scoring (gère les None automatiquement) ---
     scoring = calculer_score(tech, fund, sent, risk, trends, insider, macro)
 
-    # --- Rapport LLM ---
-    prompt = _build_prompt(ticker, asset_type, tech, fund, sent,
-                           risk, trends, insider, macro, scoring)
-
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-    )
+    # --- Rapport LLM (optionnel) ---
+    rapport = ""
+    if with_llm:
+        prompt = _build_prompt(ticker, asset_type, tech, fund, sent,
+                               risk, trends, insider, macro, scoring)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        rapport = response.choices[0].message.content or ""
 
     return {
         "ticker":     ticker,
         "asset_type": asset_type,
-        "rapport":    response.choices[0].message.content or "",
+        "rapport":    rapport,
         "scoring":    scoring,
         "tech":       tech,
         "fund":       fund,
