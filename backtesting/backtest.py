@@ -50,10 +50,16 @@ def _macro_score_from_values(taux, cpi_var, chomage, spread, confiance):
 
 
 def _macro_mult_from_score(score):
-    if score >= 0.3:    return 1.10
+    """
+    Multiplicateur macro adouci : amplitude réduite pour ne pas bloquer
+    des signaux techniques forts dans un environnement macro défavorable.
+    Avant : 0.75 / 0.90 / 1.0 / 1.10  → amplitude ×1.47
+    Après : 0.85 / 0.95 / 1.0 / 1.05  → amplitude ×1.24
+    """
+    if score >= 0.3:    return 1.05
     elif score >= 0:    return 1.00
-    elif score >= -0.3: return 0.90
-    else:               return 0.75
+    elif score >= -0.3: return 0.95
+    else:               return 0.85
 
 
 def _score_volatilite(vol):
@@ -193,18 +199,34 @@ class _TechniqueMixin:
         self.bb    = bt.indicators.BollingerBands(self.data.close, period=20)
 
     def _score_rsi(self, rsi):
+        """
+        Scoring RSI compatible tendance.
+        RSI élevé = momentum haussier, pas nécessairement surachat à vendre.
+        RSI 50-70 : légèrement négatif (×0.5 vs original)
+        RSI > 70  : pénalité plafonnée à -0.5 (vs -1.0 original)
+        """
         if rsi <= 30:   return 1.0
         elif rsi <= 50: return (50 - rsi) / 20 * 0.5
-        elif rsi <= 70: return -(rsi - 50) / 20 * 0.5
-        else:           return -1.0
+        elif rsi <= 70: return -(rsi - 50) / 40 * 0.5   # pente moitié
+        else:           return -0.5                       # cap à -0.5
 
     def _score_macd(self, macd, signal):
         return max(-1.0, min(1.0, (macd - signal) / 2.0))
 
     def _score_bb(self, prix, top, bot):
+        """
+        Scoring BB avec gestion des breakouts.
+        Prix au-dessus des BB = signal de breakout haussier (+0.2).
+        Prix en dessous = breakout baissier (-0.2).
+        Évite les scores extrêmes non clampés du code original.
+        """
         largeur = top - bot
         if largeur == 0:
             return 0.0
+        if prix > top:
+            return 0.2    # breakout haussier
+        if prix < bot:
+            return -0.2   # breakout baissier
         return round((50 - (prix - bot) / largeur * 100) / 50, 4)
 
     def _score_sma(self, prix, sma20, sma50):
