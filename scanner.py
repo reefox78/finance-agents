@@ -72,12 +72,18 @@ def _analyser_ticker(ticker: str) -> dict | None:
         r = run(ticker, with_llm=False)
         s = r["scoring"]
 
-        # Score technique brut
         s_tech   = r["tech"].get("score_final", 0.0)
         risque   = r["risk"]["risque"] if r["risk"] else "N/A"
         signal_s = r["sent"]["signal"] if r["sent"] else "N/A"
         s_macro  = r["macro"]["score_final"] if r["macro"] else None
         signal_i = r["insider"]["signal"] if r["insider"] else "N/A"
+
+        # Nouveaux agents (signal abrege : A/N/V ou -)
+        def _sig(agent): return agent["signal"][0] if agent else "-"
+        sig_opts = _sig(r.get("options_flow"))
+        sig_sec  = _sig(r.get("sec_filings"))
+        sig_si   = _sig(r.get("short_interest"))
+        sig_eps  = _sig(r.get("earnings_surprise"))
 
         return {
             "ticker":   ticker,
@@ -89,6 +95,10 @@ def _analyser_ticker(ticker: str) -> dict | None:
             "sent":     signal_s,
             "macro":    round(s_macro, 4) if s_macro is not None else "N/A",
             "insider":  signal_i,
+            "opts":     sig_opts,
+            "sec":      sig_sec,
+            "si":       sig_si,
+            "eps":      sig_eps,
         }
     except Exception as e:
         print(f"  [ERREUR] {ticker} : {e}")
@@ -104,9 +114,10 @@ def _afficher_tableau(resultats: list[dict]) -> None:
     # Tri : ACHETER en premier, VENDRE en dernier, par score décroissant
     tries = sorted(resultats, key=lambda x: x["score"], reverse=True)
 
-    sep = "-" * 80
+    sep    = "-" * 100
     entete = (f"{'TICKER':<10} {'TYPE':<10} {'DECISION':<9} {'SCORE':>8}  "
-              f"{'TECH':>7}  {'RISQUE':<7}  {'SENT':<7}  {'MACRO':>7}  {'INSIDER':<8}")
+              f"{'TECH':>7}  {'RISQUE':<7}  {'SENT':<7}  {'MACRO':>7}  "
+              f"{'INSID':<5}  {'OPTS':<4}  {'SEC':<4}  {'SI':<4}  {'EPS':<4}")
 
     print(f"\n{sep}")
     print(entete)
@@ -117,8 +128,8 @@ def _afficher_tableau(resultats: list[dict]) -> None:
         ligne = (f"{r['ticker']:<10} {r['type']:<10} "
                  f"{r['decision']:<9} {r['score']:>+8.4f}  "
                  f"{r['tech']:>+7.4f}  {r['risque']:<7}  "
-                 f"{r['sent']:<7}  {macro_str:>7}  {r['insider']:<8}")
-        # Coloriser la ligne
+                 f"{r['sent']:<7}  {macro_str:>7}  "
+                 f"{r['insider'][0]:<5}  {r['opts']:<4}  {r['sec']:<4}  {r['si']:<4}  {r['eps']:<4}")
         if r["decision"] == "ACHETER":
             print(f"{VERT}{ligne}{RESET}")
         elif r["decision"] == "VENDRE":
@@ -141,7 +152,8 @@ def _sauvegarder_csv(resultats: list[dict]) -> str:
     chemin   = OUTPUT_DIR / f"scan_{date_str}.csv"
 
     champs = ["ticker", "type", "decision", "score", "tech",
-              "risque", "sent", "macro", "insider", "date"]
+              "risque", "sent", "macro", "insider",
+              "opts", "sec", "si", "eps", "date"]
 
     with open(chemin, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=champs)

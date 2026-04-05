@@ -15,6 +15,30 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
+# Mapping des taux directeurs par devise (séries FRED)
+# ---------------------------------------------------------------------------
+
+_FOREX_RATE_SERIES = {
+    "USD": "FEDFUNDS",           # Fed Funds Rate
+    "EUR": "ECBDFR",             # BCE taux dépôt
+    "GBP": "IUDSOIA",            # SONIA overnight (proxy BoE)
+    "JPY": "IRSTCB01JPM156N",    # BoJ Policy Rate (OCDE mensuel)
+    "CHF": "IR3TIB01CHM156N",    # Taux interbancaire 3M CHF (proxy SNB)
+    "CAD": "IRSTCB01CAM156N",    # BoC Policy Rate (OCDE mensuel)
+    "AUD": "IRSTCB01AUM156N",    # RBA Policy Rate
+    "NZD": "IRSTCB01NZM156N",    # RBNZ Policy Rate
+}
+
+
+def _parse_forex_pair(ticker: str):
+    """'EURUSD=X' → ('EUR', 'USD') — None si format non reconnu."""
+    code = ticker.replace("=X", "")
+    if len(code) == 6:
+        return code[:3].upper(), code[3:].upper()
+    return None, None
+
+
+# ---------------------------------------------------------------------------
 # Scoring helpers (réplique la logique des agents sans les dépendances réseau)
 # ---------------------------------------------------------------------------
 
@@ -143,6 +167,58 @@ def _build_macro_lookup(debut: str, fin: str) -> dict:
                 t10y2y_d.get(date),
                 umcsent_d.get(date),
             )
+            lookup[date.strftime("%Y-%m-%d")] = (score, _macro_mult_from_score(score))
+
+        return lookup
+
+    except Exception:
+        return {}
+
+
+def _build_forex_macro_lookup(ticker: str, debut: str, fin: str) -> dict:
+    """
+    Différentiel de taux directeurs entre la devise de base et la devise de cotation.
+    Score = clamp((taux_base − taux_quote) / 3.0, −1, +1)
+    Score positif → favorise la hausse de la paire (achat).
+    Ne touche PAS à _build_macro_lookup() — pas d'effet sur stocks/crypto.
+    """
+    if not _FRED_AVAILABLE:
+        return {}
+
+    load_dotenv("config/.env")
+    api_key = os.getenv("FRED_API_KEY")
+    if not api_key:
+        return {}
+
+    base, quote = _parse_forex_pair(ticker)
+    if not base or not quote:
+        return {}
+
+    base_series  = _FOREX_RATE_SERIES.get(base)
+    quote_series = _FOREX_RATE_SERIES.get(quote)
+    if not base_series or not quote_series:
+        return {}
+
+    try:
+        fred = Fred(api_key=api_key)
+        start_buffer = (pd.Timestamp(debut) - pd.DateOffset(months=3)).strftime("%Y-%m-%d")
+
+        base_rate  = fred.get_series(base_series,  observation_start=start_buffer, observation_end=fin).dropna()
+        quote_rate = fred.get_series(quote_series, observation_start=start_buffer, observation_end=fin).dropna()
+
+        dates   = pd.date_range(start=debut, end=fin, freq="B")
+        base_d  = base_rate.reindex(dates,  method="ffill")
+        quote_d = quote_rate.reindex(dates, method="ffill")
+
+        lookup = {}
+        for date in dates:
+            b = base_d.get(date)
+            q = quote_d.get(date)
+            if b is None or q is None or pd.isna(b) or pd.isna(q):
+                lookup[date.strftime("%Y-%m-%d")] = (0.0, 1.0)
+                continue
+            diff  = float(b) - float(q)
+            score = round(max(-1.0, min(1.0, diff / 3.0)), 4)
             lookup[date.strftime("%Y-%m-%d")] = (score, _macro_mult_from_score(score))
 
         return lookup
@@ -396,16 +472,29 @@ def run_backtest(
     cerebro = bt.Cerebro()
     cerebro.addanalyzer(TradeLogger, _name="trades")
 
+    is_forex = ticker.endswith("=X")
+
     if mode == "multi":
-        print("Calcul des scores macro (FRED)...")
-        macro_lookup = _build_macro_lookup(debut, fin)
-        print(f"  -> {len(macro_lookup)} jours charges" if macro_lookup else "  -> FRED non disponible, macro ignoree")
+        if is_forex:
+            print("Calcul du differentiel de taux (forex)...")
+            macro_lookup = _build_forex_macro_lookup(ticker, debut, fin)
+            print(f"  -> {len(macro_lookup)} jours charges" if macro_lookup else "  -> FRED non disponible, macro ignoree")
+        else:
+            print("Calcul des scores macro (FRED)...")
+            macro_lookup = _build_macro_lookup(debut, fin)
+            print(f"  -> {len(macro_lookup)} jours charges" if macro_lookup else "  -> FRED non disponible, macro ignoree")
 
         print("Calcul des scores risque (rolling 63j)...")
         risk_lookup = _build_risk_lookup(df)
 
+        # Seuils plus bas pour le forex : scores naturellement comprimes
+        seuil_achat = 0.05 if is_forex else 0.10
+        seuil_vente = -0.05 if is_forex else -0.10
+
         cerebro.addstrategy(
             StrategieMultiAgent,
+            seuil_achat=seuil_achat,
+            seuil_vente=seuil_vente,
             macro_lookup=macro_lookup,
             risk_lookup=risk_lookup,
         )

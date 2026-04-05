@@ -1,0 +1,98 @@
+{
+  "_comment": "Frais par broker. Mettre à jour 'mis_a_jour' après chaque vérification.",
+  "_types": {
+    "fixe":  "frais_achat / frais_vente en euros, constant quel que soit le montant",
+    "pct":   "taux_pct (%) appliqué au montant, avec un minimum frais_min",
+    "mixte": "frais_fixe + taux_pct (%) — ex: DEGIRO"
+  },
+
+  "trade_republic": {
+    "nom":          "Trade Republic",
+    "type_frais":   "fixe",
+    "frais_achat":  1.0,
+    "frais_vente":  1.0,
+    "note":         "1 € fixe par ordre, tous marchés, 24h/24",
+    "url_tarifs":   "https://traderepublic.com/fr-fr/pricing",
+    "mis_a_jour":   "2026-04-05"
+  },
+
+  "revolut_standard": {
+    "nom":                  "Revolut Standard",
+    "type_frais":           "fixe",
+    "frais_achat":          0.0,
+    "frais_vente":          0.0,
+    "trades_gratuits_mois": 3,
+    "frais_apres_quota":    1.99,
+    "note":                 "3 ordres gratuits/mois, puis 1.99 €. Le spread (écart achat/vente) est facturé implicitement dans le prix d'exécution.",
+    "url_tarifs":           "https://www.revolut.com/fr-FR/trading/",
+    "mis_a_jour":           "2026-04-05"
+  },
+
+  "revolut_premium": {
+    "nom":                  "Revolut Premium / Metal",
+    "type_frais":           "fixe",
+    "frais_achat":          0.0,
+    "frais_vente":          0.0,
+    "trades_gratuits_mois": 999,
+    "frais_apres_quota":    0.0,
+    "note":                 "Ordres illimités gratuits. Spread inclus dans le prix d'exécution.",
+    "url_tarifs":           "https://www.revolut.com/fr-FR/trading/",
+    "mis_a_jour":           "2026-04-05"
+  },
+
+  "degiro": {
+    "nom":          "DEGIRO",
+    "type_frais":   "mixte",
+    "frais_achat":  0.50,
+    "frais_vente":  0.50,
+    "taux_pct":     0.022,
+    "note":         "0.50 € + 0.022 % du montant par ordre (actions EU). Actions US : 0.50 € + 0.004 $/action.",
+    "url_tarifs":   "https://www.degiro.fr/tarifs/tarifs-de-transactions",
+    "mis_a_jour":   "2026-04-05"
+  },
+
+  "boursorama": {
+    "nom":          "Boursorama Bourse (Ultim)",
+    "type_frais":   "pct",
+    "frais_min":    0.99,
+    "frais_achat":  0.0,
+    "frais_vente":  0.0,
+    "taux_pct":     0.0,
+    "note":         "Compte Ultim : 0 % de courtage sur actions FR/EU/US (offre en cours). Vérifier les conditions car l'offre peut changer.",
+    "url_tarifs":   "https://www.boursobank.com/bourse/tarifs-bourse",
+    "mis_a_jour":   "2026-04-05"
+  },
+
+  "interactive_brokers": {
+    "nom":          "Interactive Brokers (IBKR Lite EU)",
+    "type_frais":   "mixte",
+    "frais_achat":  1.25,
+    "frais_vente":  1.25,
+    "taux_pct":     0.05,
+    "note":         "0.05 % min 1.25 € par ordre sur actions EU. Actions US : 0.005 $/action min 1 $.",
+    "url_tarifs":   "https://www.interactivebrokers.com/fr/trading/commissions.php",
+    "mis_a_jour":   "2026-04-05"
+  },
+
+  "saxo": {
+    "nom":          "Saxo Banque",
+    "type_frais":   "pct",
+    "frais_min":    2.0,
+    "frais_achat":  0.0,
+    "frais_vente":  0.0,
+    "taux_pct":     0.08,
+    "note":         "0.08 % min 2 € (actions EU, compte Classic). Actions US : 0.06 % min 4 $.",
+    "url_tarifs":   "https://www.home.saxo/fr-fr/rates-and-conditions/stocks/commissions",
+    "mis_a_jour":   "2026-04-05"
+  },
+
+  "personnalise": {
+    "nom":          "Personnalisé",
+    "type_frais":   "fixe",
+    "frais_achat":  0.0,
+    "frais_vente":  0.0,
+    "note":         "Entrer les frais manuellement à chaque transaction.",
+    "url_tarifs":   "",
+    "mis_a_jour":   "2026-04-05"
+  }
+}

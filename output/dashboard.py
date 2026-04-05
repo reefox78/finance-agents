@@ -10,10 +10,99 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.market_data import get_stock_data, get_stock_info, get_news
 from data.asset_type import detect_asset_type
+from data.portfolio import (ajouter_achat, ajouter_vente, supprimer_position,
+                            evaluer_positions, lister_historique, lister_transactions)
 from orchestrator.orchestrator import run
 from backtesting.backtest import run_backtest
 from ta.trend import SMAIndicator
 from ta.volatility import BollingerBands
+
+from datetime import date as _date_cls
+
+# ---------------------------------------------------------------------------
+# Helpers frais & fiscalité
+# ---------------------------------------------------------------------------
+
+_BROKERS_PATH = Path("config/brokers.json")
+
+@st.cache_data(ttl=3600)
+def _load_brokers() -> dict:
+    try:
+        with open(_BROKERS_PATH, encoding="utf-8") as f:
+            return {k: v for k, v in json.load(f).items() if not k.startswith("_")}
+    except Exception:
+        return {"personnalise": {"nom": "Personnalisé", "type_frais": "fixe",
+                                  "frais_achat": 0.0, "frais_vente": 0.0,
+                                  "note": "", "url_tarifs": "", "mis_a_jour": "2026-01-01"}}
+
+
+def _calculer_frais_broker(montant: float, broker: dict, operation: str = "achat") -> float:
+    """Calcule les frais selon le type de broker et le montant de l'opération."""
+    t = broker.get("type_frais", "fixe")
+    if t == "fixe":
+        return broker.get(f"frais_{operation}", 0.0)
+    elif t == "pct":
+        taux = broker.get("taux_pct", 0.0)
+        mini = broker.get("frais_min", 0.0)
+        return max(mini, round(montant * taux / 100, 4))
+    elif t == "mixte":
+        fixe = broker.get(f"frais_{operation}", 0.0)
+        taux = broker.get("taux_pct", 0.0)
+        return round(fixe + montant * taux / 100, 4)
+    return 0.0
+
+
+@st.cache_data(ttl=300)
+def _fetch_prix_actuel(ticker: str) -> float | None:
+    """Récupère le dernier prix connu via yfinance (cache 5 min)."""
+    if not ticker:
+        return None
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker).info
+        prix = info.get("regularMarketPrice") or info.get("currentPrice")
+        if prix:
+            return float(prix)
+        hist = yf.Ticker(ticker).history(period="1d")
+        return float(hist["Close"].iloc[-1]) if not hist.empty else None
+    except Exception:
+        return None
+
+
+# Définitions affichées en tooltip sur les termes techniques
+_TOOLTIPS = {
+    "ticker":        "Symbole boursier de l'actif. Ex : AAPL = Apple, BTC-USD = Bitcoin, EURUSD=X = paire de devises Euro/Dollar.",
+    "cump":          "Coût Unitaire Moyen Pondéré — ton prix de revient moyen par unité, frais d'achat inclus. Recalculé à chaque achat.",
+    "pnl_brut":      "Profit & Loss brut = (prix de vente − CUMP) × quantité. Ne tient pas encore compte des frais de vente.",
+    "pnl_net":       "P&L net = P&L brut − frais de vente. C'est ce que tu as réellement gagné ou perdu sur ce trade.",
+    "pnl_pct":       "Rendement en % = P&L net ÷ (CUMP × quantité vendue) × 100. Mesure la performance relative de ton investissement.",
+    "pnl_latent":    "Gain ou perte non encore réalisé(e) sur ta position ouverte = (prix actuel − CUMP) × quantité. Devient réel à la vente.",
+    "frais":         "Frais de courtage payés à ton broker pour passer l'ordre. Inclus dans le CUMP à l'achat, déduits du P&L à la vente.",
+    "prix_moyen":    "Prix moyen d'achat = CUMP (Coût Unitaire Moyen Pondéré). Reflète tous tes achats, frais inclus.",
+    "valeur_totale": "Valeur actuelle de ta position = prix du marché × nombre d'unités détenues.",
+    "score":         "Score de conviction calculé par les agents d'analyse (technique, macro, sentiment…). De -1 (très négatif) à +1 (très positif).",
+    "signal_sortie": "Recommandation de l'app : 🟢 TENIR (position saine), 🟡 SURVEILLER (attention), 🔴 VENDRE (stop-loss ou score négatif).",
+    "win_rate":      "Pourcentage de trades gagnants = nombre de ventes avec P&L positif ÷ total des ventes × 100.",
+}
+
+
+def _net_apres_impots(pnl_net_frais: float, regime: str, tmi: int = 30) -> tuple:
+    """
+    Retourne (impots_estimes, pnl_apres_impots, taux_effectif_pct).
+    ATTENTION : estimation — les pertes annuelles compensent les gains en réalité.
+    Régimes : 'pfu' (30%), 'bareme' (TMI + 17.2% PS), 'pea' (17.2% PS après 5 ans).
+    """
+    if pnl_net_frais <= 0:
+        return 0.0, pnl_net_frais, 0.0
+    if regime == "pea":
+        taux = 0.172
+    elif regime == "bareme":
+        taux = round(tmi / 100 + 0.172, 4)
+    else:  # pfu
+        taux = 0.30
+    impots = round(pnl_net_frais * taux, 2)
+    return impots, round(pnl_net_frais - impots, 2), round(taux * 100, 1)
+
 
 st.set_page_config(
     page_title="Finance Agents",
@@ -32,30 +121,57 @@ TICKERS_PRESET = {
     "💱 Forex":        ["EURUSD=X","GBPUSD=X","USDJPY=X","USDCHF=X","AUDUSD=X","USDCAD=X","NZDUSD=X","EURGBP=X","EURJPY=X","GBPJPY=X"],
 }
 
-_TOUS_TICKERS = ["Personnalisé..."] + [t for tickers in TICKERS_PRESET.values() for t in tickers]
-_OPTIONS_AFFICHAGE = (
-    ["Personnalisé..."]
-    + [f"── {cat} ──" for cat in TICKERS_PRESET]  # séparateurs visuels (non sélectionnables)
-)
-# Liste plate avec séparateurs pour l'affichage
+# Noms courts des tickers pour l'affichage (max ~13 chars)
+_TICKER_NOMS = {
+    "AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "Nvidia", "GOOGL": "Alphabet",
+    "META": "Meta", "AMZN": "Amazon", "TSLA": "Tesla", "JPM": "JPMorgan",
+    "XOM": "ExxonMobil", "SPY": "S&P 500 ETF",
+    "MC.PA": "LVMH", "TTE.PA": "TotalEnergies", "SAN.PA": "Sanofi",
+    "BNP.PA": "BNP Paribas", "OR.PA": "L'Oréal", "AI.PA": "Air Liquide",
+    "SAF.PA": "Safran", "ASML.AS": "ASML", "SAP.DE": "SAP", "SIE.DE": "Siemens",
+    "BTC-USD": "Bitcoin", "ETH-USD": "Ethereum", "SOL-USD": "Solana",
+    "BNB-USD": "BNB Chain", "XRP-USD": "XRP", "ADA-USD": "Cardano",
+    "DOGE-USD": "Dogecoin", "DOT-USD": "Polkadot", "AVAX-USD": "Avalanche",
+    "LINK-USD": "Chainlink",
+    "EURUSD=X": "€/Dollar", "GBPUSD=X": "£/Dollar", "USDJPY=X": "$/Yen",
+    "USDCHF=X": "$/CHF", "AUDUSD=X": "AUD/Dollar", "USDCAD=X": "$/CAD",
+    "NZDUSD=X": "NZD/Dollar", "EURGBP=X": "€/£", "EURJPY=X": "€/Yen",
+    "GBPJPY=X": "£/Yen",
+}
+_NOM_MAX = 13  # longueur max du nom entre parenthèses
+
+
+def _ticker_label(ticker: str) -> str:
+    """Renvoie 'AAPL (Apple)' ou 'AAPL' si pas de nom défini."""
+    nom = _TICKER_NOMS.get(ticker, "")
+    if not nom:
+        return ticker
+    if len(nom) > _NOM_MAX:
+        nom = nom[:_NOM_MAX - 1] + "…"
+    return f"{ticker} ({nom})"
+
+
 def _build_options():
+    """Liste plate avec séparateurs de catégorie, libellés avec noms."""
     opts = ["Personnalisé..."]
     for cat, tickers in TICKERS_PRESET.items():
         opts.append(f"── {cat} ──")
-        opts.extend(tickers)
+        opts.extend(_ticker_label(t) for t in tickers)
     return opts
 
+
 def _ticker_selectbox(label, key, default="AAPL"):
-    """Selectbox avec groupes de tickers + option Personnalisé."""
-    opts = _build_options()
-    idx  = opts.index(default) if default in opts else 0
+    """Selectbox groupée avec noms. Retourne le ticker brut (sans le nom)."""
+    opts        = _build_options()
+    default_lbl = _ticker_label(default)
+    idx  = next((i for i, o in enumerate(opts) if o == default_lbl), 0)
     choix = st.selectbox(label, opts, index=idx, key=key)
-    if choix.startswith("──"):          # séparateur cliqué → retombe sur Personnalisé
+    if choix.startswith("──"):
         choix = "Personnalisé..."
     if choix == "Personnalisé...":
         return st.text_input("Ticker personnalisé", value=default,
                              key=f"{key}_custom").upper().strip()
-    return choix
+    return choix.split(" (")[0]   # extrait le ticker avant " (Nom)"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -73,7 +189,9 @@ def _icone_risque(risque):
 # ---------------------------------------------------------------------------
 
 st.title("📈 Finance Agents — Aide à la décision")
-tab_analyse, tab_scanner, tab_backtest = st.tabs(["🔍 Analyse", "📋 Scanner", "📊 Backtest"])
+tab_analyse, tab_scanner, tab_portfolio, tab_backtest = st.tabs(
+    ["🔍 Analyse", "📋 Scanner", "💼 Portefeuille", "📊 Backtest"]
+)
 
 
 # ===========================================================================
@@ -97,17 +215,25 @@ with tab_analyse:
         asset_type = detect_asset_type(ticker)
 
         # --- Analyse complète ---
-        with st.spinner(f"Analyse de {ticker} en cours..."):
-            resultat = run(ticker, with_llm=True)
+        try:
+            with st.spinner(f"Analyse de {ticker} en cours..."):
+                resultat = run(ticker, with_llm=True)
+        except Exception as e:
+            st.error(f"Erreur lors de l'analyse de **{ticker}** : {e}")
+            st.stop()
 
         tech    = resultat["tech"]
         fund    = resultat["fund"]
         sent    = resultat["sent"]
         risk    = resultat["risk"]
-        trends  = resultat["trends"]
-        insider = resultat["insider"]
-        macro   = resultat["macro"]
-        scoring = resultat["scoring"]
+        trends           = resultat["trends"]
+        insider          = resultat["insider"]
+        macro            = resultat["macro"]
+        options_flow     = resultat.get("options_flow")
+        sec_filings      = resultat.get("sec_filings")
+        short_interest   = resultat.get("short_interest")
+        earnings_surprise= resultat.get("earnings_surprise")
+        scoring          = resultat["scoring"]
 
         # --- Header ---
         try:
@@ -220,6 +346,22 @@ with tab_analyse:
             agents_affiches.append(("Macro", macro["signal"],
                                      f"Environnement : {macro['environnement']}",
                                      f"Score : {macro.get('score_final', 'N/A')}"))
+        if options_flow:
+            agents_affiches.append(("Options Flow", options_flow["signal"],
+                                     f"P/C ratio : {options_flow.get('pc_ratio_vol')}",
+                                     f"IV Skew : {options_flow.get('skew_iv')}"))
+        if sec_filings:
+            agents_affiches.append(("SEC 8-K", sec_filings["signal"],
+                                     f"Filings 90j : {sec_filings.get('nb_filings')}",
+                                     f"Dernier : {sec_filings.get('last_date')}"))
+        if short_interest:
+            agents_affiches.append(("Short Int.", short_interest["signal"],
+                                     f"Short % : {short_interest.get('short_pct')} %",
+                                     f"Var. mois : {short_interest.get('mom_change_pct')} %"))
+        if earnings_surprise:
+            agents_affiches.append(("Earnings", earnings_surprise["signal"],
+                                     f"Surprise : {earnings_surprise.get('latest_surprise')} %",
+                                     f"Beats : {earnings_surprise.get('nb_beats')}/{earnings_surprise.get('nb_quarters')}"))
 
         cols = st.columns(len(agents_affiches))
         for col, (nom_agent, signal, ligne1, ligne2) in zip(cols, agents_affiches):
@@ -348,6 +490,10 @@ with tab_scanner:
                     "Sentiment": r["sent"]["signal"] if r["sent"] else "N/A",
                     "Macro":    r["macro"]["score_final"] if r["macro"] else "N/A",
                     "Insider":  r["insider"]["signal"] if r["insider"] else "N/A",
+                    "Options":  r["options_flow"]["signal"]      if r.get("options_flow")      else "-",
+                    "SEC 8-K":  r["sec_filings"]["signal"]       if r.get("sec_filings")       else "-",
+                    "Short %":  r["short_interest"]["short_pct"] if r.get("short_interest")    else "-",
+                    "Earnings": r["earnings_surprise"]["signal"] if r.get("earnings_surprise") else "-",
                 })
             except Exception as e:
                 st.warning(f"{t} : {e}")
@@ -367,8 +513,14 @@ with tab_scanner:
                 if val == "VENDRE":  return "background-color:#f8d7da;color:#721c24;font-weight:bold"
                 return ""
 
+            _styler = df_scan.style
+            try:
+                _styler = _styler.map(style_decision, subset=["Décision"])
+            except AttributeError:
+                _styler = _styler.applymap(style_decision, subset=["Décision"])
+
             st.dataframe(
-                df_scan.style.applymap(style_decision, subset=["Décision"]),
+                _styler,
                 use_container_width=True,
                 hide_index=True,
             )
@@ -393,7 +545,437 @@ with tab_scanner:
 
 
 # ===========================================================================
-# ONGLET 3 — BACKTEST
+# ONGLET 3 — PORTEFEUILLE
+# ===========================================================================
+
+with tab_portfolio:
+    st.subheader("💼 Mon portefeuille")
+
+    SIGNAL_ICONE = {"TENIR": "🟢", "SURVEILLER": "🟡", "VENDRE": "🔴"}
+    REGIME_LABELS = {
+        "pfu":    "PFU 30 % — Flat tax (défaut)",
+        "bareme": "Barème progressif (IR + 17.2 % PS)",
+        "pea":    "PEA après 5 ans (17.2 % PS uniquement)",
+    }
+
+    # -----------------------------------------------------------------------
+    # Paramètres broker & fiscalité
+    # -----------------------------------------------------------------------
+    brokers = _load_brokers()
+    broker_options = {v["nom"]: k for k, v in brokers.items()}
+
+    with st.expander("⚙️ Broker & Fiscalité", expanded=False):
+        cfg1, cfg2 = st.columns(2)
+
+        with cfg1:
+            st.markdown("**Broker**")
+            broker_nom_sel = st.selectbox(
+                "Sélectionner un broker",
+                list(broker_options.keys()),
+                key="broker_sel",
+                label_visibility="collapsed",
+            )
+            broker_key    = broker_options[broker_nom_sel]
+            broker_config = brokers[broker_key]
+
+            st.caption(f"💰 {broker_config['note']}")
+
+            # Avertissement si tarifs anciens
+            try:
+                maj = _date_cls.fromisoformat(broker_config["mis_a_jour"])
+                jours_old = (_date_cls.today() - maj).days
+                if jours_old > 30:
+                    st.warning(
+                        f"⚠️ Tarifs vérifiés il y a **{jours_old} jours**. "
+                        + (f"[Vérifier sur le site]({broker_config['url_tarifs']})"
+                           if broker_config.get("url_tarifs") else "Mettre à jour config/brokers.json.")
+                    )
+                else:
+                    st.success(f"✅ Tarifs vérifiés il y a {jours_old} jours")
+            except Exception:
+                pass
+
+            if broker_key == "personnalise":
+                st.info("Les frais seront saisis manuellement à chaque transaction.")
+
+        with cfg2:
+            st.markdown("**Régime fiscal France**")
+            regime_label = st.selectbox(
+                "Régime fiscal",
+                list(REGIME_LABELS.values()),
+                key="tax_regime_label",
+                label_visibility="collapsed",
+            )
+            tax_regime = {v: k for k, v in REGIME_LABELS.items()}[regime_label]
+
+            tmi_val = 30
+            if tax_regime == "bareme":
+                tmi_val = st.selectbox(
+                    "Tranche marginale d'imposition (TMI)",
+                    [0, 11, 30, 41, 45],
+                    index=2,
+                    key="tmi_sel",
+                    format_func=lambda x: f"{x} %",
+                )
+                taux_total = tmi_val + 17.2
+                st.caption(f"Taux effectif : {tmi_val} % + 17.2 % PS = **{taux_total:.1f} %**")
+            elif tax_regime == "pfu":
+                st.caption("12.8 % IR + 17.2 % prélèvements sociaux = **30 %**")
+                st.caption("Les moins-values compensent les plus-values sur l'année fiscale.")
+            elif tax_regime == "pea":
+                st.caption("Exonéré d'IR après 5 ans. Seuls **17.2 % de PS** restent dus.")
+                st.caption("Attention : retraits avant 5 ans entraînent la clôture du PEA.")
+
+            st.caption("⚠️ Les impôts affichés sont des **estimations** par trade. "
+                       "Le calcul réel s'effectue à l'année sur l'ensemble des plus/moins-values.")
+
+    # -----------------------------------------------------------------------
+    # Enregistrer un achat
+    # -----------------------------------------------------------------------
+    with st.expander("➕ Enregistrer un achat", expanded=False):
+        # Sélecteur de ticker (même liste que l'onglet Analyse, avec noms)
+        pf_ticker = _ticker_selectbox("Ticker à acheter", key="pf_buy_ticker")
+
+        c2, c3, c4 = st.columns(3)
+
+        # Prix auto-rempli au dernier cours (clé inclut le ticker → reset si ticker change)
+        prix_marche = _fetch_prix_actuel(pf_ticker) if pf_ticker else None
+        prix_defaut = prix_marche if prix_marche else 100.0
+        pf_prix = c2.number_input(
+            "Prix d'achat",
+            min_value=0.0001, value=prix_defaut,
+            format="%.4f", key=f"pf_prix_{pf_ticker}",
+            help="Prix unitaire payé. Pré-rempli au dernier cours connu (mis à jour toutes les 5 min).",
+        )
+        if prix_marche:
+            c2.caption(f"Dernier cours : {prix_marche:.4f}")
+        else:
+            c2.caption("Prix non disponible — saisie manuelle")
+
+        pf_qty  = c3.number_input(
+            "Quantité",
+            min_value=0.0001, value=1.0,
+            format="%.6f", key="pf_qty",
+            help="Nombre d'unités achetées (actions, fractions, cryptos…).",
+        )
+        pf_date = c4.date_input("Date", key="pf_date",
+                                 help="Date de l'achat. Par défaut : aujourd'hui.")
+
+        # Frais calculés selon broker (clé inclut broker_key → reset si broker change)
+        frais_auto = _calculer_frais_broker(pf_prix * pf_qty, broker_config, "achat")
+        pf_frais = st.number_input(
+            f"Frais broker ({broker_nom_sel})",
+            min_value=0.0, value=frais_auto, format="%.4f",
+            key=f"pf_frais_{broker_key}",
+            help=_TOOLTIPS["frais"],
+        )
+        pf_notes = st.text_input("Notes (optionnel)", key="pf_notes",
+                                  placeholder="Ex: signal ACHETER score +0.32")
+
+        # Récapitulatif avant confirmation
+        cout_total   = round(pf_prix * pf_qty + pf_frais, 4)
+        cump_preview = round(cout_total / pf_qty, 6) if pf_qty else 0
+        st.caption(
+            f"Coût total : **{cout_total:.4f}** | "
+            f"CUMP résultant : **{cump_preview:.4f}** / unité (si 1ère position)",
+            help=_TOOLTIPS["cump"],
+        )
+
+        if st.button("Enregistrer l'achat", type="primary", key="pf_ajouter"):
+            pos = ajouter_achat(pf_ticker, pf_prix, pf_qty,
+                                pf_date.strftime("%Y-%m-%d"), pf_notes, frais=pf_frais)
+            st.success(f"✅ Achat enregistré — {pf_ticker} : {pos['quantite']} unités "
+                       f"@ CUMP {pos['prix_moyen']:.4f} (frais inclus)")
+            if "pf_positions" in st.session_state:
+                del st.session_state["pf_positions"]
+            st.rerun()
+
+    st.divider()
+
+    # --- Monitoring ---
+    col_refresh, col_mode = st.columns([3, 1])
+    lancer_eval = col_refresh.button("🔄 Analyser mes positions", type="primary", key="pf_eval")
+    mode_rapide = col_mode.checkbox("Mode rapide", value=True, key="pf_rapide",
+                                     help="P&L uniquement (instantané). Décocher pour le scoring multi-agent complet.")
+
+    positions_raw = evaluer_positions(with_scores=False)
+
+    if lancer_eval:
+        with st.spinner("Analyse en cours..."):
+            positions_eval = evaluer_positions(with_scores=not mode_rapide)
+        st.session_state["pf_positions"] = positions_eval
+
+    positions_eval = st.session_state.get("pf_positions", positions_raw)
+
+    if not positions_eval:
+        st.info("Aucune position ouverte. Enregistre ton premier achat ci-dessus.")
+    else:
+        # Résumé global
+        total_investi = sum(p["investi"] for p in positions_eval if p["investi"])
+        total_valeur  = sum(p["valeur"]  for p in positions_eval if p["valeur"])
+        total_pnl     = round(total_valeur - total_investi, 2) if total_valeur else None
+        total_pnl_pct = round(total_pnl / total_investi * 100, 2) if total_pnl and total_investi else None
+        nb_vendre     = sum(1 for p in positions_eval if p["signal_sortie"] == "VENDRE")
+        nb_surveiller = sum(1 for p in positions_eval if p["signal_sortie"] == "SURVEILLER")
+
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("Positions", len(positions_eval))
+        r2.metric("Investi", f"{total_investi:,.2f}")
+        if total_valeur and total_pnl is not None:
+            r3.metric("Valeur actuelle", f"{total_valeur:,.2f}",
+                       delta=f"{total_pnl:+.2f} ({total_pnl_pct:+.2f}%)")
+        else:
+            r3.metric("Valeur actuelle", "N/A")
+        r4.metric("🔴 Alertes vente", nb_vendre,
+                   delta=f"{nb_surveiller} à surveiller" if nb_surveiller else None,
+                   delta_color="off")
+
+        st.divider()
+
+        # Carte par position
+        for pos in sorted(positions_eval, key=lambda x: x["signal_sortie"], reverse=True):
+            signal = pos["signal_sortie"]
+            icone  = SIGNAL_ICONE.get(signal, "⚪")
+            ticker = pos["ticker"]
+
+            with st.container(border=True):
+                h1, h2, h3, h4, h5, h6, h7 = st.columns([2, 1.5, 1.5, 1.5, 1.5, 1.5, 1.2])
+
+                with h1:
+                    st.markdown(f"### {icone} {ticker}")
+                    st.caption(f"{pos['quantite']} unités · CUMP {pos['prix_moyen']:.4f}",
+                               help=_TOOLTIPS["ticker"] + " | " + _TOOLTIPS["cump"])
+                    if pos["date_achat"]:
+                        st.caption(f"Premier achat : {pos['date_achat']}"
+                                   + (f" ({pos['jours']} j)" if pos["jours"] else ""))
+                h2.metric("CUMP (prix moyen)", f"{pos['prix_moyen']:.4f}",
+                           help=_TOOLTIPS["cump"])
+                h3.metric("Prix actuel",
+                           f"{pos['prix_actuel']:.4f}" if pos["prix_actuel"] else "N/A",
+                           help="Dernier cours connu du marché pour cet actif.")
+                if pos["pnl_eur"] is not None:
+                    h4.metric("P&L latent", f"{pos['pnl_eur']:+.2f}",
+                               delta=f"{pos['pnl_pct']:+.2f}%",
+                               help=_TOOLTIPS["pnl_latent"])
+                else:
+                    h4.metric("P&L latent", "N/A", help=_TOOLTIPS["pnl_latent"])
+                h5.metric("Valeur totale",
+                           f"{pos['valeur']:,.2f}" if pos["valeur"] else "N/A",
+                           delta=f"{pos['quantite']} unités", delta_color="off",
+                           help=_TOOLTIPS["valeur_totale"])
+                h6.metric("Score agents", f"{pos['score']:+.4f}" if pos["score"] else "—",
+                           help=_TOOLTIPS["score"])
+                h6.caption(f"**{icone} {signal}**", help=_TOOLTIPS["signal_sortie"])
+
+                with h7:
+                    if st.button("💰 Vendre", key=f"sell_{ticker}"):
+                        st.session_state[f"vendre_{ticker}"] = True
+                    if st.button("🗑️ Suppr.", key=f"del_{ticker}",
+                                  help="Supprimer sans historique"):
+                        supprimer_position(ticker)
+                        if "pf_positions" in st.session_state:
+                            del st.session_state["pf_positions"]
+                        st.rerun()
+
+                # Formulaire de vente partielle ou totale
+                if st.session_state.get(f"vendre_{ticker}"):
+                    with st.form(key=f"form_vente_{ticker}"):
+                        st.markdown(f"**Vendre {ticker}** — tu as **{pos['quantite']}** unités "
+                                    f"· CUMP {pos['prix_moyen']:.4f}")
+                        vc1, vc2, vc3, vc4 = st.columns(4)
+                        qty_vente  = vc1.number_input(
+                            "Quantité à vendre", min_value=0.0001,
+                            max_value=float(pos["quantite"]),
+                            value=float(pos["quantite"]),
+                            format="%.6f", key=f"qv_{ticker}")
+                        px_vente   = vc2.number_input(
+                            "Prix de vente", min_value=0.0001,
+                            value=float(pos["prix_actuel"] or pos["prix_moyen"]),
+                            format="%.4f", key=f"pv_{ticker}")
+                        date_vente = vc3.date_input("Date", key=f"dv_{ticker}")
+                        notes_v    = vc4.text_input("Notes", key=f"nv_{ticker}",
+                                                     placeholder="signal VENDRE atteint")
+
+                        # Frais de vente selon broker
+                        frais_v_auto = _calculer_frais_broker(
+                            px_vente * qty_vente, broker_config, "vente")
+                        frais_v = st.number_input(
+                            f"Frais broker ({broker_nom_sel})",
+                            min_value=0.0, value=frais_v_auto, format="%.4f",
+                            key=f"fv_{ticker}_{broker_key}")
+
+                        # Aperçu P&L avant confirmation
+                        pnl_brut    = round((px_vente - pos["prix_moyen"]) * qty_vente, 2)
+                        pnl_net     = round(pnl_brut - frais_v, 2)
+                        base        = pos["prix_moyen"] * qty_vente
+                        pnl_pct_pr  = round(pnl_net / base * 100, 2) if base else 0.0
+                        impots, pnl_fi, taux_eff = _net_apres_impots(pnl_net, tax_regime, tmi_val)
+
+                        col_pv1, col_pv2, col_pv3 = st.columns(3)
+                        col_pv1.metric("P&L brut",          f"{pnl_brut:+.2f}")
+                        col_pv2.metric("P&L net (après frais)", f"{pnl_net:+.2f}",
+                                        delta=f"{pnl_pct_pr:+.2f}%")
+                        col_pv3.metric(f"Après impôts (~{taux_eff:.0f}%)",
+                                        f"{pnl_fi:+.2f}",
+                                        delta=f"− {impots:.2f} estimés",
+                                        delta_color="inverse")
+
+                        confirmer = st.form_submit_button("✅ Confirmer", type="primary")
+                        annuler   = st.form_submit_button("Annuler")
+
+                    if confirmer:
+                        try:
+                            trade = ajouter_vente(ticker, px_vente, qty_vente,
+                                                   date_vente.strftime("%Y-%m-%d"),
+                                                   notes_v, frais=frais_v)
+                            st.success(f"✅ Vente enregistrée — P&L net : "
+                                       f"{trade['pnl_eur']:+.2f} ({trade['pnl_pct']:+.2f}%)")
+                            del st.session_state[f"vendre_{ticker}"]
+                            if "pf_positions" in st.session_state:
+                                del st.session_state["pf_positions"]
+                            st.rerun()
+                        except ValueError as e:
+                            st.error(str(e))
+                    if annuler:
+                        del st.session_state[f"vendre_{ticker}"]
+                        st.rerun()
+
+                # Journal des transactions (expandable)
+                with st.expander(f"📋 Journal des transactions {ticker}"):
+                    txs = lister_transactions(ticker)
+                    if txs:
+                        df_tx = pd.DataFrame([{
+                            "Date":     t["date"],
+                            "Type":     "🟢 Achat" if t["type"] == "achat" else "🔴 Vente",
+                            "Prix":     t["prix"],
+                            "Qté":      t["quantite"],
+                            "Frais":    t.get("frais", 0.0),
+                            "P&L net":  t.get("pnl_eur", ""),
+                            "CUMP réf": t.get("prix_moyen_achat", ""),
+                            "Notes":    t.get("notes", ""),
+                        } for t in txs])
+                        st.dataframe(df_tx, use_container_width=True, hide_index=True,
+                            column_config={
+                                "Prix":     st.column_config.NumberColumn(
+                                    "Prix", format="%.4f",
+                                    help="Prix unitaire auquel l'ordre a été exécuté."),
+                                "Qté":      st.column_config.NumberColumn(
+                                    "Qté", format="%.6f",
+                                    help="Nombre d'unités achetées ou vendues."),
+                                "Frais":    st.column_config.NumberColumn(
+                                    "Frais", format="%.4f €",
+                                    help=_TOOLTIPS["frais"]),
+                                "P&L net":  st.column_config.NumberColumn(
+                                    "P&L net", format="%.2f",
+                                    help=_TOOLTIPS["pnl_net"]),
+                                "CUMP réf": st.column_config.NumberColumn(
+                                    "CUMP réf", format="%.4f",
+                                    help="CUMP au moment de la vente — sert de base au calcul du P&L."),
+                            })
+
+    # --- Note ---
+    with st.expander("ℹ️ Signaux de sortie & méthode CUMP"):
+        st.markdown("""
+**Méthode de calcul : CUMP** (Coût Unitaire Moyen Pondéré)
+À chaque achat, le prix moyen est recalculé. Le P&L de chaque vente est calculé sur ce prix moyen.
+C'est la méthode standard utilisée par les brokers français (Boursorama, Trade Republic…).
+
+| Signal | Condition | Action suggérée |
+|--------|-----------|-----------------|
+| 🟢 **TENIR** | Score > +0.05 ET perte < 4% | Conserver |
+| 🟡 **SURVEILLER** | Score entre -0.10 et +0.05 OU perte entre 4% et 8% | Attention |
+| 🔴 **VENDRE** | Score < -0.10 OU perte > 8% (stop-loss) | Sortir |
+""")
+
+    st.divider()
+
+    # --- Historique des ventes (toujours visible) ---
+    historique = lister_historique()
+    if historique:
+        st.subheader("📜 Historique des ventes")
+
+        total_trades  = len(historique)
+        trades_gains  = [t for t in historique if t["pnl_eur"] > 0]
+        pnl_total     = round(sum(t["pnl_eur"] for t in historique), 2)
+        win_rate      = round(len(trades_gains) / total_trades * 100) if total_trades else 0
+
+        # Totaux avec frais
+        total_frais = round(sum(t.get("frais", 0.0) for t in historique), 2)
+        ha1, ha2, ha3, ha4 = st.columns(4)
+        ha1.metric("Trades", f"{total_trades}  ({len(trades_gains)}✅ / {total_trades - len(trades_gains)}❌)")
+        ha2.metric("Win rate", f"{win_rate} %")
+        ha3.metric("P&L net total (après frais)", f"{pnl_total:+.2f}")
+        ha4.metric("Frais broker payés", f"− {total_frais:.2f}")
+
+        # Impôts estimés sur l'ensemble (gains uniquement)
+        gains_total = sum(t["pnl_eur"] for t in historique if t["pnl_eur"] > 0)
+        _, _, taux_glob = _net_apres_impots(gains_total, tax_regime, tmi_val)
+        impots_glob = round(gains_total * taux_glob / 100, 2) if gains_total > 0 else 0.0
+        if gains_total > 0:
+            st.caption(f"🧾 Impôts estimés sur les gains ({taux_glob:.0f}% {regime_label.split('—')[0].strip()}) "
+                       f": **{impots_glob:.2f}** · "
+                       f"P&L net après impôts estimé : **{pnl_total - impots_glob:+.2f}**  "
+                       f"*(estimation par trade — les pertes compensent les gains à l'année)*")
+
+        df_hist = pd.DataFrame([{
+            "Ticker":           t["ticker"],
+            "Date":             t["date"],
+            "Prix vente":       t.get("prix_vente", t.get("prix", "")),
+            "Qté":              t["quantite"],
+            "CUMP achat":       t["prix_moyen_achat"],
+            "Frais":            t.get("frais", 0.0),
+            "P&L brut":         t.get("pnl_brut", t["pnl_eur"]),
+            "P&L net":          t["pnl_eur"],
+            "P&L (%)":          t["pnl_pct"],
+            "Notes":            t.get("notes", ""),
+        } for t in historique])
+
+        def _style_pnl(val):
+            if isinstance(val, (int, float)):
+                if val > 0: return "color:#28a745;font-weight:bold"
+                if val < 0: return "color:#dc3545;font-weight:bold"
+            return ""
+
+        _styler_hist = df_hist.style
+        try:
+            _styler_hist = _styler_hist.map(_style_pnl, subset=["P&L brut", "P&L net", "P&L (%)"])
+        except AttributeError:
+            _styler_hist = _styler_hist.applymap(_style_pnl, subset=["P&L brut", "P&L net", "P&L (%)"])
+
+        st.dataframe(_styler_hist, use_container_width=True, hide_index=True,
+            column_config={
+                "Ticker":      st.column_config.TextColumn(
+                    "Ticker", help=_TOOLTIPS["ticker"]),
+                "Prix vente":  st.column_config.NumberColumn(
+                    "Prix vente", format="%.4f",
+                    help="Prix unitaire auquel tu as vendu."),
+                "Qté":         st.column_config.NumberColumn(
+                    "Qté", format="%.6f",
+                    help="Nombre d'unités vendues."),
+                "CUMP achat":  st.column_config.NumberColumn(
+                    "CUMP achat", format="%.4f",
+                    help=_TOOLTIPS["cump"]),
+                "Frais":       st.column_config.NumberColumn(
+                    "Frais", format="%.4f €",
+                    help=_TOOLTIPS["frais"]),
+                "P&L brut":    st.column_config.NumberColumn(
+                    "P&L brut", format="%.2f",
+                    help=_TOOLTIPS["pnl_brut"]),
+                "P&L net":     st.column_config.NumberColumn(
+                    "P&L net", format="%.2f",
+                    help=_TOOLTIPS["pnl_net"]),
+                "P&L (%)":     st.column_config.NumberColumn(
+                    "P&L (%)", format="%.2f %%",
+                    help=_TOOLTIPS["pnl_pct"]),
+            })
+
+        csv_hist = df_hist.to_csv(index=False).encode("utf-8")
+        st.download_button("📥 Exporter CSV", data=csv_hist,
+                            file_name="historique_ventes.csv", mime="text/csv")
+
+
+# ===========================================================================
+# ONGLET 4 — BACKTEST
 # ===========================================================================
 
 with tab_backtest:

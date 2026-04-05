@@ -10,6 +10,10 @@ from agents.risk import analyze_risk
 from agents.trends import analyze_trends
 from agents.insider import analyze_insider
 from agents.macro import analyze_macro
+from agents.options_flow import analyze_options_flow
+from agents.sec_filings import analyze_sec_filings
+from agents.short_interest import analyze_short_interest
+from agents.earnings_surprise import analyze_earnings_surprise
 from orchestrator.scoring import calculer_score
 
 load_dotenv("config/.env")
@@ -27,7 +31,9 @@ _ASSET_LABELS = {
 
 def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
                   sent: dict, risk: dict, trends: dict, insider: dict,
-                  macro: dict, scoring: dict) -> str:
+                  macro: dict, options_flow: dict, sec_filings: dict,
+                  short_interest: dict, earnings_surprise: dict,
+                  scoring: dict) -> str:
     """Construit le prompt LLM en n'incluant que les agents actifs."""
 
     label = _ASSET_LABELS.get(asset_type, asset_type)
@@ -116,6 +122,46 @@ def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
             f"- Signal        : {macro['signal']}\n",
         ]
 
+    # --- Options Flow ---
+    if options_flow:
+        lines += [
+            "OPTIONS FLOW :",
+            f"- P/C ratio (vol) : {options_flow.get('pc_ratio_vol')}",
+            f"- IV Skew         : {options_flow.get('skew_iv')}",
+            f"- Activite anorm. : {options_flow.get('unusual_calls')} calls / {options_flow.get('unusual_puts')} puts",
+            f"- Signal          : {options_flow['signal']}\n",
+        ]
+
+    # --- SEC Filings ---
+    if sec_filings:
+        lines += [
+            "DEPOTS SEC (8-K) :",
+            f"- Filings 90j     : {sec_filings.get('nb_filings')}",
+            f"- Dernier depot   : {sec_filings.get('last_date')} | Items : {sec_filings.get('last_items')}",
+            f"- Signal          : {sec_filings['signal']}\n",
+        ]
+
+    # --- Short Interest ---
+    if short_interest:
+        lines += [
+            "SHORT INTEREST :",
+            f"- Short % float   : {short_interest.get('short_pct')} %",
+            f"- Jours couverture: {short_interest.get('days_to_cover')}",
+            f"- Var. mensuelle  : {short_interest.get('mom_change_pct')} %",
+            f"- Signal          : {short_interest['signal']}\n",
+        ]
+
+    # --- Earnings Surprise ---
+    if earnings_surprise:
+        lines += [
+            "EARNINGS SURPRISE :",
+            f"- Derniere surprise : {earnings_surprise.get('latest_surprise')} %",
+            f"- Moyenne 4T        : {earnings_surprise.get('avg_surprise')} %",
+            f"- Beats             : {earnings_surprise.get('nb_beats')}/{earnings_surprise.get('nb_quarters')}",
+            f"- Prochain earnings : {earnings_surprise.get('next_earnings')}",
+            f"- Signal            : {earnings_surprise['signal']}\n",
+        ]
+
     # --- Score final ---
     lines += [
         "SCORE PONDÉRÉ FINAL :",
@@ -131,6 +177,14 @@ def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
         lines.append(f"- Insider    : {scoring['scores']['insider']} × {scoring['poids']['insider']}")
     if macro:
         lines.append(f"- Macro      : {scoring['scores']['macro']} × {scoring['poids']['macro']}")
+    if options_flow:
+        lines.append(f"- Options    : {scoring['scores']['options_flow']} × {scoring['poids']['options_flow']}")
+    if sec_filings:
+        lines.append(f"- SEC 8-K    : {scoring['scores']['sec_filings']} × {scoring['poids']['sec_filings']}")
+    if short_interest:
+        lines.append(f"- Short Int. : {scoring['scores']['short_interest']} × {scoring['poids']['short_interest']}")
+    if earnings_surprise:
+        lines.append(f"- Earnings   : {scoring['scores']['earnings_surprise']} × {scoring['poids']['earnings_surprise']}")
     lines += [
         f"- Mult risque: {scoring['scores']['multiplicateur']}",
         f"- Mult macro : {scoring['scores']['mult_macro']}",
@@ -165,19 +219,28 @@ def run(ticker: str, with_llm: bool = True) -> dict:
     sent = analyze_sentiment(ticker) if config["sentiment"] else None
 
     # --- Agents conditionnels ---
-    fund    = analyze_fundamental(ticker)             if config["fondamental"] else None
-    trends  = analyze_trends(ticker)                  if config["trends"]      else None
-    insider = analyze_insider(ticker)                 if config["insider"]     else None
-    macro   = analyze_macro(market=config["macro"])   if config["macro"]       else None
+    fund             = analyze_fundamental(ticker)           if config["fondamental"]       else None
+    trends           = analyze_trends(ticker)                if config["trends"]            else None
+    insider          = analyze_insider(ticker)               if config["insider"]           else None
+    macro            = analyze_macro(market=config["macro"]) if config["macro"]             else None
+    options_flow     = analyze_options_flow(ticker)          if config["options_flow"]      else None
+    sec_filings      = analyze_sec_filings(ticker)           if config["sec_filings"]       else None
+    short_interest   = analyze_short_interest(ticker)        if config["short_interest"]    else None
+    earnings_surprise= analyze_earnings_surprise(ticker)     if config["earnings_surprise"] else None
 
     # --- Scoring (gère les None automatiquement) ---
-    scoring = calculer_score(tech, fund, sent, risk, trends, insider, macro)
+    scoring = calculer_score(
+        tech, fund, sent, risk, trends, insider, macro,
+        options_flow, sec_filings, short_interest, earnings_surprise
+    )
 
     # --- Rapport LLM (optionnel) ---
     rapport = ""
     if with_llm:
         prompt = _build_prompt(ticker, asset_type, tech, fund, sent,
-                               risk, trends, insider, macro, scoring)
+                               risk, trends, insider, macro,
+                               options_flow, sec_filings, short_interest,
+                               earnings_surprise, scoring)
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
@@ -186,17 +249,21 @@ def run(ticker: str, with_llm: bool = True) -> dict:
         rapport = response.choices[0].message.content or ""
 
     return {
-        "ticker":     ticker,
-        "asset_type": asset_type,
-        "rapport":    rapport,
-        "scoring":    scoring,
-        "tech":       tech,
-        "fund":       fund,
-        "sent":       sent,
-        "risk":       risk,
-        "trends":     trends,
-        "insider":    insider,
-        "macro":      macro,
+        "ticker":           ticker,
+        "asset_type":       asset_type,
+        "rapport":          rapport,
+        "scoring":          scoring,
+        "tech":             tech,
+        "fund":             fund,
+        "sent":             sent,
+        "risk":             risk,
+        "trends":           trends,
+        "insider":          insider,
+        "macro":            macro,
+        "options_flow":     options_flow,
+        "sec_filings":      sec_filings,
+        "short_interest":   short_interest,
+        "earnings_surprise":earnings_surprise,
     }
 
 

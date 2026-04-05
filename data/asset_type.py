@@ -66,31 +66,47 @@ def detect_asset_type(ticker: str) -> str:
 # macro = "us" | "eu" | None
 AGENTS_PAR_TYPE = {
     "us_stock": {
-        "fondamental": True,
-        "sentiment":   True,
-        "trends":      True,
-        "insider":     True,
-        "macro":       "us",
+        "fondamental":      True,
+        "sentiment":        True,
+        "trends":           True,
+        "insider":          True,
+        "macro":            "us",
+        "options_flow":     True,   # options listées sur NYSE/NASDAQ
+        "sec_filings":      True,   # EDGAR = US uniquement
+        "short_interest":   True,   # yfinance : données FINRA
+        "earnings_surprise":True,   # EPS surprise via yfinance
     },
     "eu_stock": {
-        "fondamental": True,    # données yfinance partielles mais utiles
-        "sentiment":   True,    # couverture news variable selon le titre
-        "trends":      True,
-        "insider":     False,   # OpenInsider = SEC = US uniquement
-        "macro":       "eu",    # données BCE via FRED
+        "fondamental":      True,
+        "sentiment":        True,
+        "trends":           True,
+        "insider":          False,  # OpenInsider = SEC = US uniquement
+        "macro":            "eu",
+        "options_flow":     False,  # peu de données options EU sur yfinance
+        "sec_filings":      False,  # EDGAR = US uniquement
+        "short_interest":   True,   # yfinance en a pour certaines EU
+        "earnings_surprise":True,   # yfinance en a pour la plupart des EU
     },
     "crypto": {
-        "fondamental": False,   # pas de PER / dividende
-        "sentiment":   True,    # très pertinent pour crypto
-        "trends":      True,    # Google Trends très corrélé au cycle crypto
-        "insider":     False,   # pas de dirigeants déclarants
-        "macro":       "us",    # crypto cotée en USD
+        "fondamental":      False,  # pas de PER / dividende
+        "sentiment":        True,
+        "trends":           True,
+        "insider":          False,
+        "macro":            "us",
+        "options_flow":     False,  # pas via yfinance
+        "sec_filings":      False,
+        "short_interest":   False,
+        "earnings_surprise":False,  # pas d'EPS
     },
     "forex": {
-        "fondamental": False,   # pas applicable
-        "sentiment":   True,
-        "trends":      False,   # peu signal sur les paires FX
-        "insider":     False,   # pas applicable
-        "macro":       "us",    # macro USD comme référence
+        "fondamental":      False,
+        "sentiment":        True,
+        "trends":           False,
+        "insider":          False,
+        "macro":            "us",
+        "options_flow":     False,
+        "sec_filings":      False,
+        "short_interest":   False,
+        "earnings_surprise":False,
     },
 }

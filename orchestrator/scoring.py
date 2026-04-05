@@ -1,11 +1,15 @@
 POIDS = {
-    "technique":   0.25,
-    "fondamental": 0.20,
-    "sentiment":   0.10,
-    "trends":      0.07,
-    "insider":     0.08,
-    "macro":       0.10,
-    "risque":      0.20,
+    "technique":         0.25,
+    "fondamental":       0.18,
+    "sentiment":         0.09,
+    "trends":            0.06,
+    "insider":           0.07,
+    "macro":             0.09,
+    "risque":            0.20,   # multiplicateur, pas poids additif
+    "options_flow":      0.09,   # flux institutionnel options
+    "sec_filings":       0.06,   # événements réglementaires
+    "short_interest":    0.06,   # pression vendeuse
+    "earnings_surprise": 0.10,   # anomalie post-earnings drift
 }
 
 SEUIL_ACHAT = 0.10
@@ -35,37 +39,52 @@ def macro_en_multiplicateur(score_macro: float) -> float:
 
 def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
                    risk: dict = None, trends: dict = None,
-                   insider: dict = None, macro: dict = None) -> dict:
+                   insider: dict = None, macro: dict = None,
+                   options_flow: dict = None, sec_filings: dict = None,
+                   short_interest: dict = None, earnings_surprise: dict = None) -> dict:
     """
     Calcule le score pondéré global.
     Tous les agents sauf 'tech' et 'risk' sont optionnels (None = ignoré).
     Les poids sont renormalisés automatiquement selon les agents actifs.
     """
-    s_tech    = tech.get("score_final",    signal_en_score(tech["signal"]))
-    s_fund    = fund.get("score_final",    signal_en_score(fund["signal"])) if fund    else 0.0
-    s_sent    = signal_en_score(sent["signal"])                              if sent    else 0.0
-    s_trends  = trends.get("score_final",  0.0)                             if trends  else 0.0
-    s_insider = insider.get("score_final", 0.0)                             if insider else 0.0
-    s_macro   = macro.get("score_final",   0.0)                             if macro   else 0.0
+    s_tech     = tech.get("score_final",    signal_en_score(tech["signal"]))
+    s_fund     = fund.get("score_final",    signal_en_score(fund["signal"])) if fund     else 0.0
+    s_sent     = signal_en_score(sent["signal"])                              if sent     else 0.0
+    s_trends   = trends.get("score_final",  0.0)                             if trends   else 0.0
+    s_insider  = insider.get("score_final", 0.0)                             if insider  else 0.0
+    s_macro    = macro.get("score_final",   0.0)                             if macro    else 0.0
+    s_options  = options_flow.get("score_final",      0.0)                  if options_flow      else 0.0
+    s_sec      = sec_filings.get("score_final",       0.0)                  if sec_filings       else 0.0
+    s_short    = short_interest.get("score_final",    0.0)                  if short_interest    else 0.0
+    s_earnings = earnings_surprise.get("score_final", 0.0)                  if earnings_surprise else 0.0
+
     mult_risk  = risk.get("multiplicateur", 1.0) if risk else 1.0
     mult_macro = macro_en_multiplicateur(s_macro) if macro else 1.0
 
     poids_actifs = (
         POIDS["technique"] +
-        (POIDS["fondamental"] if fund    else 0) +
-        (POIDS["sentiment"]   if sent    else 0) +
-        (POIDS["trends"]      if trends  else 0) +
-        (POIDS["insider"]     if insider else 0) +
-        (POIDS["macro"]       if macro   else 0)
+        (POIDS["fondamental"]       if fund              else 0) +
+        (POIDS["sentiment"]         if sent              else 0) +
+        (POIDS["trends"]            if trends            else 0) +
+        (POIDS["insider"]           if insider           else 0) +
+        (POIDS["macro"]             if macro             else 0) +
+        (POIDS["options_flow"]      if options_flow      else 0) +
+        (POIDS["sec_filings"]       if sec_filings       else 0) +
+        (POIDS["short_interest"]    if short_interest    else 0) +
+        (POIDS["earnings_surprise"] if earnings_surprise else 0)
     )
 
     score_brut = (
-        s_tech    * POIDS["technique"] +
-        s_fund    * (POIDS["fondamental"] if fund    else 0) +
-        s_sent    * (POIDS["sentiment"]   if sent    else 0) +
-        s_trends  * (POIDS["trends"]      if trends  else 0) +
-        s_insider * (POIDS["insider"]     if insider else 0) +
-        s_macro   * (POIDS["macro"]       if macro   else 0)
+        s_tech     * POIDS["technique"] +
+        s_fund     * (POIDS["fondamental"]       if fund              else 0) +
+        s_sent     * (POIDS["sentiment"]         if sent              else 0) +
+        s_trends   * (POIDS["trends"]            if trends            else 0) +
+        s_insider  * (POIDS["insider"]           if insider           else 0) +
+        s_macro    * (POIDS["macro"]             if macro             else 0) +
+        s_options  * (POIDS["options_flow"]      if options_flow      else 0) +
+        s_sec      * (POIDS["sec_filings"]       if sec_filings       else 0) +
+        s_short    * (POIDS["short_interest"]    if short_interest    else 0) +
+        s_earnings * (POIDS["earnings_surprise"] if earnings_surprise else 0)
     ) / poids_actifs
 
     score_final = round(score_brut * mult_risk * mult_macro, 4)
@@ -80,14 +99,18 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
 
     return {
         "scores": {
-            "technique":      round(s_tech, 4),
-            "fondamental":    round(s_fund, 4),
-            "sentiment":      round(s_sent, 4),
-            "trends":         round(s_trends, 4),
-            "insider":        round(s_insider, 4),
-            "macro":          round(s_macro, 4),
-            "multiplicateur": mult_risk,
-            "mult_macro":     mult_macro,
+            "technique":         round(s_tech,     4),
+            "fondamental":       round(s_fund,     4),
+            "sentiment":         round(s_sent,     4),
+            "trends":            round(s_trends,   4),
+            "insider":           round(s_insider,  4),
+            "macro":             round(s_macro,    4),
+            "options_flow":      round(s_options,  4),
+            "sec_filings":       round(s_sec,      4),
+            "short_interest":    round(s_short,    4),
+            "earnings_surprise": round(s_earnings, 4),
+            "multiplicateur":    mult_risk,
+            "mult_macro":        mult_macro,
         },
         "poids":       POIDS,
         "score_final": score_final,
