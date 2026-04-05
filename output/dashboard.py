@@ -24,33 +24,15 @@ from datetime import date as _date_cls
 # Helpers frais & fiscalité
 # ---------------------------------------------------------------------------
 
-_BROKERS_PATH = Path("config/brokers.json")
+from data.fees_tax import charger_brokers, calculer_frais, calculer_impots
 
 @st.cache_data(ttl=3600)
 def _load_brokers() -> dict:
-    try:
-        with open(_BROKERS_PATH, encoding="utf-8") as f:
-            return {k: v for k, v in json.load(f).items() if not k.startswith("_")}
-    except Exception:
-        return {"personnalise": {"nom": "Personnalisé", "type_frais": "fixe",
-                                  "frais_achat": 0.0, "frais_vente": 0.0,
-                                  "note": "", "url_tarifs": "", "mis_a_jour": "2026-01-01"}}
+    return charger_brokers()
 
 
 def _calculer_frais_broker(montant: float, broker: dict, operation: str = "achat") -> float:
-    """Calcule les frais selon le type de broker et le montant de l'opération."""
-    t = broker.get("type_frais", "fixe")
-    if t == "fixe":
-        return broker.get(f"frais_{operation}", 0.0)
-    elif t == "pct":
-        taux = broker.get("taux_pct", 0.0)
-        mini = broker.get("frais_min", 0.0)
-        return max(mini, round(montant * taux / 100, 4))
-    elif t == "mixte":
-        fixe = broker.get(f"frais_{operation}", 0.0)
-        taux = broker.get("taux_pct", 0.0)
-        return round(fixe + montant * taux / 100, 4)
-    return 0.0
+    return calculer_frais(montant, broker, operation)
 
 
 @st.cache_data(ttl=300)
@@ -88,21 +70,8 @@ _TOOLTIPS = {
 
 
 def _net_apres_impots(pnl_net_frais: float, regime: str, tmi: int = 30) -> tuple:
-    """
-    Retourne (impots_estimes, pnl_apres_impots, taux_effectif_pct).
-    ATTENTION : estimation — les pertes annuelles compensent les gains en réalité.
-    Régimes : 'pfu' (30%), 'bareme' (TMI + 17.2% PS), 'pea' (17.2% PS après 5 ans).
-    """
-    if pnl_net_frais <= 0:
-        return 0.0, pnl_net_frais, 0.0
-    if regime == "pea":
-        taux = 0.172
-    elif regime == "bareme":
-        taux = round(tmi / 100 + 0.172, 4)
-    else:  # pfu
-        taux = 0.30
-    impots = round(pnl_net_frais * taux, 2)
-    return impots, round(pnl_net_frais - impots, 2), round(taux * 100, 1)
+    r = calculer_impots(pnl_net_frais, regime, tmi)
+    return r["impots"], r["pnl_apres_impots"], r["taux_effectif"]
 
 
 st.set_page_config(
