@@ -242,7 +242,13 @@ with tab_analyse:
 
         # --- Contexte macro ---
         if macro:
-            st.subheader("Contexte macroéconomique")
+            st.subheader("Contexte macroéconomique",
+                         help="Indicateurs économiques globaux qui influencent les marchés : "
+                              "taux d'intérêt directeur (fixé par la banque centrale), "
+                              "taux de chômage, confiance des consommateurs et spread obligataire. "
+                              "Un environnement favorable pousse les marchés à la hausse ; "
+                              "un environnement défavorable (taux élevés, chômage en hausse) "
+                              "les pèse à la baisse.")
             env   = macro["environnement"]
             icone = _icone_signal(macro["signal"])
 
@@ -340,6 +346,32 @@ with tab_analyse:
                                      f"Surprise : {earnings_surprise.get('latest_surprise')} %",
                                      f"Beats : {earnings_surprise.get('nb_beats')}/{earnings_surprise.get('nb_quarters')}"))
 
+        _AGENT_DESC = {
+            "Technique":    "Analyse les graphiques de prix : tendance (moyennes mobiles), "
+                            "momentum (RSI), signaux de retournement (MACD), "
+                            "et bandes de Bollinger. Ne regarde que le passé du cours.",
+            "Fondamental":  "Évalue la santé financière de l'entreprise : PER (cherté vs bénéfices), "
+                            "dividende versé, valorisation. Ignore la crypto et le forex.",
+            "Sentiment":    "Analyse le ton des actualités récentes autour du ticker. "
+                            "Si la majorité des articles est positive → signal haussier, négative → baissier.",
+            "Risque":       "Mesure la dangerosité de l'actif : volatilité (amplitude des variations), "
+                            "drawdown maximum (pire chute passée). Plus c'est élevé, plus c'est risqué.",
+            "Trends":       "Mesure l'intérêt des internautes via Google Trends. "
+                            "Un pic soudain peut signaler un engouement ou une panique.",
+            "Insider":      "Suit les achats et ventes d'actions par les dirigeants de la société. "
+                            "Un dirigeant qui achète massivement est souvent un bon signe.",
+            "Macro":        "Évalue si l'environnement économique global (taux, chômage, confiance) "
+                            "est favorable ou défavorable aux marchés.",
+            "Options Flow": "Analyse le marché des options : rapport puts/calls (P/C ratio) "
+                            "et asymétrie de volatilité implicite. Révèle les paris des gros investisseurs.",
+            "SEC 8-K":      "Surveille les dépôts réglementaires SEC (formulaire 8-K) : "
+                            "fusions, litiges, changements de direction. Beaucoup de filings = événement majeur.",
+            "Short Int.":   "Mesure le pourcentage d'actions vendues à découvert. "
+                            "Un short élevé et croissant = pression baissière ; une couverture des shorts = rebond possible.",
+            "Earnings":     "Analyse les surprises de résultats trimestriels : "
+                            "si l'entreprise bat régulièrement les attentes, c'est positif pour le cours.",
+        }
+
         NB_PAR_LIGNE = 4
         for debut in range(0, len(agents_affiches), NB_PAR_LIGNE):
             chunk = agents_affiches[debut:debut + NB_PAR_LIGNE]
@@ -347,7 +379,8 @@ with tab_analyse:
             for col, (nom_agent, signal, ligne1, ligne2) in zip(cols, chunk):
                 icone = _icone_signal(signal) if nom_agent != "Risque" else _icone_risque(signal)
                 with col:
-                    st.metric(nom_agent, f"{icone} {signal}")
+                    st.metric(nom_agent, f"{icone} {signal}",
+                              help=_AGENT_DESC.get(nom_agent, ""))
                     st.caption(ligne1)
                     st.caption(ligne2)
 
