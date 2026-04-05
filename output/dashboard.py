@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from data.market_data import get_stock_data, get_stock_info, get_news
 from data.asset_type import detect_asset_type
 from data.portfolio import (ajouter_achat, ajouter_vente, supprimer_position,
-                            supprimer_vente, evaluer_positions,
+                            supprimer_vente, evaluer_positions, definir_objectifs,
                             lister_historique, lister_transactions)
 from data.alerts_store import (lister_alertes, compter_non_lues,
                                 marquer_lue, tout_marquer_lu, supprimer_alerte)
@@ -340,13 +340,16 @@ with tab_analyse:
                                      f"Surprise : {earnings_surprise.get('latest_surprise')} %",
                                      f"Beats : {earnings_surprise.get('nb_beats')}/{earnings_surprise.get('nb_quarters')}"))
 
-        cols = st.columns(len(agents_affiches))
-        for col, (nom_agent, signal, ligne1, ligne2) in zip(cols, agents_affiches):
-            icone = _icone_signal(signal) if nom_agent != "Risque" else _icone_risque(signal)
-            with col:
-                st.metric(nom_agent, f"{icone} {signal}")
-                st.caption(ligne1)
-                st.caption(ligne2)
+        NB_PAR_LIGNE = 4
+        for debut in range(0, len(agents_affiches), NB_PAR_LIGNE):
+            chunk = agents_affiches[debut:debut + NB_PAR_LIGNE]
+            cols  = st.columns(NB_PAR_LIGNE)
+            for col, (nom_agent, signal, ligne1, ligne2) in zip(cols, chunk):
+                icone = _icone_signal(signal) if nom_agent != "Risque" else _icone_risque(signal)
+                with col:
+                    st.metric(nom_agent, f"{icone} {signal}")
+                    st.caption(ligne1)
+                    st.caption(ligne2)
 
         st.divider()
 
@@ -802,14 +805,71 @@ with tab_portfolio:
                            help=_TOOLTIPS["score"])
                 h6.caption(f"**{icone} {signal}**", help=_TOOLTIPS["signal_sortie"])
 
+                # Affichage des objectifs sous la ligne de métriques
+                cible_pct     = pos.get("cible_pct")
+                stop_loss_pct = pos.get("stop_loss_pct", -8.0)
+                prix_cible    = pos.get("prix_cible")
+                prix_stop     = pos.get("prix_stop")
+                obj_parts = []
+                obj_parts.append(f"🛑 Stop : **{stop_loss_pct:+.1f}%**"
+                                  + (f" ({prix_stop:.2f})" if prix_stop else ""))
+                if cible_pct:
+                    obj_parts.append(f"🎯 Cible : **+{cible_pct:.1f}%**"
+                                      + (f" ({prix_cible:.2f})" if prix_cible else ""))
+                else:
+                    obj_parts.append("🎯 Cible : *non définie*")
+                st.caption("  ·  ".join(obj_parts))
+
                 with h7:
                     if st.button("💰 Vendre", key=f"sell_{ticker}"):
                         st.session_state[f"vendre_{ticker}"] = True
+                    if st.button("🎯 Objectifs", key=f"obj_{ticker}"):
+                        st.session_state[f"objectifs_{ticker}"] = not st.session_state.get(f"objectifs_{ticker}", False)
                     if st.button("🗑️ Suppr.", key=f"del_{ticker}",
                                   help="Supprimer sans historique"):
                         supprimer_position(ticker)
                         if "pf_positions" in st.session_state:
                             del st.session_state["pf_positions"]
+                        st.rerun()
+
+                # Formulaire objectifs (cible + stop-loss)
+                if st.session_state.get(f"objectifs_{ticker}"):
+                    with st.form(key=f"form_obj_{ticker}"):
+                        st.markdown(f"**🎯 Objectifs pour {ticker}** — CUMP : {pos['prix_moyen']:.4f}")
+                        oj1, oj2 = st.columns(2)
+
+                        obj_stop = oj1.number_input(
+                            "Stop-loss (%)",
+                            value=float(pos.get("stop_loss_pct", -8.0)),
+                            min_value=-50.0, max_value=-0.5, step=0.5, format="%.1f",
+                            help="Perte maximale tolérée. Ex : -8 → vendre si -8% depuis le CUMP.",
+                            key=f"obj_stop_{ticker}",
+                        )
+                        prix_stop_prev = round(pos["prix_moyen"] * (1 + obj_stop / 100), 2)
+                        oj1.caption(f"= {prix_stop_prev:.2f} en valeur absolue")
+
+                        obj_cible = oj2.number_input(
+                            "Cible de gain (%)",
+                            value=float(pos.get("cible_pct", 15.0)),
+                            min_value=0.5, max_value=500.0, step=0.5, format="%.1f",
+                            help="Gain visé. Ex : 15 → vendre si +15% depuis le CUMP.",
+                            key=f"obj_cible_{ticker}",
+                        )
+                        prix_cible_prev = round(pos["prix_moyen"] * (1 + obj_cible / 100), 2)
+                        oj2.caption(f"= {prix_cible_prev:.2f} en valeur absolue")
+
+                        sauv = st.form_submit_button("💾 Enregistrer", type="primary")
+                        annuler_obj = st.form_submit_button("Annuler")
+
+                    if sauv:
+                        definir_objectifs(ticker, cible_pct=obj_cible, stop_loss_pct=obj_stop)
+                        st.success(f"✅ Objectifs enregistrés — Stop : {obj_stop:+.1f}% ({prix_stop_prev:.2f})  ·  Cible : +{obj_cible:.1f}% ({prix_cible_prev:.2f})")
+                        st.session_state[f"objectifs_{ticker}"] = False
+                        if "pf_positions" in st.session_state:
+                            del st.session_state["pf_positions"]
+                        st.rerun()
+                    if annuler_obj:
+                        st.session_state[f"objectifs_{ticker}"] = False
                         st.rerun()
 
                 # Formulaire de vente partielle ou totale

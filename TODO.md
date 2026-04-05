@@ -23,6 +23,8 @@ Les tâches terminées restent visibles pour garder l'historique.
 - [x] Scheduler d'alertes en arrière-plan (`python alerts/scheduler.py`)
 - [x] Badge 🔔 sur l'onglet Portefeuille quand alertes non lues
 - [x] Commande unique de démarrage (`python start.py`)
+- [x] Fix affichage agents Analyse — 4 par ligne au lieu de tout sur une seule ligne
+- [x] Prix cible + stop-loss par position — bouton 🎯 Objectifs par position dans le portefeuille
 
 ---
 
@@ -30,7 +32,7 @@ Les tâches terminées restent visibles pour garder l'historique.
 
 - [ ] **Email alertes** — configurer `config/alerts.json` (email.enabled, destinataire, smtp_password)
       → Infrastructure prête, il suffit de renseigner les credentials
-- [ ] **Prix cible + stop-loss par position** — définir un objectif de vente par ticker,
+- [x] **Prix cible + stop-loss par position** — définir un objectif de vente par ticker,
       l'app surveille et alerte automatiquement
 - [ ] **Historique du score** — tracer l'évolution du score d'un ticker dans le temps
       pour détecter une dégradation progressive avant une chute

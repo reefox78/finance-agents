@@ -67,15 +67,20 @@ def verifier_positions(with_scores: bool = False) -> list[dict]:
         pnl_pct = round((prix_now - prix_moyen) / prix_moyen * 100, 2)
         pnl_eur = round((prix_now - prix_moyen) * quantite, 2)
 
+        # Seuils : per-position en priorité, sinon global config
+        seuil_stop  = pos.get("stop_loss_pct", seuils["pnl_stop_loss_pct"])
+        seuil_cible = pos.get("cible_pct",     seuils["pnl_cible_pct"])
+        seuil_alerte = seuil_stop / 2  # avertissement à mi-chemin du stop
+
         # --- Stop-loss ---
-        if pnl_pct <= seuils["pnl_stop_loss_pct"]:
+        if pnl_pct <= seuil_stop:
             a = creer_alerte(
                 ticker=ticker,
                 type_alerte="STOP_LOSS",
                 niveau="CRITIQUE",
                 message=(f"{ticker} a perdu {pnl_pct:+.1f}% depuis ton CUMP "
                          f"({prix_moyen:.2f} → {prix_now:.2f}). "
-                         f"Stop-loss à {seuils['pnl_stop_loss_pct']}% déclenché."),
+                         f"Stop-loss à {seuil_stop}% déclenché."),
                 details={"pnl_pct": pnl_pct, "pnl_eur": pnl_eur,
                          "prix_moyen": prix_moyen, "prix_actuel": prix_now},
             )
@@ -83,14 +88,14 @@ def verifier_positions(with_scores: bool = False) -> list[dict]:
                 nouvelles.append(a)
 
         # --- Alerte P&L (pré-stop-loss) ---
-        elif pnl_pct <= seuils["pnl_alerte_pct"]:
+        elif pnl_pct <= seuil_alerte:
             a = creer_alerte(
                 ticker=ticker,
                 type_alerte="ALERTE_PNL",
                 niveau="SURVEILLER",
                 message=(f"{ticker} est en perte de {pnl_pct:+.1f}% "
                          f"({pnl_eur:+.2f}). "
-                         f"Stop-loss à {seuils['pnl_stop_loss_pct']}% non encore atteint."),
+                         f"Stop-loss à {seuil_stop}% non encore atteint."),
                 details={"pnl_pct": pnl_pct, "pnl_eur": pnl_eur,
                          "prix_moyen": prix_moyen, "prix_actuel": prix_now},
             )
@@ -98,14 +103,14 @@ def verifier_positions(with_scores: bool = False) -> list[dict]:
                 nouvelles.append(a)
 
         # --- Cible de gain atteinte ---
-        if pnl_pct >= seuils["pnl_cible_pct"]:
+        if pnl_pct >= seuil_cible:
             a = creer_alerte(
                 ticker=ticker,
                 type_alerte="CIBLE_ATTEINTE",
                 niveau="INFO",
                 message=(f"{ticker} a atteint +{pnl_pct:.1f}% de gain "
                          f"({pnl_eur:+.2f}). "
-                         f"Objectif de +{seuils['pnl_cible_pct']}% atteint — envisager la prise de bénéfices."),
+                         f"Objectif de +{seuil_cible}% atteint — envisager la prise de bénéfices."),
                 details={"pnl_pct": pnl_pct, "pnl_eur": pnl_eur,
                          "prix_moyen": prix_moyen, "prix_actuel": prix_now},
             )

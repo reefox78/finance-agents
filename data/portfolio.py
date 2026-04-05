@@ -263,6 +263,34 @@ def lister_positions() -> list[dict]:
     return [p for p in data["positions"].values() if p["quantite"] > 1e-9]
 
 
+def definir_objectifs(ticker: str,
+                      cible_pct: float | None = None,
+                      stop_loss_pct: float | None = None) -> dict:
+    """
+    Définit la cible de gain et/ou le stop-loss d'une position.
+    Ces seuils sont propres à chaque position et prioritaires sur les seuils globaux.
+
+    Args:
+        ticker        : symbole de la position (ex: "AAPL")
+        cible_pct     : gain visé en % (ex: 15.0 → vendre si +15%)
+        stop_loss_pct : perte maximale tolérée en % négatif (ex: -8.0)
+
+    Returns:
+        La position mise à jour.
+    """
+    data   = _charger()
+    ticker = ticker.upper().strip()
+    pos    = data["positions"].get(ticker)
+    if pos is None:
+        raise ValueError(f"Position {ticker} introuvable")
+    if cible_pct is not None:
+        pos["cible_pct"] = round(float(cible_pct), 2)
+    if stop_loss_pct is not None:
+        pos["stop_loss_pct"] = round(float(stop_loss_pct), 2)
+    _sauvegarder(data)
+    return pos
+
+
 def lister_historique() -> list[dict]:
     """Retourne toutes les ventes du plus récent au plus ancien."""
     hist = _charger()["historique_ventes"]
@@ -294,10 +322,14 @@ def _prix_actuel(ticker: str) -> float | None:
         return None
 
 
-def _signal_sortie(pnl_pct: float, score: float) -> str:
-    if pnl_pct <= -8.0 or score <= -0.10:
+def _signal_sortie(pnl_pct: float, score: float,
+                   stop_loss_pct: float = -8.0,
+                   cible_pct: float = None) -> str:
+    if pnl_pct <= stop_loss_pct or score <= -0.10:
         return "VENDRE"
-    if pnl_pct <= -4.0 or score <= 0.05:
+    if cible_pct is not None and pnl_pct >= cible_pct:
+        return "VENDRE"   # cible atteinte → prendre les bénéfices
+    if pnl_pct <= stop_loss_pct / 2 or score <= 0.05:
         return "SURVEILLER"
     return "TENIR"
 
@@ -336,8 +368,10 @@ def evaluer_positions(with_scores: bool = True) -> list[dict]:
             except Exception:
                 pass
 
+        stop_loss_pct = pos.get("stop_loss_pct", -8.0)
+        cible_pct     = pos.get("cible_pct", None)
         if pnl_pct is not None:
-            signal = _signal_sortie(pnl_pct, score)
+            signal = _signal_sortie(pnl_pct, score, stop_loss_pct, cible_pct)
 
         # Date du premier achat
         achats = [t for t in pos.get("transactions", []) if t["type"] == "achat"]
@@ -349,18 +383,23 @@ def evaluer_positions(with_scores: bool = True) -> list[dict]:
             jours = None
 
         resultats.append({
-            "ticker":       ticker,
-            "quantite":     quantite,
-            "prix_moyen":   prix_moyen,
-            "prix_actuel":  prix_now,
-            "valeur":       valeur,
-            "investi":      investi,
-            "pnl_eur":      pnl_eur,
-            "pnl_pct":      pnl_pct,
-            "jours":        jours,
-            "date_achat":   date_premier_achat,
-            "score":        round(score, 4),
-            "signal_sortie":signal,
+            "ticker":        ticker,
+            "quantite":      quantite,
+            "prix_moyen":    prix_moyen,
+            "prix_actuel":   prix_now,
+            "valeur":        valeur,
+            "investi":       investi,
+            "pnl_eur":       pnl_eur,
+            "pnl_pct":       pnl_pct,
+            "jours":         jours,
+            "date_achat":    date_premier_achat,
+            "score":         round(score, 4),
+            "signal_sortie": signal,
+            "cible_pct":     cible_pct,
+            "stop_loss_pct": stop_loss_pct,
+            # Prix absolus correspondants (calculés depuis le CUMP)
+            "prix_cible":    round(prix_moyen * (1 + cible_pct / 100), 4)     if cible_pct     else None,
+            "prix_stop":     round(prix_moyen * (1 + stop_loss_pct / 100), 4) if stop_loss_pct else None,
         })
 
     return resultats
