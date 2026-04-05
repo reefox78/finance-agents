@@ -16,6 +16,7 @@ from agents.short_interest import analyze_short_interest
 from agents.earnings_surprise import analyze_earnings_surprise
 from agents.volume_delta import analyze_volume_delta
 from orchestrator.scoring import calculer_score
+from data.score_history import enregistrer_score
 
 load_dotenv("config/.env")
 
@@ -261,6 +262,12 @@ def run(ticker: str, with_llm: bool = True) -> dict:
             temperature=0.3,
         )
         rapport = response.choices[0].message.content or ""
+
+    # --- Sauvegarde historique du score ---
+    try:
+        enregistrer_score(ticker, scoring["score_final"], scoring["decision"])
+    except Exception:
+        pass   # non bloquant
 
     return {
         "ticker":           ticker,

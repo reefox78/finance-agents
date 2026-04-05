@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.market_data import get_stock_data, get_stock_info, get_news
 from data.asset_type import detect_asset_type
+from data.score_history import lire_historique
 from data.portfolio import (ajouter_achat, ajouter_vente, supprimer_position,
                             supprimer_vente, evaluer_positions, definir_objectifs,
                             lister_historique, lister_transactions)
@@ -432,7 +433,13 @@ with tab_analyse:
         decision = scoring["decision"]
         score    = scoring["score_final"]
         sc1, sc2, sc3, sc4 = st.columns(4)
-        sc1.metric("Score final", f"{score} / 1.0")
+        sc1.metric("Score final", f"{score} / 1.0",
+                   help="Score de conviction global calculé par tous les agents actifs.\n\n"
+                        "🟢 ≥ +0.10 → ACHETER\n"
+                        "🟡 entre −0.10 et +0.10 → NEUTRE\n"
+                        "🔴 ≤ −0.10 → VENDRE\n\n"
+                        "Exemple : +0.85 = signal d'achat très fort et convergent. "
+                        "−0.02 = agents en désaccord, pas de signal clair.")
         sc2.metric("Décision",    f"{_icone_signal(decision)} {decision}")
         sc3.metric("Mult risque", scoring["scores"]["multiplicateur"])
         sc4.metric("Mult macro",  scoring["scores"]["mult_macro"])
@@ -454,6 +461,57 @@ with tab_analyse:
         ))
         fig_score.update_layout(height=200, margin=dict(l=20, r=20, t=20, b=0))
         st.plotly_chart(fig_score, use_container_width=True)
+
+        # --- Historique du score ---
+        historique = lire_historique(ticker)
+        if len(historique) >= 2:
+            st.subheader("Évolution du score",
+                         help="Chaque point correspond à une analyse lancée. "
+                              "Une dégradation progressive du score avant une chute de cours "
+                              "est souvent un signal d'alerte précoce.")
+            df_hist = pd.DataFrame(historique)
+            df_hist["ts"] = pd.to_datetime(df_hist["ts"])
+
+            couleurs_dec = {"ACHETER": "#2ecc71", "NEUTRE": "#f39c12", "VENDRE": "#e74c3c"}
+
+            fig_hist = go.Figure()
+
+            # Zones colorées de fond
+            fig_hist.add_hrect(y0=0.10,  y1=1.0,   fillcolor="rgba(46,204,113,0.07)",  line_width=0)
+            fig_hist.add_hrect(y0=-0.10, y1=0.10,  fillcolor="rgba(243,156,18,0.07)",  line_width=0)
+            fig_hist.add_hrect(y0=-1.0,  y1=-0.10, fillcolor="rgba(231,76,60,0.07)",   line_width=0)
+
+            # Lignes de seuil
+            fig_hist.add_hline(y=0.10,  line_dash="dot", line_color="rgba(46,204,113,0.5)",  line_width=1)
+            fig_hist.add_hline(y=-0.10, line_dash="dot", line_color="rgba(231,76,60,0.5)",   line_width=1)
+            fig_hist.add_hline(y=0,     line_dash="dot", line_color="rgba(150,150,150,0.3)", line_width=1)
+
+            # Courbe principale
+            fig_hist.add_trace(go.Scatter(
+                x=df_hist["ts"],
+                y=df_hist["score"],
+                mode="lines+markers",
+                name="Score",
+                line=dict(color="#5b9bd5", width=2),
+                marker=dict(
+                    color=[couleurs_dec.get(d, "#aaa") for d in df_hist["decision"]],
+                    size=8,
+                    line=dict(color="white", width=1),
+                ),
+                hovertemplate="<b>%{x|%d/%m %H:%M}</b><br>Score : %{y:.4f}<extra></extra>",
+            ))
+
+            fig_hist.update_layout(
+                height=260,
+                margin=dict(l=0, r=0, t=10, b=0),
+                yaxis=dict(range=[-1.05, 1.05], title="Score",
+                           tickvals=[-1, -0.5, -0.1, 0, 0.1, 0.5, 1]),
+                xaxis=dict(title=""),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_hist, use_container_width=True)
+        elif len(historique) == 1:
+            st.caption("📈 Historique du score — lance une 2ᵉ analyse pour voir l'évolution.")
 
         st.divider()
 
