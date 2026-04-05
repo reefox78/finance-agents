@@ -11,7 +11,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from data.market_data import get_stock_data, get_stock_info, get_news
 from data.asset_type import detect_asset_type
 from data.portfolio import (ajouter_achat, ajouter_vente, supprimer_position,
-                            evaluer_positions, lister_historique, lister_transactions)
+                            supprimer_vente, evaluer_positions,
+                            lister_historique, lister_transactions)
 from orchestrator.orchestrator import run
 from backtesting.backtest import run_backtest
 from ta.trend import SMAIndicator
@@ -905,7 +906,7 @@ C'est la méthode standard utilisée par les brokers français (Boursorama, Trad
         ha1.metric("Trades", f"{total_trades}  ({len(trades_gains)}✅ / {total_trades - len(trades_gains)}❌)")
         ha2.metric("Win rate", f"{win_rate} %")
         ha3.metric("P&L net total (après frais)", f"{pnl_total:+.2f}")
-        ha4.metric("Frais broker payés", f"− {total_frais:.2f}")
+        ha4.metric("Frais broker payés", f"{total_frais:.2f}")
 
         # Impôts estimés sur l'ensemble (gains uniquement)
         gains_total = sum(t["pnl_eur"] for t in historique if t["pnl_eur"] > 0)
@@ -917,7 +918,10 @@ C'est la méthode standard utilisée par les brokers français (Boursorama, Trad
                        f"P&L net après impôts estimé : **{pnl_total - impots_glob:+.2f}**  "
                        f"*(estimation par trade — les pertes compensent les gains à l'année)*")
 
+        # Construction du tableau avec colonne de suppression
         df_hist = pd.DataFrame([{
+            "🗑️":               False,          # colonne de sélection pour suppression
+            "_id":              t["id"],         # identifiant interne (caché)
             "Ticker":           t["ticker"],
             "Date":             t["date"],
             "Prix vente":       t.get("prix_vente", t.get("prix", "")),
@@ -930,48 +934,65 @@ C'est la méthode standard utilisée par les brokers français (Boursorama, Trad
             "Notes":            t.get("notes", ""),
         } for t in historique])
 
-        def _style_pnl(val):
-            if isinstance(val, (int, float)):
-                if val > 0: return "color:#28a745;font-weight:bold"
-                if val < 0: return "color:#dc3545;font-weight:bold"
-            return ""
-
-        _styler_hist = df_hist.style
-        try:
-            _styler_hist = _styler_hist.map(_style_pnl, subset=["P&L brut", "P&L net", "P&L (%)"])
-        except AttributeError:
-            _styler_hist = _styler_hist.applymap(_style_pnl, subset=["P&L brut", "P&L net", "P&L (%)"])
-
-        st.dataframe(_styler_hist, use_container_width=True, hide_index=True,
+        edited_hist = st.data_editor(
+            df_hist.drop(columns=["_id"]),
+            use_container_width=True,
+            hide_index=True,
+            key="hist_editor",
             column_config={
-                "Ticker":      st.column_config.TextColumn(
-                    "Ticker", help=_TOOLTIPS["ticker"]),
+                "🗑️":          st.column_config.CheckboxColumn(
+                    "🗑️", width="small",
+                    help="Cocher pour marquer la ligne à supprimer, puis cliquer sur le bouton rouge."),
+                "Ticker":      st.column_config.TextColumn("Ticker", help=_TOOLTIPS["ticker"]),
                 "Prix vente":  st.column_config.NumberColumn(
-                    "Prix vente", format="%.4f",
+                    "Prix vente", format="%.4f", disabled=True,
                     help="Prix unitaire auquel tu as vendu."),
                 "Qté":         st.column_config.NumberColumn(
-                    "Qté", format="%.6f",
+                    "Qté", format="%.6f", disabled=True,
                     help="Nombre d'unités vendues."),
                 "CUMP achat":  st.column_config.NumberColumn(
-                    "CUMP achat", format="%.4f",
+                    "CUMP achat", format="%.4f", disabled=True,
                     help=_TOOLTIPS["cump"]),
                 "Frais":       st.column_config.NumberColumn(
-                    "Frais", format="%.4f €",
+                    "Frais", format="%.4f", disabled=True,
                     help=_TOOLTIPS["frais"]),
                 "P&L brut":    st.column_config.NumberColumn(
-                    "P&L brut", format="%.2f",
+                    "P&L brut", format="%.2f", disabled=True,
                     help=_TOOLTIPS["pnl_brut"]),
                 "P&L net":     st.column_config.NumberColumn(
-                    "P&L net", format="%.2f",
+                    "P&L net", format="%.2f", disabled=True,
                     help=_TOOLTIPS["pnl_net"]),
                 "P&L (%)":     st.column_config.NumberColumn(
-                    "P&L (%)", format="%.2f %%",
+                    "P&L (%)", format="%.2f %%", disabled=True,
                     help=_TOOLTIPS["pnl_pct"]),
-            })
+                "Date":        st.column_config.TextColumn("Date", disabled=True),
+                "Notes":       st.column_config.TextColumn("Notes", disabled=True),
+            },
+        )
 
-        csv_hist = df_hist.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Exporter CSV", data=csv_hist,
-                            file_name="historique_ventes.csv", mime="text/csv")
+        # Lignes cochées pour suppression
+        ids_a_supprimer = [
+            df_hist.iloc[i]["_id"]
+            for i, row in edited_hist.iterrows()
+            if row["🗑️"]
+        ]
+
+        del_col, csv_col = st.columns([1, 3])
+        if ids_a_supprimer:
+            if del_col.button(
+                f"🗑️ Supprimer {len(ids_a_supprimer)} ligne(s)",
+                type="primary",
+                key="suppr_hist",
+            ):
+                for vid in ids_a_supprimer:
+                    supprimer_vente(vid)
+                st.rerun()
+        else:
+            del_col.caption("Cocher une ligne pour la supprimer")
+
+        csv_hist = df_hist.drop(columns=["🗑️", "_id"]).to_csv(index=False).encode("utf-8")
+        csv_col.download_button("📥 Exporter CSV", data=csv_hist,
+                                 file_name="historique_ventes.csv", mime="text/csv")
 
 
 # ===========================================================================

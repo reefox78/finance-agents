@@ -231,6 +231,21 @@ def ajouter_vente(ticker: str, prix_vente: float, quantite: float,
     return vente_hist
 
 
+def supprimer_vente(vente_id: str) -> bool:
+    """
+    Supprime une vente de l'historique par son ID.
+    N'affecte PAS les positions ouvertes (action purement comptable).
+    Retourne True si la vente a été trouvée et supprimée.
+    """
+    data  = _charger()
+    avant = len(data["historique_ventes"])
+    data["historique_ventes"] = [v for v in data["historique_ventes"] if v["id"] != vente_id]
+    if len(data["historique_ventes"]) < avant:
+        _sauvegarder(data)
+        return True
+    return False
+
+
 def supprimer_position(ticker: str) -> bool:
     """Supprime entièrement une position (sans laisser de trace dans l'historique)."""
     data   = _charger()
