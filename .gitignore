@@ -3,11 +3,22 @@ venv/
 .venv/
 env/
 
-# Clés API et secrets
+# Clés API et secrets — NE JAMAIS COMMITTER
 config/.env
 .env
 *.env.local
 *.env.production
+config/alerts.json        # contient email + mot de passe SMTP → utiliser alerts.example.json
+
+# Données personnelles — NE JAMAIS COMMITTER
+data/portfolio.json       # positions et transactions réelles
+data/alerts.json          # alertes générées (données runtime)
+
+# Cache et données générées automatiquement
+data/cache/
+output/scan_*.csv
+output/rapport_*.txt
+output/*.png
 
 # Python cache
 __pycache__/
@@ -15,10 +26,6 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-
-# Outputs générés
-output/*.png
-output/rapport_*.txt
 
 # IDE
 .vscode/
@@ -31,3 +38,6 @@ output/rapport_*.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Fichiers temporaires divers
+readme.txt.txt
