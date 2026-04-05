@@ -13,6 +13,8 @@ from data.asset_type import detect_asset_type
 from data.portfolio import (ajouter_achat, ajouter_vente, supprimer_position,
                             supprimer_vente, evaluer_positions,
                             lister_historique, lister_transactions)
+from data.alerts_store import (lister_alertes, compter_non_lues,
+                                marquer_lue, tout_marquer_lu, supprimer_alerte)
 from orchestrator.orchestrator import run
 from backtesting.backtest import run_backtest
 from ta.trend import SMAIndicator
@@ -159,8 +161,13 @@ def _icone_risque(risque):
 # ---------------------------------------------------------------------------
 
 st.title("📈 Finance Agents — Aide à la décision")
+
+# Badge de notification sur l'onglet Portefeuille
+_nb_alertes = compter_non_lues()
+_label_portfolio = f"💼 Portefeuille {'🔔 ' + str(_nb_alertes) if _nb_alertes else ''}"
+
 tab_analyse, tab_scanner, tab_portfolio, tab_backtest = st.tabs(
-    ["🔍 Analyse", "📋 Scanner", "💼 Portefeuille", "📊 Backtest"]
+    ["🔍 Analyse", "📋 Scanner", _label_portfolio, "📊 Backtest"]
 )
 
 
@@ -520,6 +527,64 @@ with tab_scanner:
 
 with tab_portfolio:
     st.subheader("💼 Mon portefeuille")
+
+    # -----------------------------------------------------------------------
+    # Panneau d'alertes
+    # -----------------------------------------------------------------------
+    alertes_actives = lister_alertes(non_lues_seulement=True)
+    if alertes_actives:
+        ICONE_NIVEAU = {"CRITIQUE": "🔴", "VENDRE": "🔴", "SURVEILLER": "🟡", "INFO": "🔵"}
+
+        with st.container(border=True):
+            al_titre, al_tout_lu = st.columns([4, 1])
+            al_titre.markdown(f"### 🔔 {len(alertes_actives)} alerte(s) non lue(s)")
+            if al_tout_lu.button("✅ Tout marquer lu", key="tout_lu"):
+                tout_marquer_lu()
+                st.rerun()
+
+            for alerte in alertes_actives:
+                icone = ICONE_NIVEAU.get(alerte["niveau"], "⚪")
+                with st.container():
+                    col_msg, col_date, col_actions = st.columns([5, 1.5, 1.5])
+                    col_msg.markdown(f"{icone} **[{alerte['ticker']}]** {alerte['message']}")
+                    col_date.caption(alerte["date"])
+                    with col_actions:
+                        btn_lu  = st.button("Lu ✓",  key=f"lu_{alerte['id']}",  use_container_width=True)
+                        btn_del = st.button("🗑️",    key=f"dal_{alerte['id']}", use_container_width=True)
+                    if btn_lu:
+                        marquer_lue(alerte["id"])
+                        st.rerun()
+                    if btn_del:
+                        supprimer_alerte(alerte["id"])
+                        st.rerun()
+                st.divider()
+
+        # Bouton pour vérifier maintenant
+        if st.button("🔄 Vérifier maintenant", key="check_now",
+                      help="Relance une vérification des seuils sur toutes les positions"):
+            with st.spinner("Vérification en cours..."):
+                from alerts.monitor import verifier_positions
+                nouvelles = verifier_positions(with_scores=False)
+            if nouvelles:
+                st.success(f"{len(nouvelles)} nouvelle(s) alerte(s) générée(s).")
+            else:
+                st.success("Aucune nouvelle alerte. Toutes les positions sont dans les seuils.")
+            st.rerun()
+    else:
+        col_ok, col_check = st.columns([4, 1])
+        col_ok.success("✅ Aucune alerte active — toutes les positions sont dans les seuils.")
+        if col_check.button("🔄 Vérifier", key="check_now_ok",
+                             help="Relance une vérification des seuils"):
+            with st.spinner("Vérification..."):
+                from alerts.monitor import verifier_positions
+                nouvelles = verifier_positions(with_scores=False)
+            if nouvelles:
+                st.warning(f"{len(nouvelles)} nouvelle(s) alerte(s) détectée(s).")
+            else:
+                st.success("Aucune alerte. Tout va bien.")
+            st.rerun()
+
+    st.divider()
 
     SIGNAL_ICONE = {"TENIR": "🟢", "SURVEILLER": "🟡", "VENDRE": "🔴"}
     REGIME_LABELS = {

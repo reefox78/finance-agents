@@ -1,0 +1,27 @@
+{
+  "_comment": "Configuration des alertes. Mettre email.enabled = true et renseigner les champs pour activer les notifications email.",
+
+  "email": {
+    "enabled":       false,
+    "destinataire":  "",
+    "expediteur":    "",
+    "smtp_host":     "smtp.gmail.com",
+    "smtp_port":     587,
+    "smtp_password": ""
+  },
+
+  "seuils": {
+    "pnl_stop_loss_pct":  -8.0,
+    "pnl_alerte_pct":     -4.0,
+    "score_vendre":       -0.10,
+    "score_surveiller":    0.05,
+    "pnl_cible_pct":      15.0
+  },
+
+  "planning": {
+    "intervalle_minutes": 60,
+    "actif":              true,
+    "avec_scores":        false,
+    "_note": "avec_scores=false = vérification rapide (P&L seulement, pas d'appel API orchestrateur). Mettre true pour les signaux agents complets (plus lent)."
+  }
+}
