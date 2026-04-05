@@ -14,6 +14,7 @@ from agents.options_flow import analyze_options_flow
 from agents.sec_filings import analyze_sec_filings
 from agents.short_interest import analyze_short_interest
 from agents.earnings_surprise import analyze_earnings_surprise
+from agents.volume_delta import analyze_volume_delta
 from orchestrator.scoring import calculer_score
 
 load_dotenv("config/.env")
@@ -33,7 +34,7 @@ def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
                   sent: dict, risk: dict, trends: dict, insider: dict,
                   macro: dict, options_flow: dict, sec_filings: dict,
                   short_interest: dict, earnings_surprise: dict,
-                  scoring: dict) -> str:
+                  volume_delta: dict, scoring: dict) -> str:
     """Construit le prompt LLM en n'incluant que les agents actifs."""
 
     label = _ASSET_LABELS.get(asset_type, asset_type)
@@ -162,6 +163,15 @@ def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
             f"- Signal            : {earnings_surprise['signal']}\n",
         ]
 
+    # --- Volume Delta (crypto) ---
+    if volume_delta and "erreur" not in volume_delta:
+        lines += [
+            "VOLUME DELTA (Binance) :",
+            f"- Achat moyen {volume_delta.get('days')}j  : {volume_delta.get('delta_pct_moyen')} % du volume (50% = équilibré)",
+            f"- Tendance CVD      : {volume_delta.get('cvd_tendance')}",
+            f"- Signal            : {volume_delta['signal']}\n",
+        ]
+
     # --- Score final ---
     lines += [
         "SCORE PONDÉRÉ FINAL :",
@@ -185,6 +195,8 @@ def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
         lines.append(f"- Short Int. : {scoring['scores']['short_interest']} × {scoring['poids']['short_interest']}")
     if earnings_surprise:
         lines.append(f"- Earnings   : {scoring['scores']['earnings_surprise']} × {scoring['poids']['earnings_surprise']}")
+    if volume_delta:
+        lines.append(f"- Vol. Delta : {scoring['scores']['volume_delta']} × {scoring['poids']['volume_delta']}")
     lines += [
         f"- Mult risque: {scoring['scores']['multiplicateur']}",
         f"- Mult macro : {scoring['scores']['mult_macro']}",
@@ -227,11 +239,13 @@ def run(ticker: str, with_llm: bool = True) -> dict:
     sec_filings      = analyze_sec_filings(ticker)           if config["sec_filings"]       else None
     short_interest   = analyze_short_interest(ticker)        if config["short_interest"]    else None
     earnings_surprise= analyze_earnings_surprise(ticker)     if config["earnings_surprise"] else None
+    volume_delta     = analyze_volume_delta(ticker)           if config["volume_delta"]      else None
 
     # --- Scoring (gère les None automatiquement) ---
     scoring = calculer_score(
         tech, fund, sent, risk, trends, insider, macro,
-        options_flow, sec_filings, short_interest, earnings_surprise
+        options_flow, sec_filings, short_interest, earnings_surprise,
+        volume_delta
     )
 
     # --- Rapport LLM (optionnel) ---
@@ -240,7 +254,7 @@ def run(ticker: str, with_llm: bool = True) -> dict:
         prompt = _build_prompt(ticker, asset_type, tech, fund, sent,
                                risk, trends, insider, macro,
                                options_flow, sec_filings, short_interest,
-                               earnings_surprise, scoring)
+                               earnings_surprise, volume_delta, scoring)
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
@@ -264,6 +278,7 @@ def run(ticker: str, with_llm: bool = True) -> dict:
         "sec_filings":      sec_filings,
         "short_interest":   short_interest,
         "earnings_surprise":earnings_surprise,
+        "volume_delta":     volume_delta,
     }
 
 

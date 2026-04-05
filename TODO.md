@@ -25,6 +25,8 @@ Les tâches terminées restent visibles pour garder l'historique.
 - [x] Commande unique de démarrage (`python start.py`)
 - [x] Fix affichage agents Analyse — 4 par ligne au lieu de tout sur une seule ligne
 - [x] Prix cible + stop-loss par position — bouton 🎯 Objectifs par position dans le portefeuille
+- [x] Indicateurs de volume dans l'agent technique — OBV, CMF, VWAP, ratio de volume
+- [x] Agent Volume Delta (crypto) — acheteurs vs vendeurs réels via API publique Binance (CVD)
 
 ---
 

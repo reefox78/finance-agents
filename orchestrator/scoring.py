@@ -10,6 +10,7 @@ POIDS = {
     "sec_filings":       0.06,   # événements réglementaires
     "short_interest":    0.06,   # pression vendeuse
     "earnings_surprise": 0.10,   # anomalie post-earnings drift
+    "volume_delta":      0.12,   # buy/sell pressure via Binance (crypto)
 }
 
 SEUIL_ACHAT = 0.10
@@ -41,7 +42,8 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
                    risk: dict = None, trends: dict = None,
                    insider: dict = None, macro: dict = None,
                    options_flow: dict = None, sec_filings: dict = None,
-                   short_interest: dict = None, earnings_surprise: dict = None) -> dict:
+                   short_interest: dict = None, earnings_surprise: dict = None,
+                   volume_delta: dict = None) -> dict:
     """
     Calcule le score pondéré global.
     Tous les agents sauf 'tech' et 'risk' sont optionnels (None = ignoré).
@@ -57,6 +59,7 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
     s_sec      = sec_filings.get("score_final",       0.0)                  if sec_filings       else 0.0
     s_short    = short_interest.get("score_final",    0.0)                  if short_interest    else 0.0
     s_earnings = earnings_surprise.get("score_final", 0.0)                  if earnings_surprise else 0.0
+    s_voldelta = volume_delta.get("score_final",      0.0)                  if volume_delta      else 0.0
 
     mult_risk  = risk.get("multiplicateur", 1.0) if risk else 1.0
     mult_macro = macro_en_multiplicateur(s_macro) if macro else 1.0
@@ -71,7 +74,8 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
         (POIDS["options_flow"]      if options_flow      else 0) +
         (POIDS["sec_filings"]       if sec_filings       else 0) +
         (POIDS["short_interest"]    if short_interest    else 0) +
-        (POIDS["earnings_surprise"] if earnings_surprise else 0)
+        (POIDS["earnings_surprise"] if earnings_surprise else 0) +
+        (POIDS["volume_delta"]      if volume_delta      else 0)
     )
 
     score_brut = (
@@ -84,7 +88,8 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
         s_options  * (POIDS["options_flow"]      if options_flow      else 0) +
         s_sec      * (POIDS["sec_filings"]       if sec_filings       else 0) +
         s_short    * (POIDS["short_interest"]    if short_interest    else 0) +
-        s_earnings * (POIDS["earnings_surprise"] if earnings_surprise else 0)
+        s_earnings * (POIDS["earnings_surprise"] if earnings_surprise else 0) +
+        s_voldelta * (POIDS["volume_delta"]      if volume_delta      else 0)
     ) / poids_actifs
 
     score_final = round(score_brut * mult_risk * mult_macro, 4)
@@ -109,6 +114,7 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
             "sec_filings":       round(s_sec,      4),
             "short_interest":    round(s_short,    4),
             "earnings_surprise": round(s_earnings, 4),
+            "volume_delta":      round(s_voldelta, 4),
             "multiplicateur":    mult_risk,
             "mult_macro":        mult_macro,
         },

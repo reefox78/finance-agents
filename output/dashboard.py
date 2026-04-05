@@ -1,5 +1,6 @@
 import streamlit as st
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 import json
 import sys
@@ -210,6 +211,7 @@ with tab_analyse:
         sec_filings      = resultat.get("sec_filings")
         short_interest   = resultat.get("short_interest")
         earnings_surprise= resultat.get("earnings_surprise")
+        volume_delta     = resultat.get("volume_delta")
         scoring          = resultat["scoring"]
 
         # --- Header ---
@@ -269,32 +271,64 @@ with tab_analyse:
 
             st.divider()
 
-        # --- Graphique prix ---
+        # --- Graphique prix + volume ---
         try:
             df = get_stock_data(ticker, period=period)
             if not df.empty:
                 st.subheader("Historique des prix")
-                fig = go.Figure()
-                fig.add_trace(go.Candlestick(
-                    x=df.index, open=df["Open"], high=df["High"],
-                    low=df["Low"], close=df["Close"], name="Prix"
-                ))
+
                 sma20  = SMAIndicator(df["Close"], window=20).sma_indicator()
                 sma50  = SMAIndicator(df["Close"], window=50).sma_indicator()
                 bb_ind = BollingerBands(df["Close"], window=20, window_dev=2)
+
+                # Couleur des barres de volume : vert si bougie haussière, rouge sinon
+                vol_colors = [
+                    "rgba(46,204,113,0.7)" if c >= o else "rgba(231,76,60,0.7)"
+                    for c, o in zip(df["Close"], df["Open"])
+                ]
+
+                fig = make_subplots(
+                    rows=2, cols=1,
+                    shared_xaxes=True,
+                    row_heights=[0.72, 0.28],
+                    vertical_spacing=0.02,
+                )
+
+                # Ligne 1 — chandeliers + indicateurs
+                fig.add_trace(go.Candlestick(
+                    x=df.index, open=df["Open"], high=df["High"],
+                    low=df["Low"], close=df["Close"], name="Prix",
+                    increasing_line_color="#2ecc71", decreasing_line_color="#e74c3c",
+                ), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df.index, y=sma20, name="SMA 20",
-                                         line=dict(color="orange", width=1.5)))
+                                         line=dict(color="orange", width=1.5)), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df.index, y=sma50, name="SMA 50",
-                                         line=dict(color="blue", width=1.5)))
+                                         line=dict(color="#5b9bd5", width=1.5)), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df.index, y=bb_ind.bollinger_hband(),
                                          name="BB Haute",
-                                         line=dict(color="rgba(150,150,150,0.6)", width=1, dash="dash")))
+                                         line=dict(color="rgba(150,150,150,0.5)", width=1, dash="dash"),
+                                         showlegend=False), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df.index, y=bb_ind.bollinger_lband(),
-                                         name="BB Basse",
-                                         line=dict(color="rgba(150,150,150,0.6)", width=1, dash="dash"),
-                                         fill="tonexty", fillcolor="rgba(150,150,150,0.05)"))
-                fig.update_layout(xaxis_rangeslider_visible=False, height=450,
-                                  margin=dict(l=0, r=0, t=0, b=0))
+                                         name="BB",
+                                         line=dict(color="rgba(150,150,150,0.5)", width=1, dash="dash"),
+                                         fill="tonexty", fillcolor="rgba(150,150,150,0.05)"), row=1, col=1)
+
+                # Ligne 2 — volume (vert/rouge selon direction)
+                fig.add_trace(go.Bar(
+                    x=df.index, y=df["Volume"],
+                    name="Volume",
+                    marker_color=vol_colors,
+                    showlegend=False,
+                ), row=2, col=1)
+
+                fig.update_layout(
+                    xaxis_rangeslider_visible=False,
+                    height=520,
+                    margin=dict(l=0, r=0, t=0, b=0),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
+                )
+                fig.update_yaxes(title_text="Volume", fixedrange=True, row=2, col=1)
+
                 st.plotly_chart(fig, use_container_width=True)
                 st.divider()
         except Exception:
@@ -304,8 +338,8 @@ with tab_analyse:
         st.subheader("Signaux des agents")
         agents_affiches = []
         agents_affiches.append(("Technique", tech["signal"],
-                                 f"RSI : {tech['rsi']} | MACD : {tech['macd']}",
-                                 f"Score : {tech.get('score_final', 'N/A')}"))
+                                 f"RSI : {tech['rsi']} | CMF : {tech.get('cmf', 'N/A')} | OBV↗" if tech.get('scores', {}).get('obv', 0) > 0 else f"RSI : {tech['rsi']} | CMF : {tech.get('cmf', 'N/A')} | OBV↘",
+                                 f"VWAP : {tech.get('vwap', 'N/A')} | Vol×{tech.get('vol_ratio', 'N/A')}"))
         if fund:
             agents_affiches.append(("Fondamental", fund["signal"],
                                      f"PER : {fund['per']} | Div : {fund['dividende']}",
@@ -345,6 +379,10 @@ with tab_analyse:
             agents_affiches.append(("Earnings", earnings_surprise["signal"],
                                      f"Surprise : {earnings_surprise.get('latest_surprise')} %",
                                      f"Beats : {earnings_surprise.get('nb_beats')}/{earnings_surprise.get('nb_quarters')}"))
+        if volume_delta and "erreur" not in volume_delta:
+            agents_affiches.append(("Vol. Delta", volume_delta["signal"],
+                                     f"Achat moyen : {volume_delta.get('delta_pct_moyen')} % du vol.",
+                                     f"CVD : {volume_delta.get('cvd_tendance')}"))
 
         _AGENT_DESC = {
             "Technique":    "Analyse les graphiques de prix : tendance (moyennes mobiles), "
@@ -370,6 +408,9 @@ with tab_analyse:
                             "Un short élevé et croissant = pression baissière ; une couverture des shorts = rebond possible.",
             "Earnings":     "Analyse les surprises de résultats trimestriels : "
                             "si l'entreprise bat régulièrement les attentes, c'est positif pour le cours.",
+            "Vol. Delta":   "Volume Delta (crypto uniquement) — mesure la pression réelle des acheteurs vs vendeurs "
+                            "via l'API Binance. >50% = acheteurs dominants, <50% = vendeurs. "
+                            "CVD croissant = accumulation = haussier.",
         }
 
         NB_PAR_LIGNE = 4

@@ -14,6 +14,9 @@ config/alerts.json        # contient email + mot de passe SMTP → utiliser aler
 data/portfolio.json       # positions et transactions réelles
 data/alerts.json          # alertes générées (données runtime)
 
+# Logs de lancement (historisés par date/heure)
+logs/
+
 # Cache et données générées automatiquement
 data/cache/
 output/scan_*.csv

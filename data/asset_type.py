@@ -75,6 +75,7 @@ AGENTS_PAR_TYPE = {
         "sec_filings":      True,   # EDGAR = US uniquement
         "short_interest":   True,   # yfinance : données FINRA
         "earnings_surprise":True,   # EPS surprise via yfinance
+        "volume_delta":     False,  # Binance API = crypto uniquement
     },
     "eu_stock": {
         "fondamental":      True,
@@ -86,6 +87,7 @@ AGENTS_PAR_TYPE = {
         "sec_filings":      False,  # EDGAR = US uniquement
         "short_interest":   True,   # yfinance en a pour certaines EU
         "earnings_surprise":True,   # yfinance en a pour la plupart des EU
+        "volume_delta":     False,
     },
     "crypto": {
         "fondamental":      False,  # pas de PER / dividende
@@ -97,6 +99,7 @@ AGENTS_PAR_TYPE = {
         "sec_filings":      False,
         "short_interest":   False,
         "earnings_surprise":False,  # pas d'EPS
+        "volume_delta":     True,   # API Binance — acheteurs vs vendeurs réels
     },
     "forex": {
         "fondamental":      False,
@@ -108,5 +111,6 @@ AGENTS_PAR_TYPE = {
         "sec_filings":      False,
         "short_interest":   False,
         "earnings_surprise":False,
+        "volume_delta":     False,
     },
 }
