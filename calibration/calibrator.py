@@ -29,7 +29,8 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from data.score_history import lire_historique, lister_tickers
+from data.score_history  import lire_historique as _lire_local, lister_tickers as _tickers_local
+from db.score_history    import lire_historique as _lire_db, lister_tickers as _tickers_db
 from orchestrator.scoring import POIDS as POIDS_DEFAUT
 
 ROOT            = Path(__file__).parent.parent
@@ -74,7 +75,7 @@ def _prix_n_jours_apres(ticker: str, date_analyse: datetime, n: int) -> float | 
 # Calibration par ticker
 # ---------------------------------------------------------------------------
 
-def calibrer(ticker: str, horizon: int = HORIZON_JOURS) -> dict:
+def calibrer(ticker: str, horizon: int = HORIZON_JOURS, user_id: str = None) -> dict:
     """
     Calcule l'exactitude de chaque agent pour un ticker donné.
 
@@ -91,7 +92,7 @@ def calibrer(ticker: str, horizon: int = HORIZON_JOURS) -> dict:
       "poids_suggeres": {agent: float, ...}
     }
     """
-    historique   = lire_historique(ticker)
+    historique   = _lire_db(user_id, ticker) if user_id else _lire_local(ticker)
     maintenant   = datetime.now()
     stats: dict  = {}   # agent → {correct: int, total: int}
     nb_points    = 0
@@ -147,18 +148,18 @@ def calibrer(ticker: str, horizon: int = HORIZON_JOURS) -> dict:
 # Calibration globale (tous tickers agrégés)
 # ---------------------------------------------------------------------------
 
-def calibrer_global(horizon: int = HORIZON_JOURS) -> dict:
+def calibrer_global(horizon: int = HORIZON_JOURS, user_id: str = None) -> dict:
     """
     Agrège les données de calibration de tous les tickers disponibles.
     Retourne le même format que calibrer() mais sans le champ "ticker".
     """
-    tickers           = lister_tickers()
+    tickers           = _tickers_db(user_id) if user_id else _tickers_local()
     aggreg: dict      = {}
     nb_tickers_actifs = 0
     nb_points_total   = 0
 
     for ticker in tickers:
-        r = calibrer(ticker, horizon)
+        r = calibrer(ticker, horizon, user_id=user_id)
         if r["nb_points_total"] == 0:
             continue
         nb_tickers_actifs += 1

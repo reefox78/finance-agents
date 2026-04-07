@@ -16,7 +16,8 @@ from agents.short_interest import analyze_short_interest
 from agents.earnings_surprise import analyze_earnings_surprise
 from agents.volume_delta import analyze_volume_delta
 from orchestrator.scoring import calculer_score
-from data.score_history import enregistrer_score
+from data.score_history import enregistrer_score as _enregistrer_score_local
+from db.score_history   import enregistrer_score as _enregistrer_score_db
 
 load_dotenv("config/.env")
 
@@ -214,7 +215,7 @@ def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
     return "\n".join(lines)
 
 
-def run(ticker: str, with_llm: bool = True) -> dict:
+def run(ticker: str, with_llm: bool = True, user_id: str = None) -> dict:
     """
     Orchestre les agents selon le type d'actif détecté,
     calcule le score pondéré et produit un rapport LLM.
@@ -270,8 +271,16 @@ def run(ticker: str, with_llm: bool = True) -> dict:
             k: v for k, v in scoring["scores"].items()
             if k not in ("multiplicateur", "mult_macro")
         }
-        enregistrer_score(ticker, scoring["score_final"], scoring["decision"],
-                          prix=prix_actuel, scores_agents=scores_agents)
+        if user_id:
+            # Sauvegarde PostgreSQL (multi-utilisateur)
+            _enregistrer_score_db(user_id, ticker, scoring["score_final"],
+                                  scoring["decision"], prix=prix_actuel,
+                                  scores_agents=scores_agents)
+        else:
+            # Sauvegarde locale JSON (fallback sans session)
+            _enregistrer_score_local(ticker, scoring["score_final"],
+                                     scoring["decision"], prix=prix_actuel,
+                                     scores_agents=scores_agents)
     except Exception:
         pass   # non bloquant
 

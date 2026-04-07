@@ -11,13 +11,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.market_data import get_stock_data, get_stock_info, get_news
 from data.asset_type import detect_asset_type
-from data.score_history import lire_historique
-from data.portfolio import (ajouter_achat, ajouter_vente, supprimer_position,
-                            supprimer_vente, evaluer_positions, definir_objectifs,
-                            lister_historique, lister_transactions,
-                            modifier_note_transaction)
-from data.alerts_store import (lister_alertes, compter_non_lues,
-                                marquer_lue, tout_marquer_lu, supprimer_alerte)
+from db.score_history import lire_historique
+from db.portfolio import (ajouter_achat, ajouter_vente, supprimer_position,
+                          supprimer_vente, evaluer_positions, definir_objectifs,
+                          lister_historique, lister_transactions,
+                          modifier_note_transaction)
+from db.alerts_store import (lister_alertes, compter_non_lues,
+                              marquer_lue, tout_marquer_lu, supprimer_alerte)
+from db.auth import inscrire, connecter
 from orchestrator.orchestrator import run
 from backtesting.backtest import run_backtest
 from ta.trend import SMAIndicator
@@ -84,6 +85,75 @@ st.set_page_config(
     page_icon="📈",
     layout="wide"
 )
+
+
+# ===========================================================================
+# AUTHENTIFICATION
+# ===========================================================================
+
+def _page_auth():
+    """Page de connexion / inscription. Bloque l'accès si non connecté."""
+    st.title("📈 Finance Agents")
+    st.markdown("### Connexion à votre espace personnel")
+
+    mode = st.radio("", ["Se connecter", "Créer un compte"], horizontal=True,
+                    label_visibility="collapsed")
+    st.divider()
+
+    if mode == "Se connecter":
+        with st.form("form_login"):
+            email    = st.text_input("Email")
+            password = st.text_input("Mot de passe", type="password")
+            submit   = st.form_submit_button("Connexion", type="primary",
+                                              use_container_width=True)
+        if submit:
+            if not email or not password:
+                st.error("Remplis tous les champs.")
+            else:
+                try:
+                    user = connecter(email, password)
+                    st.session_state["user"] = user
+                    st.success(f"Bienvenue, {user['username']} !")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+
+    else:  # Inscription
+        with st.form("form_register"):
+            username  = st.text_input("Nom d'utilisateur")
+            email     = st.text_input("Email")
+            password  = st.text_input("Mot de passe", type="password",
+                                       help="Min. 8 caractères, 1 majuscule, 1 chiffre")
+            password2 = st.text_input("Confirmer le mot de passe", type="password")
+            submit    = st.form_submit_button("Créer mon compte", type="primary",
+                                               use_container_width=True)
+        if submit:
+            if not username or not email or not password:
+                st.error("Remplis tous les champs.")
+            elif password != password2:
+                st.error("Les mots de passe ne correspondent pas.")
+            else:
+                try:
+                    user = inscrire(username, email, password)
+                    st.session_state["user"] = {
+                        "id":       str(user["id"]),
+                        "username": user["username"],
+                        "email":    user["email"],
+                    }
+                    st.success(f"Compte créé ! Bienvenue, {user['username']} !")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+
+
+# Garde d'accès : si pas connecté, afficher uniquement la page d'auth
+if "user" not in st.session_state:
+    _page_auth()
+    st.stop()
+
+# Raccourci global utilisé partout dans le dashboard
+_user    = st.session_state["user"]
+_user_id = _user["id"]
 
 # ---------------------------------------------------------------------------
 # Tickers prédéfinis par catégorie
@@ -163,10 +233,16 @@ def _icone_risque(risque):
 # Onglets principaux
 # ---------------------------------------------------------------------------
 
-st.title("📈 Finance Agents — Aide à la décision")
+col_titre, col_user = st.columns([5, 1])
+col_titre.title("📈 Finance Agents — Aide à la décision")
+with col_user:
+    st.caption(f"Connecté : **{_user['username']}**")
+    if st.button("Déconnexion", key="logout"):
+        del st.session_state["user"]
+        st.rerun()
 
 # Badge de notification sur l'onglet Portefeuille
-_nb_alertes = compter_non_lues()
+_nb_alertes = compter_non_lues(_user_id)
 _label_portfolio = f"💼 Portefeuille {'🔔 ' + str(_nb_alertes) if _nb_alertes else ''}"
 
 tab_analyse, tab_scanner, tab_portfolio, tab_backtest, tab_calib = st.tabs(
@@ -197,7 +273,7 @@ with tab_analyse:
         # --- Analyse complète ---
         try:
             with st.spinner(f"Analyse de {ticker} en cours..."):
-                resultat = run(ticker, with_llm=True)
+                resultat = run(ticker, with_llm=True, user_id=_user_id)
         except Exception as e:
             st.error(f"Erreur lors de l'analyse de **{ticker}** : {e}")
             st.stop()
@@ -464,7 +540,7 @@ with tab_analyse:
         st.plotly_chart(fig_score, use_container_width=True)
 
         # --- Historique du score ---
-        historique = lire_historique(ticker)
+        historique = lire_historique(_user_id, ticker)
         if len(historique) >= 2:
             st.subheader("Évolution du score",
                          help="Chaque point correspond à une analyse lancée. "
@@ -591,7 +667,7 @@ with tab_scanner:
         for i, t in enumerate(tickers_sel):
             progress.progress((i) / len(tickers_sel), text=f"Analyse {t}…")
             try:
-                r = run(t, with_llm=False)
+                r = run(t, with_llm=False, user_id=_user_id)
                 s = r["scoring"]
                 resultats_scan.append({
                     "Ticker":   t,
@@ -667,7 +743,7 @@ with tab_portfolio:
     # -----------------------------------------------------------------------
     # Panneau d'alertes
     # -----------------------------------------------------------------------
-    alertes_actives = lister_alertes(non_lues_seulement=True)
+    alertes_actives = lister_alertes(_user_id, non_lues_seulement=True)
     if alertes_actives:
         ICONE_NIVEAU = {"CRITIQUE": "🔴", "VENDRE": "🔴", "SURVEILLER": "🟡", "INFO": "🔵"}
 
@@ -675,7 +751,7 @@ with tab_portfolio:
             al_titre, al_tout_lu = st.columns([4, 1])
             al_titre.markdown(f"### 🔔 {len(alertes_actives)} alerte(s) non lue(s)")
             if al_tout_lu.button("✅ Tout marquer lu", key="tout_lu"):
-                tout_marquer_lu()
+                tout_marquer_lu(_user_id)
                 st.rerun()
 
             for alerte in alertes_actives:
@@ -688,10 +764,10 @@ with tab_portfolio:
                         btn_lu  = st.button("Lu ✓",  key=f"lu_{alerte['id']}",  use_container_width=True)
                         btn_del = st.button("🗑️",    key=f"dal_{alerte['id']}", use_container_width=True)
                     if btn_lu:
-                        marquer_lue(alerte["id"])
+                        marquer_lue(_user_id, alerte["id"])
                         st.rerun()
                     if btn_del:
-                        supprimer_alerte(alerte["id"])
+                        supprimer_alerte(_user_id, alerte["id"])
                         st.rerun()
                 st.divider()
 
@@ -700,7 +776,7 @@ with tab_portfolio:
                       help="Relance une vérification des seuils sur toutes les positions"):
             with st.spinner("Vérification en cours..."):
                 from alerts.monitor import verifier_positions
-                nouvelles = verifier_positions(with_scores=False)
+                nouvelles = verifier_positions(_user_id, with_scores=False)
             if nouvelles:
                 st.success(f"{len(nouvelles)} nouvelle(s) alerte(s) générée(s).")
             else:
@@ -713,7 +789,7 @@ with tab_portfolio:
                              help="Relance une vérification des seuils"):
             with st.spinner("Vérification..."):
                 from alerts.monitor import verifier_positions
-                nouvelles = verifier_positions(with_scores=False)
+                nouvelles = verifier_positions(_user_id, with_scores=False)
             if nouvelles:
                 st.warning(f"{len(nouvelles)} nouvelle(s) alerte(s) détectée(s).")
             else:
@@ -853,7 +929,7 @@ with tab_portfolio:
         )
 
         if st.button("Enregistrer l'achat", type="primary", key="pf_ajouter"):
-            pos = ajouter_achat(pf_ticker, pf_prix, pf_qty,
+            pos = ajouter_achat(_user_id, pf_ticker, pf_prix, pf_qty,
                                 pf_date.strftime("%Y-%m-%d"), pf_notes,
                                 frais=pf_frais, broker_key=broker_key)
             st.success(f"✅ Achat enregistré — {pf_ticker} : {pos['quantite']} unités "
@@ -870,11 +946,11 @@ with tab_portfolio:
     mode_rapide = col_mode.checkbox("Mode rapide", value=True, key="pf_rapide",
                                      help="P&L uniquement (instantané). Décocher pour le scoring multi-agent complet.")
 
-    positions_raw = evaluer_positions(with_scores=False)
+    positions_raw = evaluer_positions(_user_id, with_scores=False)
 
     if lancer_eval:
         with st.spinner("Analyse en cours..."):
-            positions_eval = evaluer_positions(with_scores=not mode_rapide)
+            positions_eval = evaluer_positions(_user_id, with_scores=not mode_rapide)
         st.session_state["pf_positions"] = positions_eval
 
     positions_eval = st.session_state.get("pf_positions", positions_raw)
@@ -961,7 +1037,7 @@ with tab_portfolio:
                         st.session_state[f"objectifs_{ticker}"] = not st.session_state.get(f"objectifs_{ticker}", False)
                     if st.button("🗑️ Suppr.", key=f"del_{ticker}",
                                   help="Supprimer sans historique"):
-                        supprimer_position(ticker)
+                        supprimer_position(_user_id, ticker)
                         if "pf_positions" in st.session_state:
                             del st.session_state["pf_positions"]
                         st.rerun()
@@ -997,7 +1073,7 @@ with tab_portfolio:
                         annuler_obj = st.form_submit_button("Annuler")
 
                     if sauv:
-                        definir_objectifs(ticker, cible_pct=obj_cible, stop_loss_pct=obj_stop)
+                        definir_objectifs(_user_id, ticker, cible_pct=obj_cible, stop_loss_pct=obj_stop)
                         st.success(f"✅ Objectifs enregistrés — Stop : {obj_stop:+.1f}% ({prix_stop_prev:.2f})  ·  Cible : +{obj_cible:.1f}% ({prix_cible_prev:.2f})")
                         st.session_state[f"objectifs_{ticker}"] = False
                         if "pf_positions" in st.session_state:
@@ -1144,7 +1220,7 @@ with tab_portfolio:
 
                     if confirmer:
                         try:
-                            trade = ajouter_vente(ticker, px_vente, qty_vente,
+                            trade = ajouter_vente(_user_id, ticker, px_vente, qty_vente,
                                                    date_vente.strftime("%Y-%m-%d"),
                                                    notes_v, frais=frais_v)
                             st.success(f"✅ Vente enregistrée — P&L net : "
@@ -1161,7 +1237,7 @@ with tab_portfolio:
 
                 # Journal des transactions (expandable)
                 with st.expander(f"📋 Journal des transactions {ticker}"):
-                    txs = lister_transactions(ticker)
+                    txs = lister_transactions(_user_id, ticker)
                     if txs:
                         # On garde les ids pour sauvegarder les notes éditées
                         tx_ids = [t["id"] for t in txs]
@@ -1211,7 +1287,7 @@ with tab_portfolio:
                             note_orig = txs[i].get("notes") or ""
                             note_new  = str(row.Notes) if row.Notes else ""
                             if note_new != note_orig:
-                                modifier_note_transaction(ticker, tx_id, note_new)
+                                modifier_note_transaction(_user_id, tx_id, note_new)
                                 st.rerun()
 
     # --- Note ---
@@ -1231,7 +1307,7 @@ C'est la méthode standard utilisée par les brokers français (Boursorama, Trad
     st.divider()
 
     # --- Historique des ventes (toujours visible) ---
-    historique = lister_historique()
+    historique = lister_historique(_user_id)
     if historique:
         st.subheader("📜 Historique des ventes")
 
@@ -1325,7 +1401,7 @@ C'est la méthode standard utilisée par les brokers français (Boursorama, Trad
                 key="suppr_hist",
             ):
                 for vid in ids_a_supprimer:
-                    supprimer_vente(vid)
+                    supprimer_vente(_user_id, vid)
                 st.rerun()
         else:
             del_col.caption("Cocher une ligne pour la supprimer")
@@ -1473,7 +1549,7 @@ with tab_calib:
     st.divider()
 
     with st.spinner("Calcul de la calibration en cours…"):
-        res = calibrer_global()
+        res = calibrer_global(user_id=_user_id)
 
     nb_points = res.get("nb_points_total", 0)
     nb_tickers = res.get("nb_tickers", 0)

@@ -18,8 +18,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from data.portfolio import lister_positions, _prix_actuel
-from data.alerts_store import creer_alerte, lister_alertes
+from data.portfolio    import lister_positions as _lister_pos_local, _prix_actuel
+from data.alerts_store import creer_alerte, lister_alertes as _lister_alertes_local
+from db.portfolio      import lister_positions as _lister_pos_db
+from db.alerts_store   import ajouter_alerte   as _ajouter_alerte_db
 
 CONFIG_PATH = Path("config/alerts.json")
 
@@ -40,24 +42,33 @@ def _charger_config() -> dict:
         }
 
 
-def verifier_positions(with_scores: bool = False) -> list[dict]:
+def verifier_positions(user_id: str = None, with_scores: bool = False) -> list[dict]:
     """
     Vérifie toutes les positions ouvertes et génère les alertes nécessaires.
 
+    user_id=None     : mode local JSON (rétrocompatible)
     with_scores=False : vérification rapide basée sur le P&L uniquement (pas d'API externe).
     with_scores=True  : inclut le scoring multi-agents (plus lent, appels yfinance/FRED).
 
     Retourne la liste des nouvelles alertes créées.
     """
-    config  = _charger_config()
-    seuils  = config["seuils"]
-    positions = lister_positions()
+    config    = _charger_config()
+    seuils    = config["seuils"]
+    positions = _lister_pos_db(user_id) if user_id else _lister_pos_local()
     nouvelles = []
+
+    def _ajouter(ticker_, type_, message_):
+        """Crée une alerte dans le bon store selon le mode."""
+        if user_id:
+            return _ajouter_alerte_db(user_id, ticker_, type_, message_)
+        else:
+            return creer_alerte(ticker=ticker_, type_alerte=type_,
+                                niveau="INFO", message=message_, details={})
 
     for pos in positions:
         ticker     = pos["ticker"]
-        prix_moyen = pos["prix_moyen"]
-        quantite   = pos["quantite"]
+        prix_moyen = float(pos["prix_moyen"])
+        quantite   = float(pos["quantite"])
 
         # --- Prix actuel & P&L ---
         prix_now = _prix_actuel(ticker)
@@ -68,85 +79,57 @@ def verifier_positions(with_scores: bool = False) -> list[dict]:
         pnl_eur = round((prix_now - prix_moyen) * quantite, 2)
 
         # Seuils : per-position en priorité, sinon global config
-        seuil_stop  = pos.get("stop_loss_pct", seuils["pnl_stop_loss_pct"])
-        seuil_cible = pos.get("cible_pct",     seuils["pnl_cible_pct"])
-        seuil_alerte = seuil_stop / 2  # avertissement à mi-chemin du stop
+        seuil_stop   = float(pos["stop_loss_pct"]) if pos.get("stop_loss_pct") else seuils["pnl_stop_loss_pct"]
+        seuil_cible  = float(pos["cible_pct"])     if pos.get("cible_pct")     else seuils["pnl_cible_pct"]
+        seuil_alerte = seuil_stop / 2
 
         # --- Stop-loss ---
         if pnl_pct <= seuil_stop:
-            a = creer_alerte(
-                ticker=ticker,
-                type_alerte="STOP_LOSS",
-                niveau="CRITIQUE",
-                message=(f"{ticker} a perdu {pnl_pct:+.1f}% depuis ton CUMP "
+            a = _ajouter(ticker, "STOP_LOSS",
+                         f"{ticker} a perdu {pnl_pct:+.1f}% depuis le CUMP "
                          f"({prix_moyen:.2f} → {prix_now:.2f}). "
-                         f"Stop-loss à {seuil_stop}% déclenché."),
-                details={"pnl_pct": pnl_pct, "pnl_eur": pnl_eur,
-                         "prix_moyen": prix_moyen, "prix_actuel": prix_now},
-            )
-            if a not in nouvelles:
+                         f"Stop-loss à {seuil_stop}% déclenché.")
+            if a and a not in nouvelles:
                 nouvelles.append(a)
 
         # --- Alerte P&L (pré-stop-loss) ---
         elif pnl_pct <= seuil_alerte:
-            a = creer_alerte(
-                ticker=ticker,
-                type_alerte="ALERTE_PNL",
-                niveau="SURVEILLER",
-                message=(f"{ticker} est en perte de {pnl_pct:+.1f}% "
+            a = _ajouter(ticker, "ALERTE_PNL",
+                         f"{ticker} est en perte de {pnl_pct:+.1f}% "
                          f"({pnl_eur:+.2f}). "
-                         f"Stop-loss à {seuil_stop}% non encore atteint."),
-                details={"pnl_pct": pnl_pct, "pnl_eur": pnl_eur,
-                         "prix_moyen": prix_moyen, "prix_actuel": prix_now},
-            )
-            if a not in nouvelles:
+                         f"Stop-loss à {seuil_stop}% non encore atteint.")
+            if a and a not in nouvelles:
                 nouvelles.append(a)
 
         # --- Cible de gain atteinte ---
         if pnl_pct >= seuil_cible:
-            a = creer_alerte(
-                ticker=ticker,
-                type_alerte="CIBLE_ATTEINTE",
-                niveau="INFO",
-                message=(f"{ticker} a atteint +{pnl_pct:.1f}% de gain "
+            a = _ajouter(ticker, "CIBLE_ATTEINTE",
+                         f"{ticker} a atteint +{pnl_pct:.1f}% de gain "
                          f"({pnl_eur:+.2f}). "
-                         f"Objectif de +{seuil_cible}% atteint — envisager la prise de bénéfices."),
-                details={"pnl_pct": pnl_pct, "pnl_eur": pnl_eur,
-                         "prix_moyen": prix_moyen, "prix_actuel": prix_now},
-            )
-            if a not in nouvelles:
+                         f"Objectif de +{seuil_cible}% atteint — envisager la prise de bénéfices.")
+            if a and a not in nouvelles:
                 nouvelles.append(a)
 
         # --- Score agents (si demandé) ---
         if with_scores:
             try:
                 from orchestrator.orchestrator import run as orchestrer
-                r     = orchestrer(ticker, with_llm=False)
+                r     = orchestrer(ticker, with_llm=False, user_id=user_id)
                 score = r["scoring"]["score_final"]
 
                 if score <= seuils["score_vendre"]:
-                    a = creer_alerte(
-                        ticker=ticker,
-                        type_alerte="SCORE_VENDRE",
-                        niveau="VENDRE",
-                        message=(f"Les agents recommandent de vendre {ticker} "
+                    a = _ajouter(ticker, "SCORE_VENDRE",
+                                 f"Les agents recommandent de vendre {ticker} "
                                  f"(score : {score:+.4f}). "
-                                 f"Seuil de vente : {seuils['score_vendre']}."),
-                        details={"score": score, "decision": r["scoring"]["decision"]},
-                    )
-                    if a not in nouvelles:
+                                 f"Seuil de vente : {seuils['score_vendre']}.")
+                    if a and a not in nouvelles:
                         nouvelles.append(a)
 
                 elif score <= seuils["score_surveiller"]:
-                    a = creer_alerte(
-                        ticker=ticker,
-                        type_alerte="SCORE_SURVEILLER",
-                        niveau="SURVEILLER",
-                        message=(f"Le score de {ticker} se dégrade "
-                                 f"(score : {score:+.4f}). À surveiller."),
-                        details={"score": score},
-                    )
-                    if a not in nouvelles:
+                    a = _ajouter(ticker, "SCORE_SURVEILLER",
+                                 f"Le score de {ticker} se dégrade "
+                                 f"(score : {score:+.4f}). À surveiller.")
+                    if a and a not in nouvelles:
                         nouvelles.append(a)
 
             except Exception:
