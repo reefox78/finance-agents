@@ -989,7 +989,8 @@ with tab_portfolio:
                             key=f"obj_cible_{ticker}",
                         )
                         prix_cible_prev = round(pos["prix_moyen"] * (1 + obj_cible / 100), 2)
-                        oj2.caption(f"= {prix_cible_prev:.2f} en valeur absolue")
+                        gain_brut_prev  = round((prix_cible_prev - pos["prix_moyen"]) * pos["quantite"], 2)
+                        oj2.caption(f"= {prix_cible_prev:.2f} en valeur absolue · **+{gain_brut_prev:.2f} € brut**")
 
                         sauv = st.form_submit_button("💾 Enregistrer", type="primary")
                         annuler_obj = st.form_submit_button("Annuler")
