@@ -14,11 +14,19 @@ except Exception:
     pass   # pas de secrets configurés ou exécution hors Streamlit
 # ───────────────────────────────────────────────────────────────────────────
 
+import base64
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 import json
 from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Chemins des assets
+# ---------------------------------------------------------------------------
+_ASSETS = Path(__file__).parent.parent / "assets"
+_LOGO_PATH = _ASSETS / "logo.png"
+_BG_PATH   = _ASSETS / "background.png"
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -94,11 +102,37 @@ def _net_apres_impots(pnl_net_frais: float, regime: str, tmi: int = 30) -> tuple
     return r["impots"], r["pnl_apres_impots"], r["taux_effectif"]
 
 
+_page_icon = "📈"
+if _LOGO_PATH.exists():
+    from PIL import Image as _Image
+    _page_icon = _Image.open(_LOGO_PATH)
+
 st.set_page_config(
     page_title="Finance Agents",
-    page_icon="📈",
+    page_icon=_page_icon,
     layout="wide"
 )
+
+# ---------------------------------------------------------------------------
+# Background image + overlay
+# ---------------------------------------------------------------------------
+if _BG_PATH.exists():
+    _bg_b64 = base64.b64encode(_BG_PATH.read_bytes()).decode()
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-image:
+                linear-gradient(rgba(10,10,20,0.72), rgba(10,10,20,0.72)),
+                url("data:image/png;base64,{_bg_b64}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ===========================================================================
@@ -108,7 +142,14 @@ st.set_page_config(
 def _page_auth():
     """Page de connexion / inscription. Bloque l'accès si non connecté."""
     import os as _os
-    st.title("📈 Finance Agents")
+    if _LOGO_PATH.exists():
+        _col_logo, _col_title = st.columns([1, 5])
+        with _col_logo:
+            st.image(str(_LOGO_PATH), width=80)
+        with _col_title:
+            st.title("Finance Agents")
+    else:
+        st.title("📈 Finance Agents")
     st.markdown("### Connexion à votre espace personnel")
 
     # ── Bouton Google (si configuré) ────────────────────────────────────────
@@ -237,6 +278,10 @@ elif _time.time() - st.session_state["login_time"] > _SESSION_TTL:
     del st.session_state["login_time"]
     st.warning("Votre session a expiré. Veuillez vous reconnecter.")
     st.rerun()
+
+# Logo dans la sidebar (Streamlit ≥ 1.35)
+if _LOGO_PATH.exists():
+    st.logo(str(_LOGO_PATH), size="large")
 
 # Raccourci global utilisé partout dans le dashboard
 _user    = st.session_state["user"]
