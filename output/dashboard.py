@@ -159,7 +159,7 @@ def _page_auth():
         _g_url   = get_auth_url(_state)
         st.markdown(
             f"""
-            <a href="{_g_url}" target="_self" style="text-decoration:none;">
+            <a href="{_g_url}" target="_top" style="text-decoration:none;">
               <div style="
                 display:flex; align-items:center; justify-content:center; gap:10px;
                 background:#fff; border:1px solid #dadce0; border-radius:4px;
