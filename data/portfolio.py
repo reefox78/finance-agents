@@ -304,6 +304,18 @@ def lister_historique() -> list[dict]:
     return sorted(hist, key=lambda x: x.get("date", ""), reverse=True)
 
 
+def modifier_note_transaction(ticker: str, tx_id: str, note: str) -> None:
+    """Met à jour la note d'une transaction identifiée par son id."""
+    data   = _charger()
+    ticker = ticker.upper().strip()
+    pos    = data["positions"].get(ticker, {})
+    for tx in pos.get("transactions", []):
+        if tx.get("id") == tx_id:
+            tx["notes"] = note.strip()
+            break
+    _sauvegarder(data)
+
+
 def lister_transactions(ticker: str) -> list[dict]:
     """Retourne le log complet des transactions pour un ticker."""
     data   = _charger()

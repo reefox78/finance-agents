@@ -14,7 +14,8 @@ from data.asset_type import detect_asset_type
 from data.score_history import lire_historique
 from data.portfolio import (ajouter_achat, ajouter_vente, supprimer_position,
                             supprimer_vente, evaluer_positions, definir_objectifs,
-                            lister_historique, lister_transactions)
+                            lister_historique, lister_transactions,
+                            modifier_note_transaction)
 from data.alerts_store import (lister_alertes, compter_non_lues,
                                 marquer_lue, tout_marquer_lu, supprimer_alerte)
 from orchestrator.orchestrator import run
@@ -1162,6 +1163,8 @@ with tab_portfolio:
                 with st.expander(f"📋 Journal des transactions {ticker}"):
                     txs = lister_transactions(ticker)
                     if txs:
+                        # On garde les ids pour sauvegarder les notes éditées
+                        tx_ids = [t["id"] for t in txs]
                         df_tx = pd.DataFrame([{
                             "Date":     t["date"],
                             "Type":     "🟢 Achat" if t["type"] == "achat" else "🔴 Vente",
@@ -1170,9 +1173,14 @@ with tab_portfolio:
                             "Frais":    t.get("frais", 0.0),
                             "P&L net":  t.get("pnl_eur") if t.get("pnl_eur") is not None else "—",
                             "CUMP réf": t.get("prix_moyen_achat") if t.get("prix_moyen_achat") is not None else "—",
-                            "Notes":    t.get("notes") or "—",
+                            "Notes":    t.get("notes") or "",
                         } for t in txs])
-                        st.dataframe(df_tx, use_container_width=True, hide_index=True,
+
+                        df_edited = st.data_editor(
+                            df_tx,
+                            use_container_width=True,
+                            hide_index=True,
+                            disabled=["Date", "Type", "Prix", "Qté", "Frais", "P&L net", "CUMP réf"],
                             column_config={
                                 "Prix":     st.column_config.NumberColumn(
                                     "Prix", format="%.4f",
@@ -1189,7 +1197,22 @@ with tab_portfolio:
                                 "CUMP réf": st.column_config.NumberColumn(
                                     "CUMP réf", format="%.4f",
                                     help="CUMP au moment de la vente — sert de base au calcul du P&L."),
-                            })
+                                "Notes":    st.column_config.TextColumn(
+                                    "Notes ✏️",
+                                    help="Clique pour éditer — sauvegardé automatiquement.",
+                                    max_chars=200,
+                                ),
+                            },
+                            key=f"tx_editor_{ticker}",
+                        )
+
+                        # Sauvegarder si une note a changé
+                        for i, (tx_id, row) in enumerate(zip(tx_ids, df_edited.itertuples())):
+                            note_orig = txs[i].get("notes") or ""
+                            note_new  = str(row.Notes) if row.Notes else ""
+                            if note_new != note_orig:
+                                modifier_note_transaction(ticker, tx_id, note_new)
+                                st.rerun()
 
     # --- Note ---
     with st.expander("ℹ️ Signaux de sortie & méthode CUMP"):
