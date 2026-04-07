@@ -972,7 +972,7 @@ with tab_portfolio:
 
                         obj_stop = oj1.number_input(
                             "Stop-loss (%)",
-                            value=float(pos.get("stop_loss_pct", -8.0)),
+                            value=float(pos.get("stop_loss_pct") or -8.0),
                             min_value=-50.0, max_value=-0.5, step=0.5, format="%.1f",
                             help="Perte maximale tolérée. Ex : -8 → vendre si -8% depuis le CUMP.",
                             key=f"obj_stop_{ticker}",
@@ -982,7 +982,7 @@ with tab_portfolio:
 
                         obj_cible = oj2.number_input(
                             "Cible de gain (%)",
-                            value=float(pos.get("cible_pct", 15.0)),
+                            value=float(pos.get("cible_pct") or 15.0),
                             min_value=0.5, max_value=500.0, step=0.5, format="%.1f",
                             help="Gain visé. Ex : 15 → vendre si +15% depuis le CUMP.",
                             key=f"obj_cible_{ticker}",
