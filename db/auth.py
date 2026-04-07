@@ -102,6 +102,10 @@ def connecter(email: str, password: str) -> dict:
     if not row["is_active"]:
         raise ValueError("Ce compte est désactivé.")
 
+    # Compte Google sans mot de passe → orienter vers Google Sign-In
+    if not row["password_hash"]:
+        raise ValueError("Ce compte utilise Google Sign-In. Connectez-vous avec le bouton Google.")
+
     if not _verify_password(password, row["password_hash"]):
         raise ValueError("Email ou mot de passe incorrect.")
 
