@@ -141,9 +141,12 @@ def _appliquer_achat(position: dict, tx: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def ajouter_achat(ticker: str, prix: float, quantite: float,
-                  date: str = None, notes: str = "", frais: float = 0.0) -> dict:
+                  date: str = None, notes: str = "", frais: float = 0.0,
+                  broker_key: str = None) -> dict:
     """
     Enregistre un achat. Recalcule le CUMP (frais inclus) si la position existe déjà.
+    broker_key : identifiant du broker utilisé (ex: "trade_republic") — stocké sur la
+                 position pour être réutilisé dans la simulation des objectifs.
     Retourne la position mise à jour.
     """
     data   = _charger()
@@ -156,6 +159,10 @@ def ajouter_achat(ticker: str, prix: float, quantite: float,
             "prix_moyen":   0.0,
             "transactions": [],
         }
+
+    # Mémorise le broker du premier achat (ou met à jour si fourni)
+    if broker_key:
+        data["positions"][ticker]["broker_key"] = broker_key
 
     tx = {
         "id":       _new_id(),

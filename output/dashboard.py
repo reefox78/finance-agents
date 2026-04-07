@@ -853,7 +853,8 @@ with tab_portfolio:
 
         if st.button("Enregistrer l'achat", type="primary", key="pf_ajouter"):
             pos = ajouter_achat(pf_ticker, pf_prix, pf_qty,
-                                pf_date.strftime("%Y-%m-%d"), pf_notes, frais=pf_frais)
+                                pf_date.strftime("%Y-%m-%d"), pf_notes,
+                                frais=pf_frais, broker_key=broker_key)
             st.success(f"✅ Achat enregistré — {pf_ticker} : {pos['quantite']} unités "
                        f"@ CUMP {pos['prix_moyen']:.4f} (frais inclus)")
             if "pf_positions" in st.session_state:
@@ -1003,6 +1004,95 @@ with tab_portfolio:
                     if annuler_obj:
                         st.session_state[f"objectifs_{ticker}"] = False
                         st.rerun()
+
+                # Simulation nette (frais + impôts) — hors form, réactive
+                cible_pct_saved = pos.get("cible_pct") or 15.0
+                with st.expander("📊 Simulation nette de la cible (optionnel)"):
+                    qty_pos       = pos["quantite"]
+                    cump_pos      = pos["prix_moyen"]
+                    prix_cible_sim = round(cump_pos * (1 + cible_pct_saved / 100), 4)
+                    valeur_vente  = round(prix_cible_sim * qty_pos, 2)
+                    pnl_brut_sim  = round((prix_cible_sim - cump_pos) * qty_pos, 2)
+
+                    sim1, sim2 = st.columns(2)
+
+                    # --- Frais broker ---
+                    inclure_frais_sim = sim1.checkbox(
+                        "Inclure frais de vente", key=f"sim_frais_{ticker}"
+                    )
+                    broker_key_pos = pos.get("broker_key")
+                    if inclure_frais_sim:
+                        # Broker par défaut = celui enregistré à l'achat, sinon sélection globale
+                        brokers_sim    = _load_brokers()
+                        options_sim    = {v["nom"]: k for k, v in brokers_sim.items()}
+                        default_broker = next(
+                            (b["nom"] for k, b in brokers_sim.items() if k == broker_key_pos),
+                            list(options_sim.keys())[0]
+                        )
+                        broker_sim_nom = sim1.selectbox(
+                            "Broker (vente)", list(options_sim.keys()),
+                            index=list(options_sim.keys()).index(default_broker),
+                            key=f"sim_broker_{ticker}",
+                        )
+                        broker_sim_cfg = brokers_sim[options_sim[broker_sim_nom]]
+                        frais_sim      = round(calculer_frais(valeur_vente, broker_sim_cfg, "vente"), 2)
+                        sim1.caption(f"Frais estimés : **{frais_sim:.2f} €**")
+                    else:
+                        frais_sim = 0.0
+
+                    # --- Impôts ---
+                    inclure_impots_sim = sim2.checkbox(
+                        "Inclure impôts", key=f"sim_impots_{ticker}"
+                    )
+                    if inclure_impots_sim:
+                        regime_sim = sim2.selectbox(
+                            "Régime fiscal", ["pfu", "bareme", "pea"],
+                            format_func=lambda r: {
+                                "pfu":    "PFU 30 % (flat tax)",
+                                "bareme": "Barème progressif",
+                                "pea":    "PEA après 5 ans (17.2 %)",
+                            }[r],
+                            key=f"sim_regime_{ticker}",
+                        )
+                        tmi_sim = 30
+                        if regime_sim == "bareme":
+                            tmi_sim = sim2.selectbox(
+                                "TMI (%)", [0, 11, 30, 41, 45],
+                                index=2, key=f"sim_tmi_{ticker}"
+                            )
+                    else:
+                        regime_sim = "pfu"
+                        tmi_sim    = 30
+
+                    # --- Calcul et affichage ---
+                    pnl_net_sim = round(pnl_brut_sim - frais_sim, 2)
+                    if inclure_impots_sim and pnl_net_sim > 0:
+                        r_impots   = calculer_impots(pnl_net_sim, regime_sim, tmi_sim)
+                        impots_sim = r_impots["impots"]
+                        pnl_final  = r_impots["pnl_apres_impots"]
+                        taux_eff   = r_impots["taux_effectif"]
+                    else:
+                        impots_sim = 0.0
+                        pnl_final  = pnl_net_sim
+                        taux_eff   = 0.0
+
+                    st.markdown("---")
+                    sc1, sc2, sc3, sc4 = st.columns(4)
+                    sc1.metric("Prix cible brut", f"{prix_cible_sim:.2f}")
+                    sc2.metric("P&L brut", f"+{pnl_brut_sim:.2f} €",
+                               help=f"({cible_pct_saved:+.1f}%) × {qty_pos} unités")
+                    if inclure_frais_sim:
+                        sc3.metric("Frais vente", f"−{frais_sim:.2f} €")
+                    if inclure_impots_sim:
+                        sc4.metric(
+                            f"Impôts ({taux_eff:.0f}%)", f"−{impots_sim:.2f} €"
+                        )
+                    if inclure_frais_sim or inclure_impots_sim:
+                        st.metric(
+                            "**Gain net réel**",
+                            f"+{pnl_final:.2f} €",
+                            delta=f"{pnl_final / (cump_pos * qty_pos) * 100:+.2f}% net",
+                        )
 
                 # Formulaire de vente partielle ou totale
                 if st.session_state.get(f"vendre_{ticker}"):
