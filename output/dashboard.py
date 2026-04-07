@@ -1168,9 +1168,9 @@ with tab_portfolio:
                             "Prix":     t["prix"],
                             "Qté":      t["quantite"],
                             "Frais":    t.get("frais", 0.0),
-                            "P&L net":  t.get("pnl_eur", ""),
-                            "CUMP réf": t.get("prix_moyen_achat", ""),
-                            "Notes":    t.get("notes", ""),
+                            "P&L net":  t.get("pnl_eur") if t.get("pnl_eur") is not None else "—",
+                            "CUMP réf": t.get("prix_moyen_achat") if t.get("prix_moyen_achat") is not None else "—",
+                            "Notes":    t.get("notes") or "—",
                         } for t in txs])
                         st.dataframe(df_tx, use_container_width=True, hide_index=True,
                             column_config={
