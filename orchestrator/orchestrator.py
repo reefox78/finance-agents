@@ -263,9 +263,15 @@ def run(ticker: str, with_llm: bool = True) -> dict:
         )
         rapport = response.choices[0].message.content or ""
 
-    # --- Sauvegarde historique du score ---
+    # --- Sauvegarde historique du score (avec scores par agent + prix) ---
     try:
-        enregistrer_score(ticker, scoring["score_final"], scoring["decision"])
+        prix_actuel = tech.get("prix_actuel")
+        scores_agents = {
+            k: v for k, v in scoring["scores"].items()
+            if k not in ("multiplicateur", "mult_macro")
+        }
+        enregistrer_score(ticker, scoring["score_final"], scoring["decision"],
+                          prix=prix_actuel, scores_agents=scores_agents)
     except Exception:
         pass   # non bloquant
 

@@ -168,8 +168,8 @@ st.title("📈 Finance Agents — Aide à la décision")
 _nb_alertes = compter_non_lues()
 _label_portfolio = f"💼 Portefeuille {'🔔 ' + str(_nb_alertes) if _nb_alertes else ''}"
 
-tab_analyse, tab_scanner, tab_portfolio, tab_backtest = st.tabs(
-    ["🔍 Analyse", "📋 Scanner", _label_portfolio, "📊 Backtest"]
+tab_analyse, tab_scanner, tab_portfolio, tab_backtest, tab_calib = st.tabs(
+    ["🔍 Analyse", "📋 Scanner", _label_portfolio, "📊 Backtest", "⚙️ Calibration"]
 )
 
 
@@ -1324,3 +1324,142 @@ with tab_backtest:
                           "date", "prix_vente", "pnl", "pnlnet"]
             cols_ordre = [c for c in cols_ordre if c in df_trades.columns]
             st.dataframe(df_trades[cols_ordre], use_container_width=True, hide_index=True)
+
+# ===========================================================================
+# Onglet Calibration
+# ===========================================================================
+
+with tab_calib:
+    from calibration.calibrator import (
+        calibrer_global, charger_poids_custom,
+        sauvegarder_poids, supprimer_poids_custom, HORIZON_JOURS,
+    )
+    from orchestrator.scoring import POIDS as POIDS_DEFAUT
+
+    st.subheader("Calibration des poids des agents",
+                 help="Mesure la précision de chaque agent sur tes analyses passées. "
+                      "Un agent qui prédit bien la direction du cours mérite un poids plus élevé. "
+                      "Les poids suggérés sont calculés automatiquement — tu peux les appliquer ou garder les défauts.")
+
+    st.markdown(
+        "**Comment ça marche :** à chaque analyse, l'app enregistre le score de chaque agent "
+        "et le prix courant. "
+        f"Après **{HORIZON_JOURS} jours**, elle vérifie si le cours a bien bougé dans le sens prédit. "
+        "Plus un agent est précis, plus son poids est augmenté."
+    )
+
+    poids_custom = charger_poids_custom()
+    if poids_custom:
+        st.success("✅ Poids custom actifs — les poids par défaut ont été remplacés par tes poids calibrés.")
+        if st.button("↩️ Revenir aux poids par défaut"):
+            supprimer_poids_custom()
+            st.success("Poids réinitialisés aux valeurs par défaut.")
+            st.rerun()
+
+    st.divider()
+
+    with st.spinner("Calcul de la calibration en cours…"):
+        res = calibrer_global()
+
+    nb_points = res.get("nb_points_total", 0)
+    nb_tickers = res.get("nb_tickers", 0)
+
+    col_i1, col_i2 = st.columns(2)
+    col_i1.metric("Points évaluables", nb_points,
+                  help=f"Analyses de plus de {HORIZON_JOURS} jours avec prix enregistré")
+    col_i2.metric("Tickers couverts", nb_tickers)
+
+    MIN_REQUIS = 5
+    if nb_points < MIN_REQUIS:
+        jours_restants = HORIZON_JOURS
+        st.info(
+            f"📊 Pas encore assez de données pour calibrer ({nb_points}/{MIN_REQUIS} points évaluables).\n\n"
+            f"Lance **plusieurs analyses** sur les prochains jours — "
+            f"les résultats apparaîtront automatiquement après **{jours_restants} jours**."
+        )
+    else:
+        agents       = res["agents"]
+        poids_sugg   = res["poids_suggeres"]
+
+        # --- Tableau comparatif ---
+        st.subheader("Précision par agent")
+        lignes = []
+        for agent in sorted(POIDS_DEFAUT.keys()):
+            if agent in ("risque",):
+                continue
+            s    = agents.get(agent, {})
+            ex   = s.get("exactitude")
+            nb   = s.get("nb_predictions", 0)
+            corr = s.get("nb_correctes", 0)
+            p_def = POIDS_DEFAUT.get(agent, 0)
+            p_sug = poids_sugg.get(agent, p_def)
+            p_cur = poids_custom.get(agent, p_def) if poids_custom else p_def
+
+            if ex is None:
+                ex_str    = "—"
+                tendance  = "📊 Données insuffisantes"
+            elif ex >= 0.65:
+                ex_str   = f"{ex*100:.1f}%"
+                tendance = "🟢 Fiable"
+            elif ex >= 0.55:
+                ex_str   = f"{ex*100:.1f}%"
+                tendance = "🟡 Correct"
+            elif ex >= 0.45:
+                ex_str   = f"{ex*100:.1f}%"
+                tendance = "🟠 Aléatoire"
+            else:
+                ex_str   = f"{ex*100:.1f}%"
+                tendance = "🔴 Contre-productif"
+
+            lignes.append({
+                "Agent":         agent,
+                "Prédictions":   nb,
+                "Correctes":     corr,
+                "Exactitude":    ex_str,
+                "Appréciation":  tendance,
+                "Poids actuel":  round(p_cur, 4),
+                "Poids suggéré": round(p_sug, 4),
+            })
+
+        df_calib = pd.DataFrame(lignes)
+        st.dataframe(df_calib, use_container_width=True, hide_index=True)
+
+        # --- Graphique comparaison poids ---
+        st.subheader("Comparaison des poids")
+        agents_labels  = df_calib["Agent"].tolist()
+        poids_actuels  = df_calib["Poids actuel"].tolist()
+        poids_suggeres = df_calib["Poids suggéré"].tolist()
+
+        fig_poids = go.Figure()
+        fig_poids.add_trace(go.Bar(
+            name="Poids actuel",
+            x=agents_labels, y=poids_actuels,
+            marker_color="rgba(91,155,213,0.8)",
+        ))
+        fig_poids.add_trace(go.Bar(
+            name="Poids suggéré",
+            x=agents_labels, y=poids_suggeres,
+            marker_color="rgba(46,204,113,0.8)",
+        ))
+        fig_poids.update_layout(
+            barmode="group", height=320,
+            margin=dict(l=0, r=0, t=10, b=0),
+            legend=dict(orientation="h", y=1.05),
+            yaxis_title="Poids",
+        )
+        st.plotly_chart(fig_poids, use_container_width=True)
+
+        # --- Bouton appliquer ---
+        st.divider()
+        col_btn1, col_btn2 = st.columns([1, 3])
+        if col_btn1.button("✅ Appliquer les poids suggérés", type="primary"):
+            sauvegarder_poids(poids_sugg)
+            st.success(
+                "Poids sauvegardés dans `config/weights_custom.json`. "
+                "Ils seront utilisés dès la prochaine analyse."
+            )
+            st.rerun()
+        col_btn2.caption(
+            "Les poids suggérés remplacent les poids par défaut pour toutes les analyses futures. "
+            "Tu peux revenir aux défauts à tout moment avec le bouton en haut de page."
+        )

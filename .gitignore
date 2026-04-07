@@ -13,7 +13,8 @@ config/alerts.json        # contient email + mot de passe SMTP → utiliser aler
 # Données personnelles — NE JAMAIS COMMITTER
 data/portfolio.json       # positions et transactions réelles
 data/alerts.json          # alertes générées (données runtime)
-data/score_history.json   # historique des scores (données runtime)
+data/score_history.json        # historique des scores (données runtime)
+config/weights_custom.json     # poids calibrés (données runtime)
 
 # Logs de lancement (historisés par date/heure)
 logs/

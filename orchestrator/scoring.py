@@ -1,3 +1,8 @@
+import json
+from pathlib import Path
+
+_FICHIER_CUSTOM = Path(__file__).parent.parent / "config" / "weights_custom.json"
+
 POIDS = {
     "technique":         0.25,
     "fondamental":       0.18,
@@ -15,6 +20,19 @@ POIDS = {
 
 SEUIL_ACHAT = 0.10
 SEUIL_VENTE = -0.10
+
+
+def _charger_poids() -> dict:
+    """Retourne les poids custom si disponibles, sinon les poids par défaut."""
+    if _FICHIER_CUSTOM.exists():
+        try:
+            with open(_FICHIER_CUSTOM, encoding="utf-8") as f:
+                custom = json.load(f)
+            # Complète les clés manquantes avec les défauts
+            return {**POIDS, **custom}
+        except Exception:
+            pass
+    return POIDS
 
 
 def signal_en_score(signal: str) -> float:
@@ -64,32 +82,34 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
     mult_risk  = risk.get("multiplicateur", 1.0) if risk else 1.0
     mult_macro = macro_en_multiplicateur(s_macro) if macro else 1.0
 
+    P = _charger_poids()   # poids actifs (custom ou défauts)
+
     poids_actifs = (
-        POIDS["technique"] +
-        (POIDS["fondamental"]       if fund              else 0) +
-        (POIDS["sentiment"]         if sent              else 0) +
-        (POIDS["trends"]            if trends            else 0) +
-        (POIDS["insider"]           if insider           else 0) +
-        (POIDS["macro"]             if macro             else 0) +
-        (POIDS["options_flow"]      if options_flow      else 0) +
-        (POIDS["sec_filings"]       if sec_filings       else 0) +
-        (POIDS["short_interest"]    if short_interest    else 0) +
-        (POIDS["earnings_surprise"] if earnings_surprise else 0) +
-        (POIDS["volume_delta"]      if volume_delta      else 0)
+        P["technique"] +
+        (P["fondamental"]       if fund              else 0) +
+        (P["sentiment"]         if sent              else 0) +
+        (P["trends"]            if trends            else 0) +
+        (P["insider"]           if insider           else 0) +
+        (P["macro"]             if macro             else 0) +
+        (P["options_flow"]      if options_flow      else 0) +
+        (P["sec_filings"]       if sec_filings       else 0) +
+        (P["short_interest"]    if short_interest    else 0) +
+        (P["earnings_surprise"] if earnings_surprise else 0) +
+        (P["volume_delta"]      if volume_delta      else 0)
     )
 
     score_brut = (
-        s_tech     * POIDS["technique"] +
-        s_fund     * (POIDS["fondamental"]       if fund              else 0) +
-        s_sent     * (POIDS["sentiment"]         if sent              else 0) +
-        s_trends   * (POIDS["trends"]            if trends            else 0) +
-        s_insider  * (POIDS["insider"]           if insider           else 0) +
-        s_macro    * (POIDS["macro"]             if macro             else 0) +
-        s_options  * (POIDS["options_flow"]      if options_flow      else 0) +
-        s_sec      * (POIDS["sec_filings"]       if sec_filings       else 0) +
-        s_short    * (POIDS["short_interest"]    if short_interest    else 0) +
-        s_earnings * (POIDS["earnings_surprise"] if earnings_surprise else 0) +
-        s_voldelta * (POIDS["volume_delta"]      if volume_delta      else 0)
+        s_tech     * P["technique"] +
+        s_fund     * (P["fondamental"]       if fund              else 0) +
+        s_sent     * (P["sentiment"]         if sent              else 0) +
+        s_trends   * (P["trends"]            if trends            else 0) +
+        s_insider  * (P["insider"]           if insider           else 0) +
+        s_macro    * (P["macro"]             if macro             else 0) +
+        s_options  * (P["options_flow"]      if options_flow      else 0) +
+        s_sec      * (P["sec_filings"]       if sec_filings       else 0) +
+        s_short    * (P["short_interest"]    if short_interest    else 0) +
+        s_earnings * (P["earnings_surprise"] if earnings_surprise else 0) +
+        s_voldelta * (P["volume_delta"]      if volume_delta      else 0)
     ) / poids_actifs
 
     score_final = round(score_brut * mult_risk * mult_macro, 4)
@@ -118,7 +138,7 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
             "multiplicateur":    mult_risk,
             "mult_macro":        mult_macro,
         },
-        "poids":       POIDS,
+        "poids":       P,
         "score_final": score_final,
         "decision":    decision,
     }
