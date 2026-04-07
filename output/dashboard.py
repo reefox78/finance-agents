@@ -41,6 +41,7 @@ from db.alerts_store import (lister_alertes, compter_non_lues,
                               marquer_lue, tout_marquer_lu, supprimer_alerte)
 from db.auth import inscrire, connecter
 from db.google_auth import get_auth_url, exchange_code, connecter_ou_inscrire, generate_state, verify_state
+from streamlit_js_eval import streamlit_js_eval
 from orchestrator.orchestrator import run
 from backtesting.backtest import run_backtest
 from ta.trend import SMAIndicator
@@ -142,6 +143,30 @@ if _BG_PATH.exists():
 def _page_auth():
     """Page de connexion / inscription. Bloque l'accès si non connecté."""
     import os as _os
+    import json as _json
+
+    # ── Détection d'une auth Google terminée dans un autre onglet ───────────
+    _pending = streamlit_js_eval(
+        js_expressions="""(function(){
+            try {
+                var a = localStorage.getItem('fa_pending_auth');
+                if (a) { localStorage.removeItem('fa_pending_auth'); return a; }
+            } catch(e) {}
+            return null;
+        })()""",
+        key="pending_auth_check",
+    )
+    if _pending:
+        try:
+            _u = _json.loads(_pending)
+            st.session_state["user"]       = _u
+            st.session_state["login_time"] = _time.time()
+            st.rerun()
+            return
+        except Exception:
+            pass
+    # ────────────────────────────────────────────────────────────────────────
+
     if _LOGO_PATH.exists():
         _col_logo, _col_title = st.columns([1, 5])
         with _col_logo:
@@ -179,6 +204,14 @@ def _page_auth():
             """,
             unsafe_allow_html=True,
         )
+        st.markdown(
+            "<div style='text-align:center;color:#aaa;font-size:12px;margin-top:6px'>"
+            "Une fois connecté dans le nouvel onglet, cliquez ici ↓</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("✅  Finaliser la connexion Google", use_container_width=True):
+            pass  # déclenche un rerun qui relit localStorage via pending_auth_check
+
         st.markdown("<div style='text-align:center;color:#888;margin:12px 0'>— ou —</div>",
                     unsafe_allow_html=True)
 
@@ -257,7 +290,22 @@ if "code" in _qp and "user" not in st.session_state:
                 st.session_state["user"]       = user
                 st.session_state["login_time"] = _time.time()
                 st.query_params.clear()
-                st.rerun()
+                # Écrit les infos dans localStorage pour l'onglet original,
+                # puis ferme cet onglet (nouvel onglet Google auth).
+                import json as _j
+                _u_json = _j.dumps({
+                    "id":       user["id"],
+                    "username": user["username"],
+                    "email":    user["email"],
+                })
+                streamlit_js_eval(js_expressions=f"""(function(){{
+                    try {{ localStorage.setItem('fa_pending_auth', JSON.stringify({_u_json})); }} catch(e) {{}}
+                    setTimeout(function() {{ try {{ window.close(); }} catch(e) {{}} }}, 600);
+                    return true;
+                }})()""", key="oauth_store_close")
+                st.success("✅ Connexion réussie !")
+                st.info("Retournez à votre onglet original et cliquez sur **Finaliser la connexion Google**.")
+                st.stop()
             except Exception as _e:
                 st.error(f"Erreur de connexion Google : {_e}")
                 st.query_params.clear()
