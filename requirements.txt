@@ -4,6 +4,7 @@ annotated-types==0.7.0
 anyio==4.13.0
 attrs==26.1.0
 backtrader==1.9.78.123
+bcrypt==5.0.0
 beautifulsoup4==4.14.3
 blinker==1.9.0
 cachetools==7.0.5
@@ -56,6 +57,7 @@ pluggy==1.6.0
 praw==7.8.1
 prawcore==2.4.0
 protobuf==7.34.1
+psycopg2-binary==2.9.11
 pyarrow==23.0.1
 pycparser==3.0
 pydantic==2.12.5
