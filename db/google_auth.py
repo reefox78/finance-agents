@@ -31,9 +31,12 @@ GOOGLE_AUTH_URL  = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_INFO_URL  = "https://www.googleapis.com/oauth2/v3/userinfo"
 
-# L'URI de redirection doit être identique à celle enregistrée dans Google Cloud Console
-APP_URL      = os.getenv("APP_URL", "http://localhost:8501").rstrip("/")
-REDIRECT_URI = APP_URL
+def _redirect_uri() -> str:
+    """
+    Lit APP_URL à chaque appel (pas à l'import).
+    Nécessaire sur Streamlit Cloud où les secrets sont injectés après l'import.
+    """
+    return os.getenv("APP_URL", "http://localhost:8501").rstrip("/")
 
 
 # ---------------------------------------------------------------------------
@@ -72,12 +75,12 @@ def get_auth_url(state: str) -> str:
 
     params = {
         "client_id":     client_id,
-        "redirect_uri":  REDIRECT_URI,
+        "redirect_uri":  _redirect_uri(),
         "response_type": "code",
         "scope":         "openid email profile",
         "state":         state,
         "access_type":   "offline",
-        "prompt":        "select_account",   # toujours montrer le sélecteur de compte
+        "prompt":        "select_account",
     }
     return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
 
@@ -97,7 +100,7 @@ def exchange_code(code: str) -> dict:
         "code":          code,
         "client_id":     client_id,
         "client_secret": client_secret,
-        "redirect_uri":  REDIRECT_URI,
+        "redirect_uri":  _redirect_uri(),
         "grant_type":    "authorization_code",
     }, timeout=10)
     resp.raise_for_status()
