@@ -167,63 +167,163 @@ def _page_auth():
             pass
     # ────────────────────────────────────────────────────────────────────────
 
+    # ── CSS page auth ────────────────────────────────────────────────────────
+    _logo_b64 = ""
     if _LOGO_PATH.exists():
-        _col_logo, _col_title = st.columns([1, 5])
-        with _col_logo:
-            st.image(str(_LOGO_PATH), width=80)
-        with _col_title:
-            st.title("Finance Agents")
-    else:
-        st.title("📈 Finance Agents")
-    st.markdown("### Connexion à votre espace personnel")
+        _logo_b64 = base64.b64encode(_LOGO_PATH.read_bytes()).decode()
 
-    # ── Bouton Google (si configuré) ────────────────────────────────────────
+    st.markdown(f"""
+    <style>
+    /* Card centrée */
+    .main .block-container {{
+        max-width: 480px !important;
+        margin: 48px auto !important;
+        padding: 44px 40px 52px !important;
+        background: rgba(7, 11, 22, 0.92) !important;
+        border: 1px solid rgba(0, 200, 255, 0.13) !important;
+        border-radius: 20px !important;
+        box-shadow:
+            0 24px 64px rgba(0,0,0,0.65),
+            0 0 0 1px rgba(0,200,255,0.04),
+            inset 0 1px 0 rgba(255,255,255,0.04) !important;
+    }}
+    /* Inputs */
+    .stTextInput > label {{
+        color: #6b7fa3 !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        letter-spacing: 1.2px !important;
+        text-transform: uppercase !important;
+    }}
+    .stTextInput > div > div > input {{
+        background: rgba(255,255,255,0.04) !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 10px !important;
+        color: #d0d8f0 !important;
+        font-size: 14px !important;
+        padding: 12px 14px !important;
+    }}
+    .stTextInput > div > div > input:focus {{
+        border-color: rgba(0, 200, 255, 0.45) !important;
+        box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.08) !important;
+        background: rgba(0, 200, 255, 0.03) !important;
+    }}
+    .stTextInput > div > div > input::placeholder {{
+        color: #3a4a6a !important;
+    }}
+    /* Bouton submit */
+    div[data-testid="stFormSubmitButton"] > button {{
+        background: linear-gradient(135deg, #0c6fff 0%, #00c8ff 100%) !important;
+        border: none !important;
+        border-radius: 10px !important;
+        font-weight: 700 !important;
+        font-size: 13px !important;
+        letter-spacing: 1.5px !important;
+        height: 46px !important;
+        color: #fff !important;
+        box-shadow: 0 4px 24px rgba(0, 150, 255, 0.25) !important;
+        transition: all 0.2s !important;
+    }}
+    div[data-testid="stFormSubmitButton"] > button:hover {{
+        box-shadow: 0 6px 32px rgba(0, 200, 255, 0.4) !important;
+        transform: translateY(-1px) !important;
+    }}
+    /* Bouton Finaliser */
+    div[data-testid="stBaseButton-secondary"] > button,
+    button[kind="secondary"] {{
+        background: rgba(0, 200, 120, 0.07) !important;
+        border: 1px solid rgba(0, 200, 120, 0.25) !important;
+        border-radius: 10px !important;
+        color: #4fffb0 !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        height: 42px !important;
+    }}
+    /* Radio mode */
+    .stRadio > div {{ gap: 24px !important; justify-content: center !important; }}
+    .stRadio label {{ font-size: 13px !important; color: #6b7fa3 !important; font-weight: 500 !important; }}
+    .stRadio label:has(input:checked) {{ color: #00c8ff !important; }}
+    /* Supprimer les marges parasites */
+    .stAlert {{ border-radius: 10px !important; font-size: 13px !important; }}
+    div[data-testid="stForm"] {{ border: none !important; padding: 0 !important; }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── Header : logo + titre ────────────────────────────────────────────────
+    if _logo_b64:
+        st.markdown(f"""
+        <div style="text-align:center; padding-bottom:28px;">
+          <img src="data:image/png;base64,{_logo_b64}" width="88"
+               style="filter:drop-shadow(0 0 18px rgba(0,200,255,0.5)); margin-bottom:14px;">
+          <div style="font-size:22px; font-weight:800; color:#e8edf8;
+                      letter-spacing:3px; font-family:'Segoe UI',sans-serif;">
+            FINANCE AGENTS
+          </div>
+          <div style="font-size:10px; color:#2a6aad; letter-spacing:4px;
+                      margin-top:5px; font-family:monospace; text-transform:uppercase;">
+            Intelligent · Automated · Secure
+          </div>
+          <div style="width:50px; height:1px;
+                      background:linear-gradient(90deg,transparent,#00c8ff,transparent);
+                      margin:16px auto 0;"></div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div style="text-align:center;padding-bottom:28px;">
+          <div style="font-size:22px;font-weight:800;color:#e8edf8;letter-spacing:3px;">📈 FINANCE AGENTS</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── Bouton Google ────────────────────────────────────────────────────────
     _google_configured = bool(_os.getenv("GOOGLE_CLIENT_ID"))
     if _google_configured:
-        _state   = generate_state()
-        _g_url   = get_auth_url(_state)
-        st.markdown(
-            f"""
-            <a href="{_g_url}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">
-              <div style="
-                display:flex; align-items:center; justify-content:center; gap:10px;
-                background:#fff; border:1px solid #dadce0; border-radius:4px;
-                padding:10px 16px; cursor:pointer; font-family:Google Sans,sans-serif;
-                font-size:14px; font-weight:500; color:#3c4043;
-                box-shadow:0 1px 3px rgba(0,0,0,.08);
-              ">
-                <svg width="18" height="18" viewBox="0 0 48 48">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                </svg>
-                Continuer avec Google
-              </div>
-            </a>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<div style='text-align:center;color:#aaa;font-size:12px;margin-top:6px'>"
-            "Une fois connecté dans le nouvel onglet, cliquez ici ↓</div>",
-            unsafe_allow_html=True,
-        )
-        if st.button("✅  Finaliser la connexion Google", use_container_width=True):
-            pass  # déclenche un rerun qui relit localStorage via pending_auth_check
+        _state = generate_state()
+        _g_url = get_auth_url(_state)
+        st.markdown(f"""
+        <a href="{_g_url}" target="_blank" style="text-decoration:none;display:block;margin-bottom:10px;">
+          <div style="
+            display:flex; align-items:center; justify-content:center; gap:12px;
+            background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+            border-radius:10px; padding:13px 20px; cursor:pointer;
+            font-family:'Segoe UI',sans-serif; font-size:14px; font-weight:500; color:#d0d8f0;
+            transition:all .2s;
+          " onmouseover="this.style.background='rgba(255,255,255,0.09)';this.style.borderColor='rgba(255,255,255,0.18)'"
+             onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.borderColor='rgba(255,255,255,0.1)'">
+            <svg width="18" height="18" viewBox="0 0 48 48">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            </svg>
+            Continuer avec Google
+          </div>
+        </a>
+        <div style="text-align:center;color:#2e4060;font-size:11px;margin-bottom:10px;letter-spacing:.3px;">
+          Après connexion dans le nouvel onglet, cliquez ↓
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("✅  Finaliser la connexion Google", use_container_width=True, key="btn_finalize"):
+            pass
 
-        st.markdown("<div style='text-align:center;color:#888;margin:12px 0'>— ou —</div>",
-                    unsafe_allow_html=True)
+        st.markdown("""
+        <div style="display:flex;align-items:center;gap:14px;margin:22px 0 18px;">
+          <div style="flex:1;height:1px;background:rgba(255,255,255,0.06);"></div>
+          <div style="color:#2e4060;font-size:12px;letter-spacing:1px;">OU</div>
+          <div style="flex:1;height:1px;background:rgba(255,255,255,0.06);"></div>
+        </div>
+        """, unsafe_allow_html=True)
 
+    # ── Tabs connexion / inscription ─────────────────────────────────────────
     mode = st.radio("", ["Se connecter", "Créer un compte"], horizontal=True,
                     label_visibility="collapsed")
-    st.divider()
+    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
 
     if mode == "Se connecter":
         with st.form("form_login"):
-            email    = st.text_input("Email")
-            password = st.text_input("Mot de passe", type="password")
-            submit   = st.form_submit_button("Connexion", type="primary",
+            email    = st.text_input("Email", placeholder="vous@exemple.com")
+            password = st.text_input("Mot de passe", type="password", placeholder="••••••••")
+            submit   = st.form_submit_button("CONNEXION", type="primary",
                                               use_container_width=True)
         if submit:
             if not email or not password:
@@ -239,12 +339,14 @@ def _page_auth():
 
     else:  # Inscription
         with st.form("form_register"):
-            username  = st.text_input("Nom d'utilisateur")
-            email     = st.text_input("Email")
+            username  = st.text_input("Nom d'utilisateur", placeholder="john_doe")
+            email     = st.text_input("Email", placeholder="vous@exemple.com")
             password  = st.text_input("Mot de passe", type="password",
-                                       help="Min. 8 caractères, 1 majuscule, 1 chiffre")
-            password2 = st.text_input("Confirmer le mot de passe", type="password")
-            submit    = st.form_submit_button("Créer mon compte", type="primary",
+                                       help="Min. 8 caractères, 1 majuscule, 1 chiffre",
+                                       placeholder="••••••••")
+            password2 = st.text_input("Confirmer le mot de passe", type="password",
+                                       placeholder="••••••••")
+            submit    = st.form_submit_button("CRÉER MON COMPTE", type="primary",
                                                use_container_width=True)
         if submit:
             if not username or not email or not password:
