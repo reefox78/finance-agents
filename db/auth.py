@@ -24,6 +24,15 @@ def _verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
+_EMAIL_RE = __import__("re").compile(r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$')
+
+
+def _valider_email(email: str) -> None:
+    """Lève ValueError si le format d'email est invalide."""
+    if not _EMAIL_RE.match(email):
+        raise ValueError("Format d'email invalide.")
+
+
 def _valider_password(password: str) -> None:
     """Lève ValueError si le mot de passe ne respecte pas les règles."""
     if len(password) < 8:
@@ -49,6 +58,7 @@ def inscrire(username: str, email: str, password: str) -> dict:
     if not username or not email:
         raise ValueError("Username et email obligatoires.")
 
+    _valider_email(email)
     _valider_password(password)
 
     # Vérifie les doublons

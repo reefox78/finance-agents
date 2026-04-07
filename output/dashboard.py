@@ -151,6 +151,17 @@ if "user" not in st.session_state:
     _page_auth()
     st.stop()
 
+# Timeout de session : déconnexion automatique après 24h d'inactivité
+import time as _time
+_SESSION_TTL = 86400  # 24 heures en secondes
+if "login_time" not in st.session_state:
+    st.session_state["login_time"] = _time.time()
+elif _time.time() - st.session_state["login_time"] > _SESSION_TTL:
+    del st.session_state["user"]
+    del st.session_state["login_time"]
+    st.warning("Votre session a expiré. Veuillez vous reconnecter.")
+    st.rerun()
+
 # Raccourci global utilisé partout dans le dashboard
 _user    = st.session_state["user"]
 _user_id = _user["id"]
@@ -1420,9 +1431,12 @@ with tab_backtest:
 
     bt1, bt2 = st.columns(2)
     with bt1:
+        from datetime import date as _date_bt, timedelta as _td_bt
         bt_ticker  = _ticker_selectbox("Ticker", key="ticker_backtest")
-        bt_debut   = st.text_input("Début", value="2023-01-01", key="bt_debut")
-        bt_fin     = st.text_input("Fin",   value="2024-12-31", key="bt_fin")
+        bt_debut   = st.date_input("Début", value=_date_bt(2023, 1, 1), key="bt_debut",
+                                   help="Date de début du backtest.")
+        bt_fin     = st.date_input("Fin",   value=_date_bt(2024, 12, 31), key="bt_fin",
+                                   help="Date de fin du backtest.")
     with bt2:
         bt_mode    = st.radio("Mode", ["multi", "technique"],
                               help="multi = technique + macro + risque | technique = technique seul")
@@ -1431,9 +1445,14 @@ with tab_backtest:
     lancer_bt = st.button("Lancer le backtest", type="primary", key="lancer_bt")
 
     if lancer_bt:
+        if bt_debut >= bt_fin:
+            st.error("La date de début doit être antérieure à la date de fin.")
+            st.stop()
         with st.spinner("Backtest en cours..."):
             bt_result = run_backtest(
-                bt_ticker, debut=bt_debut, fin=bt_fin,
+                bt_ticker,
+                debut=bt_debut.strftime("%Y-%m-%d"),
+                fin=bt_fin.strftime("%Y-%m-%d"),
                 capital=float(bt_capital), mode=bt_mode
             )
 
