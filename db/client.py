@@ -16,22 +16,25 @@ import psycopg2
 import psycopg2.pool
 from dotenv import load_dotenv
 
-load_dotenv("config/.env")
+load_dotenv("config/.env")   # local dev — ignoré silencieusement si absent
 
-_DATABASE_URL = os.getenv("DATABASE_URL")
-if not _DATABASE_URL:
-    raise EnvironmentError("DATABASE_URL manquant dans config/.env")
-
-# Pool de 1 à 5 connexions simultanées (Streamlit est mono-thread par session)
+# Pool initialisé au premier appel (lazy) pour supporter Streamlit Cloud
+# où DATABASE_URL est injecté dans os.environ APRÈS l'import du module.
 _pool: psycopg2.pool.ThreadedConnectionPool | None = None
 
 
 def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
     global _pool
     if _pool is None or _pool.closed:
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            raise EnvironmentError(
+                "DATABASE_URL manquant. "
+                "Configurez config/.env (local) ou les Secrets Streamlit Cloud."
+            )
         _pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=1, maxconn=5,
-            dsn=_DATABASE_URL,
+            dsn=db_url,
             sslmode="require",
             connect_timeout=10,
         )

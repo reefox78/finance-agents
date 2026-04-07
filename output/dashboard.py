@@ -1,10 +1,23 @@
+import os
+import sys
 import streamlit as st
+
+# ── Injection des secrets Streamlit Cloud dans os.environ ──────────────────
+# Doit être fait AVANT tout import de db/ qui lit os.getenv() au chargement.
+# En local, config/.env est chargé par load_dotenv() dans chaque module db/.
+# Sur Streamlit Cloud, les secrets de l'UI sont injectés ici.
+try:
+    for _sk, _sv in st.secrets.items():
+        if isinstance(_sv, str):
+            os.environ.setdefault(_sk, _sv)
+except Exception:
+    pass   # pas de secrets configurés ou exécution hors Streamlit
+# ───────────────────────────────────────────────────────────────────────────
+
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 import json
-import sys
-import os
 from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

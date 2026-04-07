@@ -47,3 +47,4 @@ Thumbs.db
 # Fichiers temporaires divers
 readme.txt.txt
 surveillance
+.streamlit/secrets.toml
