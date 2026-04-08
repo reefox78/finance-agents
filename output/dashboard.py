@@ -433,6 +433,278 @@ elif _time.time() - st.session_state["login_time"] > _SESSION_TTL:
 if _LOGO_PATH.exists():
     st.logo(str(_LOGO_PATH), size="large")
 
+# ===========================================================================
+# CSS GLOBAL — Dashboard (injecté après auth)
+# ===========================================================================
+st.markdown("""
+<style>
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: rgba(5, 9, 20, 0.96) !important;
+    border-right: 1px solid rgba(0, 200, 255, 0.08) !important;
+}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #c8d6f0 !important;
+    font-size: 13px !important;
+    letter-spacing: 1.5px !important;
+    text-transform: uppercase !important;
+    font-weight: 700 !important;
+    border-bottom: 1px solid rgba(0, 200, 255, 0.1) !important;
+    padding-bottom: 8px !important;
+    margin-bottom: 16px !important;
+}
+[data-testid="stSidebar"] label {
+    color: #6b7fa3 !important;
+    font-size: 11px !important;
+    letter-spacing: 0.8px !important;
+    text-transform: uppercase !important;
+    font-weight: 600 !important;
+}
+[data-testid="stSidebar"] .stSelectbox > div > div,
+[data-testid="stSidebar"] .stMultiSelect > div > div {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 8px !important;
+    color: #c8d6f0 !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton"] > button {
+    background: linear-gradient(135deg, #0c6fff 0%, #00c8ff 100%) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    letter-spacing: 1.2px !important;
+    color: #fff !important;
+    box-shadow: 0 4px 20px rgba(0, 150, 255, 0.2) !important;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 1px solid rgba(0, 200, 255, 0.1) !important;
+    gap: 4px !important;
+}
+.stTabs [data-baseweb="tab"] {
+    background: transparent !important;
+    border: none !important;
+    color: #4a5a7a !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px !important;
+    padding: 10px 20px !important;
+    border-radius: 6px 6px 0 0 !important;
+    transition: all 0.2s !important;
+}
+.stTabs [data-baseweb="tab"]:hover {
+    color: #8ba8d0 !important;
+    background: rgba(255,255,255,0.03) !important;
+}
+.stTabs [aria-selected="true"] {
+    color: #00c8ff !important;
+    background: rgba(0, 200, 255, 0.06) !important;
+    border-bottom: 2px solid #00c8ff !important;
+}
+.stTabs [data-baseweb="tab-highlight"] { display: none !important; }
+
+/* ── Métriques ───────────────────────────────────────────────────────────── */
+[data-testid="stMetric"] {
+    background: rgba(10, 16, 32, 0.7) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 12px !important;
+    padding: 14px 18px !important;
+}
+[data-testid="stMetricLabel"] {
+    color: #4a5a7a !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 1px !important;
+    text-transform: uppercase !important;
+}
+[data-testid="stMetricValue"] {
+    color: #e0e8ff !important;
+    font-size: 22px !important;
+    font-weight: 700 !important;
+}
+[data-testid="stMetricDelta"] { font-size: 12px !important; }
+
+/* ── Subheaders ──────────────────────────────────────────────────────────── */
+h3 {
+    color: #c8d6f0 !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.8px !important;
+    text-transform: uppercase !important;
+    padding-bottom: 8px !important;
+    border-bottom: 1px solid rgba(0, 200, 255, 0.12) !important;
+    margin-bottom: 16px !important;
+}
+
+/* ── Dividers ────────────────────────────────────────────────────────────── */
+hr {
+    border: none !important;
+    border-top: 1px solid rgba(255,255,255,0.05) !important;
+    margin: 20px 0 !important;
+}
+
+/* ── Containers avec bordure ────────────────────────────────────────────── */
+[data-testid="stVerticalBlockBorderWrapper"] > div {
+    background: rgba(8, 13, 28, 0.6) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 12px !important;
+}
+
+/* ── Inputs globaux ──────────────────────────────────────────────────────── */
+.stTextInput > label, .stNumberInput > label,
+.stSelectbox > label, .stMultiSelect > label,
+.stDateInput > label, .stRadio > label {
+    color: #6b7fa3 !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.8px !important;
+    text-transform: uppercase !important;
+}
+.stTextInput input, .stNumberInput input {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 8px !important;
+    color: #c8d6f0 !important;
+}
+.stTextInput input:focus, .stNumberInput input:focus {
+    border-color: rgba(0,200,255,0.4) !important;
+    box-shadow: 0 0 0 2px rgba(0,200,255,0.08) !important;
+}
+.stSelectbox > div > div,
+.stMultiSelect > div > div {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 8px !important;
+    color: #c8d6f0 !important;
+}
+.stDateInput input {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 8px !important;
+    color: #c8d6f0 !important;
+}
+
+/* ── Boutons globaux ─────────────────────────────────────────────────────── */
+[data-testid="stBaseButton-primary"] > button,
+button[kind="primary"] {
+    background: linear-gradient(135deg, #0c6fff 0%, #00c8ff 100%) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    letter-spacing: 1px !important;
+    color: #fff !important;
+    box-shadow: 0 4px 20px rgba(0, 150, 255, 0.2) !important;
+    transition: all 0.2s !important;
+}
+[data-testid="stBaseButton-primary"] > button:hover,
+button[kind="primary"]:hover {
+    box-shadow: 0 6px 28px rgba(0, 200, 255, 0.35) !important;
+    transform: translateY(-1px) !important;
+}
+[data-testid="stBaseButton-secondary"] > button,
+button[kind="secondary"] {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 8px !important;
+    color: #8ba8d0 !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+}
+[data-testid="stBaseButton-secondary"] > button:hover {
+    border-color: rgba(0,200,255,0.3) !important;
+    color: #00c8ff !important;
+}
+
+/* ── Alerts / messages ───────────────────────────────────────────────────── */
+[data-testid="stAlert"] {
+    border-radius: 10px !important;
+    font-size: 13px !important;
+    border: none !important;
+}
+[data-testid="stAlert"][data-type="info"] {
+    background: rgba(0, 120, 255, 0.08) !important;
+    border-left: 3px solid rgba(0, 150, 255, 0.5) !important;
+}
+[data-testid="stAlert"][data-type="success"] {
+    background: rgba(0, 200, 100, 0.08) !important;
+    border-left: 3px solid rgba(0, 200, 100, 0.5) !important;
+}
+[data-testid="stAlert"][data-type="warning"] {
+    background: rgba(255, 170, 0, 0.08) !important;
+    border-left: 3px solid rgba(255, 170, 0, 0.5) !important;
+}
+[data-testid="stAlert"][data-type="error"] {
+    background: rgba(255, 60, 60, 0.08) !important;
+    border-left: 3px solid rgba(255, 60, 60, 0.5) !important;
+}
+
+/* ── Expanders ───────────────────────────────────────────────────────────── */
+[data-testid="stExpander"] > details {
+    background: rgba(8, 13, 28, 0.6) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 10px !important;
+}
+[data-testid="stExpander"] summary {
+    color: #8ba8d0 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+}
+
+/* ── Progress bar ────────────────────────────────────────────────────────── */
+[data-testid="stProgressBar"] > div > div {
+    background: linear-gradient(90deg, #0c6fff, #00c8ff) !important;
+    border-radius: 4px !important;
+}
+[data-testid="stProgressBar"] {
+    background: rgba(255,255,255,0.06) !important;
+    border-radius: 4px !important;
+}
+
+/* ── Dataframes ──────────────────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+}
+
+/* ── Download button ─────────────────────────────────────────────────────── */
+[data-testid="stDownloadButton"] > button {
+    background: rgba(0, 200, 100, 0.07) !important;
+    border: 1px solid rgba(0, 200, 100, 0.2) !important;
+    border-radius: 8px !important;
+    color: #4fffb0 !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+}
+[data-testid="stDownloadButton"] > button:hover {
+    background: rgba(0, 200, 100, 0.12) !important;
+    border-color: rgba(0, 200, 100, 0.4) !important;
+}
+
+/* ── Radio buttons ───────────────────────────────────────────────────────── */
+.stRadio > div { gap: 16px !important; }
+.stRadio [data-testid="stMarkdownContainer"] p { margin: 0 !important; }
+
+/* ── Caption text ────────────────────────────────────────────────────────── */
+[data-testid="stCaptionContainer"] p {
+    color: #3d5070 !important;
+    font-size: 11px !important;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,200,255,0.4); }
+</style>
+""", unsafe_allow_html=True)
+
 # Raccourci global utilisé partout dans le dashboard
 _user    = st.session_state["user"]
 _user_id = _user["id"]
@@ -510,15 +782,106 @@ def _icone_signal(signal):
 def _icone_risque(risque):
     return {"FAIBLE": "🟢", "ELEVE": "🔴"}.get(risque, "🟡")
 
+def _section_header(title: str, help_text: str = ""):
+    tooltip = f' title="{help_text}"' if help_text else ""
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:10px;margin:24px 0 16px;"{tooltip}>
+      <div style="width:3px;height:18px;background:linear-gradient(180deg,#00c8ff,#0066ff);
+                  border-radius:2px;flex-shrink:0;"></div>
+      <div style="font-size:13px;font-weight:700;color:#c8d6f0;
+                  letter-spacing:1.2px;text-transform:uppercase;">{title}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Dark theme Plotly — appliqué à tous les charts
+def _dark_layout(fig, height=None, **kwargs):
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#8ba8d0", family="Segoe UI, sans-serif", size=12),
+        xaxis=dict(
+            gridcolor="rgba(255,255,255,0.05)",
+            zerolinecolor="rgba(255,255,255,0.08)",
+            tickfont=dict(color="#4a5a7a"),
+        ),
+        yaxis=dict(
+            gridcolor="rgba(255,255,255,0.05)",
+            zerolinecolor="rgba(255,255,255,0.08)",
+            tickfont=dict(color="#4a5a7a"),
+        ),
+        legend=dict(
+            bgcolor="rgba(0,0,0,0)",
+            bordercolor="rgba(255,255,255,0.06)",
+            font=dict(color="#6b7fa3"),
+        ),
+        margin=dict(l=0, r=0, t=0, b=0),
+        **({"height": height} if height else {}),
+        **kwargs,
+    )
+    # Axes supplémentaires (subplots)
+    for ax in ["xaxis2", "yaxis2", "xaxis3", "yaxis3"]:
+        fig.update_layout({ax: dict(
+            gridcolor="rgba(255,255,255,0.05)",
+            zerolinecolor="rgba(255,255,255,0.08)",
+            tickfont=dict(color="#4a5a7a"),
+        )})
+    return fig
+
+# Carte HTML pour les signaux agents
+_SIG_COLOR = {"ACHETER": "#2ecc71", "VENDRE": "#e74c3c",
+              "FAIBLE": "#2ecc71", "ELEVE": "#e74c3c"}
+
+def _agent_card(nom, signal, ligne1, ligne2, desc=""):
+    col = _SIG_COLOR.get(signal, "#f39c12")
+    bg  = col.replace(")", ",0.06)").replace("rgb", "rgba") if col.startswith("rgb") else \
+          f"rgba({int(col[1:3],16)},{int(col[3:5],16)},{int(col[5:7],16)},0.07)"
+    return f"""
+    <div title="{desc}" style="
+        background:{bg};
+        border:1px solid {col}33;
+        border-left:3px solid {col};
+        border-radius:10px;
+        padding:12px 14px;
+        margin-bottom:8px;
+        cursor:default;
+    ">
+      <div style="font-size:10px;color:#4a5a7a;letter-spacing:1px;
+                  text-transform:uppercase;font-weight:600;margin-bottom:4px;">{nom}</div>
+      <div style="font-size:15px;font-weight:700;color:{col};margin-bottom:6px;">{signal}</div>
+      <div style="font-size:11px;color:#6b7fa3;line-height:1.5;">{ligne1}</div>
+      <div style="font-size:11px;color:#4a5a7a;">{ligne2}</div>
+    </div>"""
+
 
 # ---------------------------------------------------------------------------
 # Onglets principaux
 # ---------------------------------------------------------------------------
 
-col_titre, col_user = st.columns([5, 1])
-col_titre.title("📈 Finance Agents — Aide à la décision")
-with col_user:
-    st.caption(f"Connecté : **{_user['username']}**")
+_col_h, _col_u = st.columns([6, 1])
+with _col_h:
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:14px;padding:6px 0 2px;">
+      <div>
+        <div style="font-size:20px;font-weight:800;color:#e0e8ff;
+                    letter-spacing:2px;line-height:1.2;font-family:'Segoe UI',sans-serif;">
+          FINANCE AGENTS
+        </div>
+        <div style="font-size:10px;color:#2a4a6a;letter-spacing:3px;
+                    font-family:monospace;margin-top:2px;">
+          AIDE À LA DÉCISION · ANALYSE · PORTEFEUILLE
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+with _col_u:
+    st.markdown(f"""
+    <div style="text-align:right;padding-top:6px;">
+      <div style="font-size:10px;color:#2a4a6a;letter-spacing:1px;
+                  text-transform:uppercase;font-family:monospace;">Connecté</div>
+      <div style="font-size:13px;font-weight:600;color:#4fffb0;
+                  letter-spacing:0.5px;">{_user['username']}</div>
+    </div>
+    """, unsafe_allow_html=True)
     if st.button("Déconnexion", key="logout"):
         del st.session_state["user"]
         st.rerun()
@@ -546,8 +909,40 @@ with tab_analyse:
         lancer = st.button("Analyser", type="primary", use_container_width=True)
 
     if not lancer:
-        st.info("Entre un ticker dans la sidebar et clique sur **Analyser**.\n\n"
-                "Exemples : `AAPL` (US), `MC.PA` (Paris), `BTC-USD` (crypto), `EURUSD=X` (forex)")
+        st.markdown("""
+        <div style="
+            margin-top:40px;
+            background:rgba(8,13,28,0.7);
+            border:1px solid rgba(0,200,255,0.1);
+            border-radius:16px;
+            padding:48px 40px;
+            text-align:center;
+        ">
+          <div style="font-size:36px;margin-bottom:16px;">📡</div>
+          <div style="font-size:18px;font-weight:700;color:#c8d6f0;
+                      letter-spacing:1px;margin-bottom:10px;">
+            Prêt à analyser
+          </div>
+          <div style="font-size:13px;color:#4a5a7a;line-height:1.8;max-width:420px;margin:0 auto;">
+            Sélectionne un ticker dans la sidebar et clique sur <strong style="color:#00c8ff;">Analyser</strong>
+            pour lancer l'ensemble des agents IA.
+          </div>
+          <div style="display:flex;justify-content:center;gap:10px;margin-top:24px;flex-wrap:wrap;">
+            <span style="background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.15);
+                         border-radius:6px;padding:4px 12px;font-size:11px;color:#4a8ab5;
+                         font-family:monospace;">AAPL</span>
+            <span style="background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.15);
+                         border-radius:6px;padding:4px 12px;font-size:11px;color:#4a8ab5;
+                         font-family:monospace;">MC.PA</span>
+            <span style="background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.15);
+                         border-radius:6px;padding:4px 12px;font-size:11px;color:#4a8ab5;
+                         font-family:monospace;">BTC-USD</span>
+            <span style="background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.15);
+                         border-radius:6px;padding:4px 12px;font-size:11px;color:#4a8ab5;
+                         font-family:monospace;">EURUSD=X</span>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     if lancer:
         asset_type = detect_asset_type(ticker)
@@ -590,7 +985,7 @@ with tab_analyse:
             "forex":     "💱 Forex",
         }
 
-        st.subheader(f"{nom} — {ticker}")
+        _section_header(f"{nom} — {ticker}")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Prix actuel",  f"{tech['prix_actuel']}")
         c2.metric("Type d'actif", asset_labels.get(asset_type, asset_type))
@@ -604,13 +999,8 @@ with tab_analyse:
 
         # --- Contexte macro ---
         if macro:
-            st.subheader("Contexte macroéconomique",
-                         help="Indicateurs économiques globaux qui influencent les marchés : "
-                              "taux d'intérêt directeur (fixé par la banque centrale), "
-                              "taux de chômage, confiance des consommateurs et spread obligataire. "
-                              "Un environnement favorable pousse les marchés à la hausse ; "
-                              "un environnement défavorable (taux élevés, chômage en hausse) "
-                              "les pèse à la baisse.")
+            _section_header("Contexte macroéconomique",
+                            "Indicateurs économiques globaux : taux directeur, chômage, confiance, spread obligataire.")
             env   = macro["environnement"]
             icone = _icone_signal(macro["signal"])
 
@@ -635,7 +1025,7 @@ with tab_analyse:
         try:
             df = get_stock_data(ticker, period=period)
             if not df.empty:
-                st.subheader("Historique des prix")
+                _section_header("Historique des prix")
 
                 sma20  = SMAIndicator(df["Close"], window=20).sma_indicator()
                 sma50  = SMAIndicator(df["Close"], window=50).sma_indicator()
@@ -681,11 +1071,11 @@ with tab_analyse:
                     showlegend=False,
                 ), row=2, col=1)
 
+                _dark_layout(fig, height=520)
                 fig.update_layout(
                     xaxis_rangeslider_visible=False,
-                    height=520,
-                    margin=dict(l=0, r=0, t=0, b=0),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.01,
+                                xanchor="left", x=0, bgcolor="rgba(0,0,0,0)"),
                 )
                 fig.update_yaxes(title_text="Volume", fixedrange=True, row=2, col=1)
 
@@ -695,7 +1085,7 @@ with tab_analyse:
             pass
 
         # --- Signaux des agents ---
-        st.subheader("Signaux des agents")
+        _section_header("Signaux des agents")
         agents_affiches = []
         agents_affiches.append(("Technique", tech["signal"],
                                  f"RSI : {tech['rsi']} | CMF : {tech.get('cmf', 'N/A')} | OBV↗" if tech.get('scores', {}).get('obv', 0) > 0 else f"RSI : {tech['rsi']} | CMF : {tech.get('cmf', 'N/A')} | OBV↘",
@@ -778,17 +1168,18 @@ with tab_analyse:
             chunk = agents_affiches[debut:debut + NB_PAR_LIGNE]
             cols  = st.columns(NB_PAR_LIGNE)
             for col, (nom_agent, signal, ligne1, ligne2) in zip(cols, chunk):
-                icone = _icone_signal(signal) if nom_agent != "Risque" else _icone_risque(signal)
+                sig_display = signal if nom_agent != "Risque" else signal
                 with col:
-                    st.metric(nom_agent, f"{icone} {signal}",
-                              help=_AGENT_DESC.get(nom_agent, ""))
-                    st.caption(ligne1)
-                    st.caption(ligne2)
+                    st.markdown(
+                        _agent_card(nom_agent, sig_display, ligne1, ligne2,
+                                    _AGENT_DESC.get(nom_agent, "")),
+                        unsafe_allow_html=True,
+                    )
 
         st.divider()
 
         # --- Score pondéré ---
-        st.subheader("Score pondéré final")
+        _section_header("Score pondéré final")
         decision = scoring["decision"]
         score    = scoring["score_final"]
         sc1, sc2, sc3, sc4 = st.columns(4)
@@ -818,16 +1209,16 @@ with tab_analyse:
             },
             number={"suffix": " / 1.0", "font": {"size": 28}},
         ))
-        fig_score.update_layout(height=200, margin=dict(l=20, r=20, t=20, b=0))
+        _dark_layout(fig_score, height=200)
+        fig_score.update_layout(margin=dict(l=20, r=20, t=20, b=0))
+        fig_score.update_traces(number_font_color="#e0e8ff", title_font_color="#6b7fa3")
         st.plotly_chart(fig_score, use_container_width=True)
 
         # --- Historique du score ---
         historique = lire_historique(_user_id, ticker)
         if len(historique) >= 2:
-            st.subheader("Évolution du score",
-                         help="Chaque point correspond à une analyse lancée. "
-                              "Une dégradation progressive du score avant une chute de cours "
-                              "est souvent un signal d'alerte précoce.")
+            _section_header("Évolution du score",
+                            "Chaque point = une analyse. Une dégradation progressive = signal d'alerte précoce.")
             df_hist = pd.DataFrame(historique)
             df_hist["ts"] = pd.to_datetime(df_hist["ts"])
 
@@ -860,12 +1251,13 @@ with tab_analyse:
                 hovertemplate="<b>%{x|%d/%m %H:%M}</b><br>Score : %{y:.4f}<extra></extra>",
             ))
 
+            _dark_layout(fig_hist, height=260)
             fig_hist.update_layout(
-                height=260,
-                margin=dict(l=0, r=0, t=10, b=0),
                 yaxis=dict(range=[-1.05, 1.05], title="Score",
-                           tickvals=[-1, -0.5, -0.1, 0, 0.1, 0.5, 1]),
-                xaxis=dict(title=""),
+                           tickvals=[-1, -0.5, -0.1, 0, 0.1, 0.5, 1],
+                           gridcolor="rgba(255,255,255,0.05)",
+                           tickfont=dict(color="#4a5a7a")),
+                xaxis=dict(title="", tickfont=dict(color="#4a5a7a")),
                 showlegend=False,
             )
             st.plotly_chart(fig_hist, use_container_width=True)
@@ -875,7 +1267,7 @@ with tab_analyse:
         st.divider()
 
         # --- Rapport LLM ---
-        st.subheader("Rapport de décision (IA)")
+        _section_header("Rapport de décision (IA)")
         if resultat["rapport"]:
             st.markdown(resultat["rapport"])
         else:
@@ -885,7 +1277,7 @@ with tab_analyse:
 
         # --- Insider transactions ---
         if insider and insider.get("transactions"):
-            st.subheader("Transactions des dirigeants")
+            _section_header("Transactions des dirigeants")
             df_insider = pd.DataFrame(insider["transactions"])
             df_insider["type"] = df_insider["type"].apply(
                 lambda x: "🟢 ACHAT" if x == "ACHAT" else "🔴 VENTE"
@@ -894,7 +1286,7 @@ with tab_analyse:
             st.divider()
 
         # --- News ---
-        st.subheader("Dernières news")
+        _section_header("Dernières news")
         try:
             news = get_news(ticker)
             if news:
@@ -911,7 +1303,7 @@ with tab_analyse:
 # ===========================================================================
 
 with tab_scanner:
-    st.subheader("Scanner de marché")
+    _section_header("Scanner de marché")
 
     WATCHLIST_PATH = Path("config/watchlist.json")
 
@@ -1020,7 +1412,7 @@ with tab_scanner:
 # ===========================================================================
 
 with tab_portfolio:
-    st.subheader("💼 Mon portefeuille")
+    _section_header("💼 Mon portefeuille")
 
     # -----------------------------------------------------------------------
     # Panneau d'alertes
@@ -1591,7 +1983,7 @@ C'est la méthode standard utilisée par les brokers français (Boursorama, Trad
     # --- Historique des ventes (toujours visible) ---
     historique = lister_historique(_user_id)
     if historique:
-        st.subheader("📜 Historique des ventes")
+        _section_header("📜 Historique des ventes")
 
         total_trades  = len(historique)
         trades_gains  = [t for t in historique if t["pnl_eur"] > 0]
@@ -1698,7 +2090,7 @@ C'est la méthode standard utilisée par les brokers français (Boursorama, Trad
 # ===========================================================================
 
 with tab_backtest:
-    st.subheader("Backtest")
+    _section_header("Backtest")
 
     bt1, bt2 = st.columns(2)
     with bt1:
@@ -1770,12 +2162,12 @@ with tab_backtest:
                     name="Vente"
                 ))
 
+            _dark_layout(fig_bt, height=420)
             fig_bt.update_layout(
-                title=f"Prix + signaux — {bt_ticker}",
+                title=dict(text=f"Prix + signaux — {bt_ticker}",
+                           font=dict(color="#8ba8d0", size=13)),
                 xaxis_rangeslider_visible=False,
-                height=420,
-                margin=dict(l=0, r=0, t=40, b=0),
-                legend=dict(orientation="h", y=1.08)
+                legend=dict(orientation="h", y=1.08, bgcolor="rgba(0,0,0,0)"),
             )
             st.plotly_chart(fig_bt, use_container_width=True)
 
@@ -1789,8 +2181,11 @@ with tab_backtest:
                 line=dict(color="#2ecc71", width=2),
                 fill="tozeroy", fillcolor="rgba(46,204,113,0.08)"
             ))
-            fig_eq.update_layout(title="Courbe d'équité", height=260,
-                                 margin=dict(l=0, r=0, t=35, b=0))
+            _dark_layout(fig_eq, height=260)
+            fig_eq.update_layout(
+                title=dict(text="Courbe d'équité",
+                           font=dict(color="#8ba8d0", size=13)),
+            )
             st.plotly_chart(fig_eq, use_container_width=True)
 
         # --- Détail des trades ---
@@ -1816,10 +2211,8 @@ with tab_calib:
     )
     from orchestrator.scoring import POIDS as POIDS_DEFAUT
 
-    st.subheader("Calibration des poids des agents",
-                 help="Mesure la précision de chaque agent sur tes analyses passées. "
-                      "Un agent qui prédit bien la direction du cours mérite un poids plus élevé. "
-                      "Les poids suggérés sont calculés automatiquement — tu peux les appliquer ou garder les défauts.")
+    _section_header("Calibration des poids des agents",
+                    "Mesure la précision de chaque agent. Les poids suggérés sont calculés automatiquement.")
 
     st.markdown(
         "**Comment ça marche :** à chaque analyse, l'app enregistre le score de chaque agent "
@@ -1862,7 +2255,7 @@ with tab_calib:
         poids_sugg   = res["poids_suggeres"]
 
         # --- Tableau comparatif ---
-        st.subheader("Précision par agent")
+        _section_header("Précision par agent")
         lignes = []
         for agent in sorted(POIDS_DEFAUT.keys()):
             if agent in ("risque",):
@@ -1905,7 +2298,7 @@ with tab_calib:
         st.dataframe(df_calib, use_container_width=True, hide_index=True)
 
         # --- Graphique comparaison poids ---
-        st.subheader("Comparaison des poids")
+        _section_header("Comparaison des poids")
         agents_labels  = df_calib["Agent"].tolist()
         poids_actuels  = df_calib["Poids actuel"].tolist()
         poids_suggeres = df_calib["Poids suggéré"].tolist()
