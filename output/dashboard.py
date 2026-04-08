@@ -729,28 +729,56 @@ _user_id = _user["id"]
 # ---------------------------------------------------------------------------
 
 TICKERS_PRESET = {
-    "🇺🇸 Actions US":  ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","TSLA","JPM","XOM","SPY"],
-    "🇪🇺 Actions EU":  ["MC.PA","TTE.PA","SAN.PA","BNP.PA","OR.PA","AI.PA","SAF.PA","ASML.AS","SAP.DE","SIE.DE"],
-    "₿ Crypto":        ["BTC-USD","ETH-USD","SOL-USD","BNB-USD","XRP-USD","ADA-USD","DOGE-USD","DOT-USD","AVAX-USD","LINK-USD"],
-    "💱 Forex":        ["EURUSD=X","GBPUSD=X","USDJPY=X","USDCHF=X","AUDUSD=X","USDCAD=X","NZDUSD=X","EURGBP=X","EURJPY=X","GBPJPY=X"],
+    "🇺🇸 Actions US": [
+        "AAPL","MSFT","NVDA","GOOGL","META","AMZN","TSLA","JPM","XOM","SPY",
+        "V","MA","UNH","JNJ","WMT","HD","BAC","PG","COST","NFLX",
+    ],
+    "🇪🇺 Actions EU": [
+        "MC.PA","TTE.PA","SAN.PA","BNP.PA","OR.PA","AI.PA","SAF.PA","ASML.AS","SAP.DE","SIE.DE",
+        "SHELL.AS","NOVN.SW","ROG.SW","AZN.L","HSBA.L","RMS.PA","CS.PA","AIR.PA","DTE.DE","ALV.DE",
+    ],
+    "₿ Crypto": [
+        "BTC-USD","ETH-USD","SOL-USD","BNB-USD","XRP-USD","ADA-USD","DOGE-USD","DOT-USD","AVAX-USD","LINK-USD",
+        "MATIC-USD","UNI-USD","ATOM-USD","LTC-USD","TON-USD","NEAR-USD","ICP-USD","FIL-USD","APT-USD","ARB-USD",
+    ],
+    "💱 Forex": [
+        "EURUSD=X","GBPUSD=X","USDJPY=X","USDCHF=X","AUDUSD=X","USDCAD=X","NZDUSD=X","EURGBP=X","EURJPY=X","GBPJPY=X",
+        "USDCNY=X","USDINR=X","USDMXN=X","USDBRL=X","USDKRW=X","USDSGD=X","USDHKD=X","EURCHF=X","AUDCAD=X","CADJPY=X",
+    ],
 }
 
 # Noms courts des tickers pour l'affichage (max ~13 chars)
 _TICKER_NOMS = {
+    # Actions US
     "AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "Nvidia", "GOOGL": "Alphabet",
     "META": "Meta", "AMZN": "Amazon", "TSLA": "Tesla", "JPM": "JPMorgan",
     "XOM": "ExxonMobil", "SPY": "S&P 500 ETF",
+    "V": "Visa", "MA": "Mastercard", "UNH": "UnitedHealth", "JNJ": "J&J",
+    "WMT": "Walmart", "HD": "Home Depot", "BAC": "Bank of Am.", "PG": "Procter&Gamble",
+    "COST": "Costco", "NFLX": "Netflix",
+    # Actions EU
     "MC.PA": "LVMH", "TTE.PA": "TotalEnergies", "SAN.PA": "Sanofi",
     "BNP.PA": "BNP Paribas", "OR.PA": "L'Oréal", "AI.PA": "Air Liquide",
     "SAF.PA": "Safran", "ASML.AS": "ASML", "SAP.DE": "SAP", "SIE.DE": "Siemens",
+    "SHELL.AS": "Shell", "NOVN.SW": "Novartis", "ROG.SW": "Roche",
+    "AZN.L": "AstraZeneca", "HSBA.L": "HSBC", "RMS.PA": "Hermès",
+    "CS.PA": "AXA", "AIR.PA": "Airbus", "DTE.DE": "Deutsche Tel.", "ALV.DE": "Allianz",
+    # Crypto
     "BTC-USD": "Bitcoin", "ETH-USD": "Ethereum", "SOL-USD": "Solana",
     "BNB-USD": "BNB Chain", "XRP-USD": "XRP", "ADA-USD": "Cardano",
     "DOGE-USD": "Dogecoin", "DOT-USD": "Polkadot", "AVAX-USD": "Avalanche",
-    "LINK-USD": "Chainlink",
+    "LINK-USD": "Chainlink", "MATIC-USD": "Polygon", "UNI-USD": "Uniswap",
+    "ATOM-USD": "Cosmos", "LTC-USD": "Litecoin", "TON-USD": "Toncoin",
+    "NEAR-USD": "NEAR", "ICP-USD": "Internet Cmp.", "FIL-USD": "Filecoin",
+    "APT-USD": "Aptos", "ARB-USD": "Arbitrum",
+    # Forex
     "EURUSD=X": "€/Dollar", "GBPUSD=X": "£/Dollar", "USDJPY=X": "$/Yen",
     "USDCHF=X": "$/CHF", "AUDUSD=X": "AUD/Dollar", "USDCAD=X": "$/CAD",
     "NZDUSD=X": "NZD/Dollar", "EURGBP=X": "€/£", "EURJPY=X": "€/Yen",
-    "GBPJPY=X": "£/Yen",
+    "GBPJPY=X": "£/Yen", "USDCNY=X": "$/Yuan", "USDINR=X": "$/Roupie",
+    "USDMXN=X": "$/Peso MX", "USDBRL=X": "$/Réal", "USDKRW=X": "$/Won",
+    "USDSGD=X": "$/SGD", "USDHKD=X": "$/HKD", "EURCHF=X": "€/CHF",
+    "AUDCAD=X": "AUD/CAD", "CADJPY=X": "CAD/Yen",
 }
 _NOM_MAX = 13  # longueur max du nom entre parenthèses
 
