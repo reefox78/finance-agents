@@ -64,6 +64,21 @@ def _calculer_frais_broker(montant: float, broker: dict, operation: str = "achat
     return calculer_frais(montant, broker, operation)
 
 
+@st.cache_data(ttl=30)
+def _nb_alertes_cached(user_id: str) -> int:
+    """Cache 30 s — évite une requête DB à chaque rerun."""
+    return compter_non_lues(user_id)
+
+
+@st.cache_data(ttl=300)
+def _stock_info_cached(ticker: str) -> dict:
+    """Cache 5 min sur les métadonnées d'un titre."""
+    try:
+        return get_stock_info(ticker)
+    except Exception:
+        return {}
+
+
 @st.cache_data(ttl=300)
 def _fetch_prix_actuel(ticker: str) -> float | None:
     """Récupère le dernier prix connu via yfinance (cache 5 min)."""
@@ -887,7 +902,7 @@ with _col_u:
         st.rerun()
 
 # Badge de notification sur l'onglet Portefeuille
-_nb_alertes = compter_non_lues(_user_id)
+_nb_alertes = _nb_alertes_cached(_user_id)
 _label_portfolio = f"💼 Portefeuille {'🔔 ' + str(_nb_alertes) if _nb_alertes else ''}"
 
 tab_analyse, tab_scanner, tab_portfolio, tab_backtest, tab_calib = st.tabs(
@@ -908,24 +923,33 @@ with tab_analyse:
         period = st.selectbox("Période graphique", ["1mo", "3mo", "6mo", "1y", "2y"], index=1)
         lancer = st.button("Analyser", type="primary", use_container_width=True)
 
-    if not lancer:
+    # ── Lancement ou récupération depuis le cache session ───────────────────
+    if lancer:
+        asset_type = detect_asset_type(ticker)
+        try:
+            with st.spinner(f"Analyse de {ticker} en cours..."):
+                resultat = run(ticker, with_llm=True, user_id=_user_id)
+        except Exception as e:
+            st.error(f"Erreur lors de l'analyse de **{ticker}** : {e}")
+            st.stop()
+        st.session_state["_analyse"] = {
+            "ticker": ticker, "period": period,
+            "asset_type": asset_type, "result": resultat,
+        }
+
+    _ar = st.session_state.get("_analyse")
+
+    if not lancer and not _ar:
         st.markdown("""
-        <div style="
-            margin-top:40px;
-            background:rgba(8,13,28,0.7);
-            border:1px solid rgba(0,200,255,0.1);
-            border-radius:16px;
-            padding:48px 40px;
-            text-align:center;
-        ">
+        <div style="margin-top:40px;background:rgba(8,13,28,0.7);
+                    border:1px solid rgba(0,200,255,0.1);border-radius:16px;
+                    padding:48px 40px;text-align:center;">
           <div style="font-size:36px;margin-bottom:16px;">📡</div>
           <div style="font-size:18px;font-weight:700;color:#c8d6f0;
-                      letter-spacing:1px;margin-bottom:10px;">
-            Prêt à analyser
-          </div>
+                      letter-spacing:1px;margin-bottom:10px;">Prêt à analyser</div>
           <div style="font-size:13px;color:#4a5a7a;line-height:1.8;max-width:420px;margin:0 auto;">
-            Sélectionne un ticker dans la sidebar et clique sur <strong style="color:#00c8ff;">Analyser</strong>
-            pour lancer l'ensemble des agents IA.
+            Sélectionne un ticker dans la sidebar et clique sur
+            <strong style="color:#00c8ff;">Analyser</strong> pour lancer l'ensemble des agents IA.
           </div>
           <div style="display:flex;justify-content:center;gap:10px;margin-top:24px;flex-wrap:wrap;">
             <span style="background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.15);
@@ -941,19 +965,21 @@ with tab_analyse:
                          border-radius:6px;padding:4px 12px;font-size:11px;color:#4a8ab5;
                          font-family:monospace;">EURUSD=X</span>
           </div>
-        </div>
-        """, unsafe_allow_html=True)
+        </div>""", unsafe_allow_html=True)
 
-    if lancer:
-        asset_type = detect_asset_type(ticker)
-
-        # --- Analyse complète ---
-        try:
-            with st.spinner(f"Analyse de {ticker} en cours..."):
-                resultat = run(ticker, with_llm=True, user_id=_user_id)
-        except Exception as e:
-            st.error(f"Erreur lors de l'analyse de **{ticker}** : {e}")
-            st.stop()
+    if _ar:
+        # Récupération depuis cache si pas de nouveau lancement
+        if not lancer:
+            ticker     = _ar["ticker"]
+            period     = _ar["period"]
+            asset_type = _ar["asset_type"]
+            resultat   = _ar["result"]
+            st.markdown(
+                f"<div style='font-size:11px;color:#2a4a6a;margin-bottom:8px;'>"
+                f"📊 Dernière analyse : <strong style='color:#4a8ab5;'>{ticker}</strong>"
+                f" — cliquer <em>Analyser</em> pour actualiser</div>",
+                unsafe_allow_html=True,
+            )
 
         tech    = resultat["tech"]
         fund    = resultat["fund"]
@@ -970,13 +996,10 @@ with tab_analyse:
         scoring          = resultat["scoring"]
 
         # --- Header ---
-        try:
-            info = get_stock_info(ticker)
-            nom  = info.get("nom", ticker)
-            cap  = info.get("capitalisation", 0)
-            cap_str = f"{cap/1e9:.0f} Md$" if cap else "N/A"
-        except Exception:
-            info, nom, cap_str = {}, ticker, "N/A"
+        info    = _stock_info_cached(ticker)
+        nom     = info.get("nom", ticker)
+        cap     = info.get("capitalisation", 0)
+        cap_str = f"{cap/1e9:.0f} Md$" if cap else "N/A"
 
         asset_labels = {
             "us_stock": "🇺🇸 Action US",
@@ -1332,79 +1355,123 @@ with tab_scanner:
 
     st.caption(f"{len(tickers_sel)} tickers sélectionnés : {', '.join(tickers_sel)}")
 
-    lancer_scan = st.button("Lancer le scan", type="primary")
+    lancer_scan = st.button("🚀 Lancer le scan", type="primary")
 
     if lancer_scan and tickers_sel:
         resultats_scan = []
-        progress = st.progress(0, text="Démarrage...")
-
+        progress = st.progress(0, text="Démarrage…")
         for i, t in enumerate(tickers_sel):
-            progress.progress((i) / len(tickers_sel), text=f"Analyse {t}…")
+            progress.progress(i / len(tickers_sel), text=f"Analyse {t}…")
             try:
                 r = run(t, with_llm=False, user_id=_user_id)
                 s = r["scoring"]
                 resultats_scan.append({
-                    "Ticker":   t,
-                    "Type":     r["asset_type"],
-                    "Décision": s["decision"],
-                    "Score":    s["score_final"],
+                    "Ticker":    t,
+                    "Type":      r["asset_type"],
+                    "Décision":  s["decision"],
+                    "Score":     s["score_final"],
                     "Technique": r["tech"].get("score_final", 0.0),
-                    "Risque":   r["risk"]["risque"] if r["risk"] else "N/A",
+                    "Risque":    r["risk"]["risque"] if r["risk"] else "N/A",
                     "Sentiment": r["sent"]["signal"] if r["sent"] else "N/A",
-                    "Macro":    r["macro"]["score_final"] if r["macro"] else "N/A",
-                    "Insider":  r["insider"]["signal"] if r["insider"] else "N/A",
-                    "Options":  r["options_flow"]["signal"]      if r.get("options_flow")      else "-",
-                    "SEC 8-K":  r["sec_filings"]["signal"]       if r.get("sec_filings")       else "-",
-                    "Short %":  r["short_interest"]["short_pct"] if r.get("short_interest")    else "-",
-                    "Earnings": r["earnings_surprise"]["signal"] if r.get("earnings_surprise") else "-",
+                    "Macro":     r["macro"]["score_final"] if r["macro"] else "N/A",
+                    "Insider":   r["insider"]["signal"] if r["insider"] else "N/A",
+                    "Options":   r["options_flow"]["signal"]      if r.get("options_flow")      else "-",
+                    "SEC 8-K":   r["sec_filings"]["signal"]       if r.get("sec_filings")       else "-",
+                    "Short %":   r["short_interest"]["short_pct"] if r.get("short_interest")    else "-",
+                    "Earnings":  r["earnings_surprise"]["signal"] if r.get("earnings_surprise") else "-",
                 })
             except Exception as e:
                 st.warning(f"{t} : {e}")
-
-        progress.progress(1.0, text="Terminé")
-
+        progress.progress(1.0, text="✅ Terminé")
         if resultats_scan:
-            df_scan = pd.DataFrame(resultats_scan)
-            df_scan = df_scan.sort_values("Score", ascending=False)
+            st.session_state["_scan"] = {
+                "df": pd.DataFrame(resultats_scan).sort_values("Score", ascending=False),
+                "ts": pd.Timestamp.now().strftime("%H:%M"),
+                "n":  len(tickers_sel),
+            }
 
-            if min_score != 0.0:
-                df_scan = df_scan[df_scan["Score"] >= min_score]
+    # ── Affichage des résultats (persistants via session_state) ─────────────
+    _scan_cache = st.session_state.get("_scan")
+    if _scan_cache:
+        df_scan = _scan_cache["df"].copy()
+        if min_score != 0.0:
+            df_scan = df_scan[df_scan["Score"] >= min_score]
 
-            # Colorisation de la colonne Décision
-            def style_decision(val):
-                if val == "ACHETER": return "background-color:#d4edda;color:#155724;font-weight:bold"
-                if val == "VENDRE":  return "background-color:#f8d7da;color:#721c24;font-weight:bold"
-                return ""
+        acheter = (df_scan["Décision"] == "ACHETER").sum()
+        neutre  = (df_scan["Décision"] == "NEUTRE").sum()
+        vendre  = (df_scan["Décision"] == "VENDRE").sum()
+        total   = len(df_scan)
 
-            _styler = df_scan.style
-            try:
-                _styler = _styler.map(style_decision, subset=["Décision"])
-            except AttributeError:
-                _styler = _styler.applymap(style_decision, subset=["Décision"])
+        # ── Stats visuelles ─────────────────────────────────────────────────
+        pct_a = int(acheter / total * 100) if total else 0
+        pct_n = int(neutre  / total * 100) if total else 0
+        pct_v = int(vendre  / total * 100) if total else 0
+        st.markdown(f"""
+        <div style="background:rgba(8,13,28,0.6);border:1px solid rgba(255,255,255,0.07);
+                    border-radius:12px;padding:18px 20px;margin:16px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="font-size:11px;color:#4a5a7a;letter-spacing:1px;text-transform:uppercase;">
+              Résultats — {_scan_cache['ts']} · {_scan_cache['n']} tickers scannés
+            </div>
+            <div style="font-size:11px;color:#4a5a7a;">{total} affiché(s)</div>
+          </div>
+          <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:12px;">
+            <div style="width:{pct_a}%;background:#2ecc71;"></div>
+            <div style="width:{pct_n}%;background:#f39c12;"></div>
+            <div style="width:{pct_v}%;background:#e74c3c;"></div>
+          </div>
+          <div style="display:flex;gap:20px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="width:8px;height:8px;border-radius:50%;background:#2ecc71;"></div>
+              <span style="font-size:13px;font-weight:700;color:#2ecc71;">{acheter}</span>
+              <span style="font-size:11px;color:#4a5a7a;">ACHETER</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="width:8px;height:8px;border-radius:50%;background:#f39c12;"></div>
+              <span style="font-size:13px;font-weight:700;color:#f39c12;">{neutre}</span>
+              <span style="font-size:11px;color:#4a5a7a;">NEUTRE</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="width:8px;height:8px;border-radius:50%;background:#e74c3c;"></div>
+              <span style="font-size:13px;font-weight:700;color:#e74c3c;">{vendre}</span>
+              <span style="font-size:11px;color:#4a5a7a;">VENDRE</span>
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-            st.dataframe(
-                _styler,
-                use_container_width=True,
-                hide_index=True,
-            )
+        def style_decision(val):
+            if val == "ACHETER": return "color:#2ecc71;font-weight:700"
+            if val == "VENDRE":  return "color:#e74c3c;font-weight:700"
+            return "color:#f39c12"
 
-            acheter = (df_scan["Décision"] == "ACHETER").sum()
-            neutre  = (df_scan["Décision"] == "NEUTRE").sum()
-            vendre  = (df_scan["Décision"] == "VENDRE").sum()
+        _styler = df_scan.style
+        try:
+            _styler = _styler.map(style_decision, subset=["Décision"])
+        except AttributeError:
+            _styler = _styler.applymap(style_decision, subset=["Décision"])
 
-            sc1, sc2, sc3 = st.columns(3)
-            sc1.metric("🟢 ACHETER", acheter)
-            sc2.metric("🟡 NEUTRE",  neutre)
-            sc3.metric("🔴 VENDRE",  vendre)
+        st.dataframe(_styler, use_container_width=True, hide_index=True)
 
-            # Export CSV
-            csv_data = df_scan.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "Télécharger CSV",
-                data=csv_data,
-                file_name=f"scan_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv",
-            )
+        csv_data = df_scan.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "📥 Exporter CSV",
+            data=csv_data,
+            file_name=f"scan_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv",
+        )
+    elif not lancer_scan:
+        st.markdown("""
+        <div style="margin-top:32px;background:rgba(8,13,28,0.6);border:1px solid rgba(255,255,255,0.06);
+                    border-radius:12px;padding:40px;text-align:center;">
+          <div style="font-size:32px;margin-bottom:12px;">🔭</div>
+          <div style="font-size:15px;font-weight:700;color:#c8d6f0;margin-bottom:8px;">
+            Scanner de marché
+          </div>
+          <div style="font-size:12px;color:#4a5a7a;">
+            Sélectionne des catégories et lance le scan pour identifier les opportunités.
+          </div>
+        </div>""", unsafe_allow_html=True)
 
 
 # ===========================================================================
@@ -1421,29 +1488,44 @@ with tab_portfolio:
     if alertes_actives:
         ICONE_NIVEAU = {"CRITIQUE": "🔴", "VENDRE": "🔴", "SURVEILLER": "🟡", "INFO": "🔵"}
 
-        with st.container(border=True):
-            al_titre, al_tout_lu = st.columns([4, 1])
-            al_titre.markdown(f"### 🔔 {len(alertes_actives)} alerte(s) non lue(s)")
-            if al_tout_lu.button("✅ Tout marquer lu", key="tout_lu"):
-                tout_marquer_lu(_user_id)
-                st.rerun()
+        _AL_COLOR = {"CRITIQUE": "#e74c3c", "VENDRE": "#e74c3c",
+                     "SURVEILLER": "#f39c12", "INFO": "#3498db"}
+        al_h, al_btn = st.columns([4, 1])
+        al_h.markdown(
+            f"<div style='font-size:14px;font-weight:700;color:#c8d6f0;padding:6px 0;'>"
+            f"🔔 {len(alertes_actives)} alerte(s) non lue(s)</div>",
+            unsafe_allow_html=True,
+        )
+        if al_btn.button("✅ Tout lu", key="tout_lu", use_container_width=True):
+            tout_marquer_lu(_user_id)
+            st.rerun()
 
-            for alerte in alertes_actives:
-                icone = ICONE_NIVEAU.get(alerte["niveau"], "⚪")
-                with st.container():
-                    col_msg, col_date, col_actions = st.columns([5, 1.5, 1.5])
-                    col_msg.markdown(f"{icone} **[{alerte['ticker']}]** {alerte['message']}")
-                    col_date.caption(alerte["date"])
-                    with col_actions:
-                        btn_lu  = st.button("Lu ✓",  key=f"lu_{alerte['id']}",  use_container_width=True)
-                        btn_del = st.button("🗑️",    key=f"dal_{alerte['id']}", use_container_width=True)
-                    if btn_lu:
-                        marquer_lue(_user_id, alerte["id"])
-                        st.rerun()
-                    if btn_del:
-                        supprimer_alerte(_user_id, alerte["id"])
-                        st.rerun()
-                st.divider()
+        for alerte in alertes_actives:
+            col  = _AL_COLOR.get(alerte["niveau"], "#6b7fa3")
+            st.markdown(f"""
+            <div style="background:rgba(8,13,28,0.7);border:1px solid {col}33;
+                        border-left:3px solid {col};border-radius:10px;
+                        padding:12px 16px;margin:6px 0;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <span style="font-size:11px;font-weight:700;color:{col};
+                               text-transform:uppercase;letter-spacing:1px;">
+                    {alerte['niveau']} · {alerte['ticker']}
+                  </span>
+                  <div style="font-size:13px;color:#c8d6f0;margin-top:4px;">
+                    {alerte['message']}
+                  </div>
+                </div>
+                <div style="font-size:11px;color:#4a5a7a;white-space:nowrap;margin-left:12px;">
+                  {alerte['date']}
+                </div>
+              </div>
+            </div>""", unsafe_allow_html=True)
+            _c1, _c2, _ = st.columns([1, 1, 6])
+            if _c1.button("Lu ✓", key=f"lu_{alerte['id']}", use_container_width=True):
+                marquer_lue(_user_id, alerte["id"]); st.rerun()
+            if _c2.button("🗑️", key=f"dal_{alerte['id']}", use_container_width=True):
+                supprimer_alerte(_user_id, alerte["id"]); st.rerun()
 
         # Bouton pour vérifier maintenant
         if st.button("🔄 Vérifier maintenant", key="check_now",
@@ -1630,7 +1712,19 @@ with tab_portfolio:
     positions_eval = st.session_state.get("pf_positions", positions_raw)
 
     if not positions_eval:
-        st.info("Aucune position ouverte. Enregistre ton premier achat ci-dessus.")
+        st.markdown("""
+        <div style="margin-top:24px;background:rgba(8,13,28,0.6);
+                    border:1px solid rgba(255,255,255,0.06);border-radius:12px;
+                    padding:40px;text-align:center;">
+          <div style="font-size:32px;margin-bottom:12px;">📭</div>
+          <div style="font-size:15px;font-weight:700;color:#c8d6f0;margin-bottom:8px;">
+            Aucune position ouverte
+          </div>
+          <div style="font-size:12px;color:#4a5a7a;">
+            Utilise <strong style="color:#00c8ff;">Enregistrer un achat</strong> ci-dessus
+            pour suivre tes investissements.
+          </div>
+        </div>""", unsafe_allow_html=True)
     else:
         # Résumé global
         total_investi = sum(p["investi"] for p in positions_eval if p["investi"])
@@ -2105,7 +2199,21 @@ with tab_backtest:
                               help="multi = technique + macro + risque | technique = technique seul")
         bt_capital = st.number_input("Capital ($)", value=10000, step=1000)
 
-    lancer_bt = st.button("Lancer le backtest", type="primary", key="lancer_bt")
+    lancer_bt = st.button("🚀 Lancer le backtest", type="primary", key="lancer_bt")
+
+    if not lancer_bt and "_bt_result" not in st.session_state:
+        st.markdown("""
+        <div style="margin-top:24px;background:rgba(8,13,28,0.6);
+                    border:1px solid rgba(255,255,255,0.06);border-radius:12px;
+                    padding:36px;text-align:center;">
+          <div style="font-size:32px;margin-bottom:10px;">📊</div>
+          <div style="font-size:14px;font-weight:700;color:#c8d6f0;margin-bottom:6px;">
+            Simulation de stratégie
+          </div>
+          <div style="font-size:12px;color:#4a5a7a;">
+            Configure les paramètres et lance le backtest pour simuler tes stratégies sur données historiques.
+          </div>
+        </div>""", unsafe_allow_html=True)
 
     if lancer_bt:
         if bt_debut >= bt_fin:
