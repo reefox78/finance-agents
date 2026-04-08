@@ -1,16 +1,26 @@
 {
   "us_stocks": [
     "AAPL", "MSFT", "NVDA", "GOOGL", "META",
-    "AMZN", "JPM", "XOM", "SPY", "QQQ"
+    "AMZN", "TSLA", "JPM", "XOM", "SPY",
+    "V", "MA", "UNH", "JNJ", "WMT",
+    "HD", "BAC", "PG", "COST", "NFLX"
   ],
   "eu_stocks": [
     "MC.PA", "TTE.PA", "SAN.PA", "BNP.PA", "OR.PA",
-    "AI.PA", "SAF.PA", "ASML.AS", "SAP.DE", "SIE.DE"
+    "AI.PA", "SAF.PA", "ASML.AS", "SAP.DE", "SIE.DE",
+    "SHELL.AS", "NOVN.SW", "ROG.SW", "AZN.L", "HSBA.L",
+    "RMS.PA", "CS.PA", "AIR.PA", "DTE.DE", "ALV.DE"
   ],
   "crypto": [
-    "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"
+    "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD",
+    "ADA-USD", "DOGE-USD", "DOT-USD", "AVAX-USD", "LINK-USD",
+    "MATIC-USD", "UNI-USD", "ATOM-USD", "LTC-USD", "TON-USD",
+    "NEAR-USD", "ICP-USD", "FIL-USD", "APT-USD", "ARB-USD"
   ],
   "forex": [
-    "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCHF=X"
+    "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCHF=X", "AUDUSD=X",
+    "USDCAD=X", "NZDUSD=X", "EURGBP=X", "EURJPY=X", "GBPJPY=X",
+    "USDCNY=X", "USDINR=X", "USDMXN=X", "USDBRL=X", "USDKRW=X",
+    "USDSGD=X", "USDHKD=X", "EURCHF=X", "AUDCAD=X", "CADJPY=X"
   ]
 }
