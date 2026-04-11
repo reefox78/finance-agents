@@ -1,13 +1,32 @@
 """
 Analyse router — run full orchestrator analysis for a ticker.
 """
+import json
+import numpy as np
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from orchestrator.orchestrator import run as orchestrer
 from api.deps import CurrentUser
 
 router = APIRouter()
+
+
+class _NumpyEncoder(json.JSONEncoder):
+    """Serialize numpy scalars to native Python types."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
+
+def _jsonify(data: dict) -> JSONResponse:
+    return JSONResponse(content=json.loads(json.dumps(data, cls=_NumpyEncoder)))
 
 
 class AnalyseResponse(BaseModel):
@@ -50,4 +69,4 @@ def analyse(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    return result
+    return _jsonify(result)
