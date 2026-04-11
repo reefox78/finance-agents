@@ -555,55 +555,18 @@ elif _time.time() - st.session_state["login_time"] > _SESSION_TTL:
     st.warning("Votre session a expiré. Veuillez vous reconnecter.")
     st.rerun()
 
-# Logo dans la sidebar (Streamlit ≥ 1.35)
-if _LOGO_PATH.exists():
-    st.logo(str(_LOGO_PATH), size="large")
+# Sidebar masquée — les contrôles sont intégrés dans les onglets
+
 
 # ===========================================================================
 # CSS GLOBAL — Dashboard (injecté après auth)
 # ===========================================================================
 st.markdown("""
 <style>
-/* ── Sidebar ─────────────────────────────────────────────────────────────── */
-[data-testid="stSidebar"] {
-    background: rgba(5, 9, 20, 0.96) !important;
-    border-right: 1px solid rgba(0, 200, 255, 0.08) !important;
-}
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 {
-    color: #c8d6f0 !important;
-    font-size: 13px !important;
-    letter-spacing: 1.5px !important;
-    text-transform: uppercase !important;
-    font-weight: 700 !important;
-    border-bottom: 1px solid rgba(0, 200, 255, 0.1) !important;
-    padding-bottom: 8px !important;
-    margin-bottom: 16px !important;
-}
-[data-testid="stSidebar"] label {
-    color: #6b7fa3 !important;
-    font-size: 11px !important;
-    letter-spacing: 0.8px !important;
-    text-transform: uppercase !important;
-    font-weight: 600 !important;
-}
-[data-testid="stSidebar"] .stSelectbox > div > div,
-[data-testid="stSidebar"] .stMultiSelect > div > div {
-    background: rgba(255,255,255,0.04) !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 8px !important;
-    color: #c8d6f0 !important;
-}
-[data-testid="stSidebar"] [data-testid="stButton"] > button {
-    background: linear-gradient(135deg, #0c6fff 0%, #00c8ff 100%) !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-weight: 700 !important;
-    font-size: 12px !important;
-    letter-spacing: 1.2px !important;
-    color: #fff !important;
-    box-shadow: 0 4px 20px rgba(0, 150, 255, 0.2) !important;
+/* ── Sidebar masquée ─────────────────────────────────────────────────────── */
+[data-testid="stSidebar"],
+[data-testid="collapsedControl"] {
+    display: none !important;
 }
 
 /* ── Tabs ─────────────────────────────────────────────────────────────────── */
@@ -1188,12 +1151,18 @@ tab_analyse, tab_scanner, tab_portfolio, tab_backtest, tab_calib, tab_logs = st.
 
 with tab_analyse:
 
-    # --- Sidebar ---
-    with st.sidebar:
-        st.header("Paramètres")
+    # --- Contrôles intégrés (ex-sidebar) ---
+    _ctrl1, _ctrl2, _ctrl3 = st.columns([3, 1.5, 1.2])
+    with _ctrl1:
         ticker = _ticker_selectbox("Ticker", key="ticker_analyse")
-        period = st.selectbox("Période graphique", ["1mo", "3mo", "6mo", "1y", "2y"], index=1)
+    with _ctrl2:
+        period = st.selectbox("Période", ["1mo", "3mo", "6mo", "1y", "2y"], index=1,
+                              label_visibility="visible")
+    with _ctrl3:
+        st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
         lancer = st.button("Analyser", type="primary", use_container_width=True)
+
+    st.divider()
 
     # ── Lancement ou récupération depuis le cache session ───────────────────
     if lancer:
@@ -1222,7 +1191,7 @@ with tab_analyse:
           <div style="font-size:18px;font-weight:700;color:#c8d6f0;
                       letter-spacing:1px;margin-bottom:10px;">Prêt à analyser</div>
           <div style="font-size:13px;color:#4a5a7a;line-height:1.8;max-width:420px;margin:0 auto;">
-            Sélectionne un ticker dans la sidebar et clique sur
+            Sélectionne un ticker ci-dessus et clique sur
             <strong style="color:#00c8ff;">Analyser</strong> pour lancer l'ensemble des agents IA.
           </div>
           <div style="display:flex;justify-content:center;gap:10px;margin-top:24px;flex-wrap:wrap;">
