@@ -93,8 +93,19 @@ def run(req: BacktestRequest, current_user: CurrentUser):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Supprimer le DataFrame (non-serialisable + inutile pour le front)
-    result.pop("df", None)
+    # Extraire les prix de clôture quotidiens avant de supprimer le DataFrame
+    df = result.pop("df", None)
+    if df is not None:
+        try:
+            prices = [
+                {"date": str(idx.date()), "close": round(float(row["Close"]), 4)}
+                for idx, row in df.iterrows()
+            ]
+        except Exception:
+            prices = []
+    else:
+        prices = []
+    result["prices"] = prices
 
     # Stats supplémentaires
     trades    = result.get("trades", [])

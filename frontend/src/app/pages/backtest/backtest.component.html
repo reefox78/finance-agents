@@ -3,7 +3,6 @@
 
   <!-- ── Form ── -->
   <div class="bt-form card">
-
     <div class="form-row">
       <div class="field">
         <label class="ctrl-label">Ticker</label>
@@ -36,28 +35,23 @@
       <div class="field">
         <label class="ctrl-label">Mode</label>
         <div class="mode-btns">
-          <button [class.active]="mode === 'multi'" (click)="mode = 'multi'" class="mode-btn">
-            🤖 Multi-agents
-          </button>
-          <button [class.active]="mode === 'technique'" (click)="mode = 'technique'" class="mode-btn">
-            📈 Technique seul
-          </button>
+          <button [class.active]="mode === 'multi'"     (click)="mode='multi'"     class="mode-btn">🤖 Multi-agents</button>
+          <button [class.active]="mode === 'technique'" (click)="mode='technique'" class="mode-btn">📈 Technique seul</button>
         </div>
       </div>
 
       <div class="field field-action">
         <label class="ctrl-label">&nbsp;</label>
         <button class="btn-primary" (click)="run()" [disabled]="loading()">
-          {{ loading() ? '⏳ Calcul en cours…' : '🚀 Lancer le backtest' }}
+          {{ loading() ? '⏳ Calcul…' : '🚀 Lancer le backtest' }}
         </button>
       </div>
     </div>
 
-    @if (mode === 'multi') {
-      <div class="mode-hint">Mode <b>Multi-agents</b> : combine technique (25%), macro FRED (10%) et multiplicateur de risque. Plus réaliste, plus lent.</div>
-    } @else {
-      <div class="mode-hint">Mode <b>Technique seul</b> : basé sur SMA, RSI, MACD, Bollinger. Plus rapide.</div>
-    }
+    <div class="mode-hint">
+      @if (mode === 'multi') { Mode <b>Multi-agents</b> : technique (25%) + macro FRED (10%) + risque. Plus réaliste, plus lent. }
+      @else                  { Mode <b>Technique seul</b> : SMA, RSI, MACD, Bollinger. Rapide. }
+    </div>
   </div>
 
   @if (error()) { <div class="error-box">{{ error() }}</div> }
@@ -65,131 +59,125 @@
   @if (loading()) {
     <div class="running-banner">
       <div class="loader-bar"><div class="bar-inner"></div></div>
-      <div class="running-msg">Backtest en cours — cela peut prendre 15 à 60 secondes selon la période…</div>
+      <div class="running-msg">Backtest en cours — 15 à 60 secondes selon la période…</div>
     </div>
   }
 
-  <!-- ── Results ── -->
   @if (result()) {
-    <div class="results">
 
-      <!-- Metrics row -->
-      <div class="metrics-row">
-        <div class="metric-card">
-          <div class="metric-label">Capital départ</div>
-          <div class="metric-value">{{ result().capital | number:'1.0-0' }} €</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Capital final</div>
-          <div class="metric-value" [class]="rendClass()">{{ result().valeur_fin | number:'1.0-0' }} €</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Rendement</div>
-          <div class="metric-value rend" [class]="rendClass()">
-            {{ result().rendement >= 0 ? '+' : '' }}{{ result().rendement | number:'1.2-2' }} %
-          </div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">P&L net</div>
-          <div class="metric-value" [class]="pnlClass(result().pnl_total)">
-            {{ result().pnl_total >= 0 ? '+' : '' }}{{ result().pnl_total | number:'1.2-2' }} €
-          </div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Nb trades</div>
-          <div class="metric-value">{{ result().nb_trades }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Win rate</div>
-          <div class="metric-value" [class]="winRateClass()">{{ result().win_rate | number:'1.1-1' }} %</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Meilleur trade</div>
-          <div class="metric-value pos">+{{ result().max_gain | number:'1.2-2' }} €</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Pire trade</div>
-          <div class="metric-value neg">{{ result().max_perte | number:'1.2-2' }} €</div>
+    <!-- Metrics -->
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-label">Capital départ</div>
+        <div class="metric-value">{{ result().capital | number:'1.0-0' }} €</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Capital final</div>
+        <div class="metric-value" [class]="rendClass()">{{ result().valeur_fin | number:'1.0-0' }} €</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Rendement</div>
+        <div class="metric-value rend" [class]="rendClass()">
+          {{ result().rendement >= 0 ? '+' : '' }}{{ result().rendement | number:'1.2-2' }} %
         </div>
       </div>
-
-      <!-- Period + mode badges -->
-      <div class="result-meta">
-        <span class="meta-badge">{{ result().ticker }}</span>
-        <span class="meta-badge">{{ result().debut }} → {{ result().fin }}</span>
-        <span class="meta-badge mode-badge">{{ result().mode }}</span>
+      <div class="metric-card">
+        <div class="metric-label">P&L net</div>
+        <div class="metric-value" [class]="pnlClass(result().pnl_total)">
+          {{ result().pnl_total >= 0 ? '+' : '' }}{{ result().pnl_total | number:'1.2-2' }} €
+        </div>
       </div>
-
-      <!-- Equity curve -->
-      @if (result().equity?.length > 1) {
-        <div class="card equity-card">
-          <div class="card-title">Courbe de capital</div>
-          <svg class="equity-svg" [attr.viewBox]="'0 0 ' + SVG_W + ' ' + SVG_H" preserveAspectRatio="none">
-            <!-- Grid lines -->
-            <line [attr.x1]="PAD" [attr.y1]="SVG_H / 2" [attr.x2]="SVG_W - PAD" [attr.y2]="SVG_H / 2"
-                  stroke="rgba(255,255,255,0.05)" stroke-dasharray="4,4"/>
-            <!-- Area fill -->
-            <polygon
-              [attr.points]="equitySvgPoints() + ' ' + (SVG_W - PAD) + ',' + (SVG_H - PAD) + ' ' + PAD + ',' + (SVG_H - PAD)"
-              [attr.fill]="equityColor()" fill-opacity="0.10"/>
-            <!-- Line -->
-            <polyline
-              [attr.points]="equitySvgPoints()"
-              fill="none"
-              [attr.stroke]="equityColor()"
-              stroke-width="2"
-              stroke-linejoin="round"/>
-          </svg>
-          <div class="equity-labels">
-            <span>{{ result().equity[0].date }}</span>
-            <span>{{ result().equity[result().equity.length - 1].date }}</span>
-          </div>
-        </div>
-      }
-
-      <!-- Trades table -->
-      @if (result().trades?.length > 0) {
-        <div class="card">
-          <div class="card-title">Détail des trades ({{ result().trades.length }})</div>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Date achat</th>
-                  <th>Prix achat</th>
-                  <th>Date vente</th>
-                  <th>Prix vente</th>
-                  <th>P&L brut</th>
-                  <th>P&L net</th>
-                  <th>Résultat</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (t of result().trades; track $index; let i = $index) {
-                  <tr [class]="t.pnlnet >= 0 ? 'trade-win' : 'trade-loss'">
-                    <td class="num">{{ i + 1 }}</td>
-                    <td>{{ t.date_achat }}</td>
-                    <td>{{ t.prix_achat | number:'1.2-2' }}</td>
-                    <td>{{ t.date }}</td>
-                    <td>{{ t.prix_vente | number:'1.2-2' }}</td>
-                    <td [class]="pnlClass(t.pnl)">{{ t.pnl >= 0 ? '+' : '' }}{{ t.pnl | number:'1.2-2' }} €</td>
-                    <td [class]="pnlClass(t.pnlnet)">{{ t.pnlnet >= 0 ? '+' : '' }}{{ t.pnlnet | number:'1.2-2' }} €</td>
-                    <td class="result-icon">{{ t.pnlnet >= 0 ? '✅' : '❌' }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-      } @else if (!loading()) {
-        <div class="card no-trades">
-          <div>Aucun trade généré sur cette période avec ces paramètres.</div>
-          <div class="no-trades-hint">Essayez une période plus longue ou le mode "Technique seul".</div>
-        </div>
-      }
-
+      <div class="metric-card">
+        <div class="metric-label">Nb trades</div>
+        <div class="metric-value">{{ result().nb_trades }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Win rate</div>
+        <div class="metric-value" [class]="winRateClass()">{{ result().win_rate | number:'1.1-1' }} %</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Meilleur trade</div>
+        <div class="metric-value pos">+{{ result().max_gain | number:'1.2-2' }} €</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Pire trade</div>
+        <div class="metric-value neg">{{ result().max_perte | number:'1.2-2' }} €</div>
+      </div>
     </div>
-  }
 
+    <div class="result-meta">
+      <span class="meta-badge">{{ result().ticker }}</span>
+      <span class="meta-badge">{{ result().debut }} → {{ result().fin }}</span>
+      <span class="meta-badge mode-badge">{{ result().mode }}</span>
+    </div>
+
+    <!-- Chart 1 : Prix + signaux -->
+    @if (result().prices?.length > 1) {
+      <div class="card chart-card">
+        <div class="chart-wrap tall">
+          <canvas #priceCanvas></canvas>
+        </div>
+        <div class="chart-legend-hint">
+          <span class="leg buy">▲ Achat</span>
+          <span class="leg sell">▼ Vente</span>
+          <span class="leg price">─ Prix clôture</span>
+        </div>
+      </div>
+    }
+
+    <!-- Chart 2 : Courbe de capital -->
+    @if (result().equity?.length > 1) {
+      <div class="card chart-card">
+        <div class="chart-wrap medium">
+          <canvas #equityCanvas></canvas>
+        </div>
+      </div>
+    }
+
+    <!-- Chart 3 : P&L par trade -->
+    @if (result().trades?.length > 0) {
+      <div class="card chart-card">
+        <div class="chart-wrap medium">
+          <canvas #pnlCanvas></canvas>
+        </div>
+      </div>
+    }
+
+    <!-- Trades table -->
+    @if (result().trades?.length > 0) {
+      <div class="card">
+        <div class="card-title">Détail des {{ result().trades.length }} trades</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th><th>Date achat</th><th>Prix achat</th>
+                <th>Date vente</th><th>Prix vente</th>
+                <th>P&L brut</th><th>P&L net</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (t of result().trades; track $index; let i = $index) {
+                <tr [class]="t.pnlnet >= 0 ? 'trade-win' : 'trade-loss'">
+                  <td class="num">{{ i + 1 }}</td>
+                  <td>{{ t.date_achat }}</td>
+                  <td>{{ t.prix_achat | number:'1.2-4' }}</td>
+                  <td>{{ t.date }}</td>
+                  <td>{{ t.prix_vente | number:'1.2-4' }}</td>
+                  <td [class]="pnlClass(t.pnl)">{{ t.pnl >= 0 ? '+' : '' }}{{ t.pnl | number:'1.2-2' }} €</td>
+                  <td [class]="pnlClass(t.pnlnet)">{{ t.pnlnet >= 0 ? '+' : '' }}{{ t.pnlnet | number:'1.2-2' }} €</td>
+                  <td class="res-icon">{{ t.pnlnet >= 0 ? '✅' : '❌' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    } @else {
+      <div class="card no-trades">
+        Aucun trade généré. Essayez une période plus longue ou le mode Technique.
+      </div>
+    }
+
+  }
 </div>
