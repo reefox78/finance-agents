@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: finance-agents-api
+    runtime: python
+    buildCommand: pip install -r backend/requirements-backend.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRED_API_KEY
+        sync: false

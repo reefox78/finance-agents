@@ -1,0 +1,71 @@
+.page { max-width: 800px; }
+.page-title { color: #00c8ff; font-size: 1.4rem; margin: 0; }
+
+.page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.btn-mark-all {
+  background: transparent; border: 1px solid rgba(0,200,255,0.25);
+  border-radius: 6px; color: #7ab; font-size: 0.8rem;
+  padding: 0.4rem 0.9rem; cursor: pointer;
+  &:hover { background: rgba(0,200,255,0.08); }
+}
+
+.loader-bar {
+  height: 3px; background: rgba(0,200,255,0.15); border-radius: 3px;
+  overflow: hidden; margin-bottom: 1.5rem;
+  .bar-inner { height: 100%; width: 40%; background: #00c8ff; animation: slide 1.2s ease-in-out infinite; }
+}
+@keyframes slide { 0% { transform: translateX(-150%); } 100% { transform: translateX(350%); } }
+
+.error-box {
+  background: rgba(255,60,80,0.1); border: 1px solid rgba(255,60,80,0.3);
+  border-radius: 8px; color: #ff7088; padding: 0.75rem 1rem; margin-bottom: 1rem;
+}
+
+.empty { color: #6b8aad; font-style: italic; padding: 2rem 0; }
+
+.alerts-list { display: flex; flex-direction: column; gap: 0.6rem; }
+
+.alert-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px; padding: 0.75rem 1rem;
+  transition: background 0.15s;
+
+  &.unread {
+    border-color: rgba(0,200,255,0.15);
+    background: rgba(0,200,255,0.04);
+  }
+}
+
+.badge {
+  font-size: 0.7rem; font-weight: 700; padding: 2px 8px;
+  border-radius: 10px; white-space: nowrap;
+  &.crit { background: rgba(255,60,80,0.2);  color: #ff5252; }
+  &.sell { background: rgba(255,80,0,0.2);   color: #ff8040; }
+  &.warn { background: rgba(255,215,64,0.2); color: #ffd740; }
+  &.info { background: rgba(0,200,255,0.15); color: #00c8ff; }
+}
+
+.alert-body {
+  flex: 1; display: flex; flex-direction: column; gap: 0.15rem;
+  .alert-ticker { font-weight: 700; font-size: 0.875rem; color: #cde; }
+  .alert-msg    { font-size: 0.825rem; color: #7a9bbb; }
+}
+
+.alert-date { font-size: 0.75rem; color: #4a6a8a; white-space: nowrap; }
+
+.alert-actions {
+  display: flex; gap: 0.4rem;
+  button {
+    background: transparent; border: none; cursor: pointer;
+    font-size: 0.8rem; padding: 0.3rem 0.5rem; border-radius: 6px;
+    transition: background 0.15s;
+  }
+  .btn-read { color: #00e676; &:hover { background: rgba(0,230,118,0.1); } }
+  .btn-del  { color: #ff5252; &:hover { background: rgba(255,82,82,0.1); } }
+}

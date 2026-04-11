@@ -1,0 +1,50 @@
+"""
+FastAPI backend — Finance Agents
+Exposes all analysis, scanner, portfolio and auth capabilities as REST endpoints.
+"""
+import sys
+from pathlib import Path
+
+# Add project root to path so existing agents/db/orchestrator modules are importable
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from api.routers import auth, analyse, scanner, portfolio, alerts
+
+app = FastAPI(
+    title="Finance Agents API",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+# ---------------------------------------------------------------------------
+# CORS — allow Angular dev server + production domain
+# ---------------------------------------------------------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:4200",   # Angular dev
+        "https://*.vercel.app",    # Vercel preview
+        "https://*.netlify.app",   # Netlify preview
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------------------------------------------------------------------------
+# Routers
+# ---------------------------------------------------------------------------
+app.include_router(auth.router,      prefix="/api/auth",      tags=["auth"])
+app.include_router(analyse.router,   prefix="/api/analyse",   tags=["analyse"])
+app.include_router(scanner.router,   prefix="/api/scanner",   tags=["scanner"])
+app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"])
+app.include_router(alerts.router,    prefix="/api/alerts",    tags=["alerts"])
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}

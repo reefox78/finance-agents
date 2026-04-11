@@ -1,0 +1,20 @@
+# FastAPI backend dependencies
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-jose[cryptography]==3.3.0
+pydantic[email]==2.12.5
+python-dotenv==1.2.2
+
+# Existing project deps (needed by agents/db)
+bcrypt==5.0.0
+psycopg2-binary==2.9.11
+yfinance==1.2.0
+groq==1.1.2
+pandas==3.0.2
+numpy==2.4.4
+ta==0.11.0
+fredapi==0.5.2
+pytrends==4.9.2
+praw==7.8.1
+requests==2.33.1
+beautifulsoup4==4.14.3

@@ -1,0 +1,102 @@
+<div class="page">
+  <h2 class="page-title">💼 Portefeuille</h2>
+
+  <div class="tabs">
+    <button [class.active]="tab() === 'positions'"  (click)="switchTab('positions')">Positions</button>
+    <button [class.active]="tab() === 'historique'" (click)="switchTab('historique')">Historique</button>
+    <button [class.active]="tab() === 'achat'"      (click)="switchTab('achat')">+ Achat</button>
+  </div>
+
+  @if (error()) { <div class="error-box">{{ error() }}</div> }
+  @if (loading()) { <div class="loader-bar"><div class="bar-inner"></div></div> }
+
+  <!-- Positions -->
+  @if (tab() === 'positions') {
+    @if (!loading() && positions().length === 0) {
+      <div class="empty">Aucune position ouverte.</div>
+    } @else {
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Ticker</th><th>Qté</th><th>Px moy.</th><th>Px actuel</th>
+            <th>Valeur</th><th>P&L €</th><th>P&L %</th><th>Signal</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of positions(); track p.ticker) {
+            <tr>
+              <td class="ticker">{{ p.ticker }}</td>
+              <td>{{ p.quantite }}</td>
+              <td>{{ p.prix_moyen | number:'1.2-2' }}</td>
+              <td>{{ p.prix_actuel ? (p.prix_actuel | number:'1.2-2') : '—' }}</td>
+              <td>{{ p.valeur ? (p.valeur | number:'1.2-2') + ' €' : '—' }}</td>
+              <td [style.color]="pnlColor(p.pnl_eur)">
+                {{ p.pnl_eur !== null ? (p.pnl_eur | number:'1.2-2') + ' €' : '—' }}
+              </td>
+              <td [style.color]="pnlColor(p.pnl_pct)">
+                {{ p.pnl_pct !== null ? (p.pnl_pct | number:'1.2-2') + ' %' : '—' }}
+              </td>
+              <td class="signal">{{ p.signal_sortie }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+
+  <!-- Historique -->
+  @if (tab() === 'historique') {
+    @if (!loading() && historique().length === 0) {
+      <div class="empty">Aucune vente enregistrée.</div>
+    } @else {
+      <table class="data-table">
+        <thead>
+          <tr><th>Date</th><th>Ticker</th><th>Qté</th><th>Px vente</th><th>P&L €</th><th>P&L %</th></tr>
+        </thead>
+        <tbody>
+          @for (h of historique(); track h.id) {
+            <tr>
+              <td>{{ h.date }}</td>
+              <td class="ticker">{{ h.ticker }}</td>
+              <td>{{ h.quantite }}</td>
+              <td>{{ h.prix_vente | number:'1.2-2' }} €</td>
+              <td [style.color]="pnlColor(h.pnl_eur)">{{ h.pnl_eur | number:'1.2-2' }} €</td>
+              <td [style.color]="pnlColor(h.pnl_pct)">{{ h.pnl_pct | number:'1.2-2' }} %</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+
+  <!-- Achat form -->
+  @if (tab() === 'achat') {
+    <form class="achat-form" (ngSubmit)="submitAchat()">
+      <div class="form-row">
+        <label>Ticker</label>
+        <input type="text" [(ngModel)]="achat.ticker" name="ticker" required placeholder="AAPL" />
+      </div>
+      <div class="form-row">
+        <label>Prix d'achat</label>
+        <input type="number" [(ngModel)]="achat.prix" name="prix" required step="0.01" placeholder="150.00" />
+      </div>
+      <div class="form-row">
+        <label>Quantité</label>
+        <input type="number" [(ngModel)]="achat.quantite" name="quantite" required step="0.0001" placeholder="10" />
+      </div>
+      <div class="form-row">
+        <label>Date</label>
+        <input type="date" [(ngModel)]="achat.date" name="date" />
+      </div>
+      <div class="form-row">
+        <label>Frais</label>
+        <input type="number" [(ngModel)]="achat.frais" name="frais" step="0.01" placeholder="0.00" />
+      </div>
+      <div class="form-row">
+        <label>Notes</label>
+        <input type="text" [(ngModel)]="achat.notes" name="notes" placeholder="Optionnel" />
+      </div>
+      <button type="submit">Enregistrer l'achat</button>
+    </form>
+  }
+</div>

@@ -1,0 +1,31 @@
+<div class="dashboard">
+  <nav class="sidebar">
+    <div class="brand">
+      <span class="brand-icon">📈</span>
+      <span class="brand-name">Finance Agents</span>
+    </div>
+
+    <ul class="nav-links">
+      @for (tab of tabs; track tab.path) {
+        <li>
+          <a [routerLink]="tab.path" routerLinkActive="active">
+            <span class="nav-icon">{{ tab.icon }}</span>
+            <span class="nav-label">{{ tab.label }}</span>
+            @if (tab.path === 'alerts' && alertCount() > 0) {
+              <span class="badge">{{ alertCount() }}</span>
+            }
+          </a>
+        </li>
+      }
+    </ul>
+
+    <div class="sidebar-footer">
+      <span class="user-name">{{ auth.currentUser()?.username }}</span>
+      <button class="logout-btn" (click)="auth.logout()">Déconnexion</button>
+    </div>
+  </nav>
+
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>

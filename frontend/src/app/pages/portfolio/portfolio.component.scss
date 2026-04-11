@@ -1,0 +1,79 @@
+.page { max-width: 1100px; }
+.page-title { color: #00c8ff; font-size: 1.4rem; margin: 0 0 1.5rem; }
+
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(0,200,255,0.15);
+  width: fit-content;
+
+  button {
+    padding: 0.55rem 1.25rem;
+    border: none;
+    background: transparent;
+    color: #6b8aad;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    &.active { background: rgba(0,200,255,0.12); color: #00c8ff; font-weight: 600; }
+    &:hover:not(.active) { background: rgba(255,255,255,0.04); color: #9ab; }
+  }
+}
+
+.loader-bar {
+  height: 3px; background: rgba(0,200,255,0.15); border-radius: 3px; overflow: hidden; margin-bottom: 1.5rem;
+  .bar-inner { height: 100%; width: 40%; background: #00c8ff; animation: slide 1.2s ease-in-out infinite; }
+}
+@keyframes slide { 0% { transform: translateX(-150%); } 100% { transform: translateX(350%); } }
+
+.error-box {
+  background: rgba(255,60,80,0.1); border: 1px solid rgba(255,60,80,0.3);
+  border-radius: 8px; color: #ff7088; padding: 0.75rem 1rem; margin-bottom: 1rem;
+}
+
+.empty { color: #6b8aad; font-style: italic; padding: 2rem 0; }
+
+.data-table {
+  width: 100%; border-collapse: collapse; font-size: 0.875rem;
+
+  th {
+    text-align: left; color: #6b8aad; font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(0,200,255,0.1);
+  }
+
+  td { padding: 0.65rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.04); color: #cde; }
+  tr:hover td { background: rgba(0,200,255,0.04); }
+
+  .ticker { font-weight: 700; color: #fff; }
+  .signal { font-weight: 600; color: #ffd740; }
+}
+
+.achat-form {
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  .form-row {
+    display: flex; flex-direction: column; gap: 0.35rem;
+    label { color: #7a9bbb; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    input {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(0,200,255,0.2);
+      border-radius: 8px; padding: 0.6rem 0.9rem; color: #e0f0ff; font-size: 0.95rem; outline: none;
+      &::placeholder { color: #3a5a7a; }
+      &:focus { border-color: #00c8ff; }
+    }
+  }
+
+  button[type="submit"] {
+    background: linear-gradient(135deg, #00c8ff, #0080cc);
+    border: none; border-radius: 8px; color: #fff;
+    font-weight: 600; padding: 0.7rem 1.5rem; cursor: pointer; font-size: 0.95rem;
+    transition: opacity 0.2s; align-self: flex-start;
+    &:hover { opacity: 0.88; }
+  }
+}

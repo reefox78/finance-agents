@@ -1,0 +1,103 @@
+.page { max-width: 900px; }
+.page-title { color: #00c8ff; font-size: 1.4rem; margin: 0 0 1.5rem; }
+
+.controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+
+  select, input[type="number"] {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(0,200,255,0.2);
+    border-radius: 8px;
+    padding: 0.6rem 0.9rem;
+    color: #e0f0ff;
+    font-size: 0.9rem;
+    outline: none;
+    &:focus { border-color: #00c8ff; }
+    option { background: #0d1b2e; }
+  }
+
+  .score-filter {
+    color: #7a9bbb;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    input { width: 70px; }
+  }
+
+  button {
+    background: linear-gradient(135deg, #00c8ff, #0080cc);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-weight: 600;
+    padding: 0.65rem 1.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: opacity 0.2s;
+    &:disabled { opacity: 0.45; cursor: not-allowed; }
+    &:hover:not(:disabled) { opacity: 0.88; }
+  }
+}
+
+.progress-overlay {
+  background: rgba(0,200,255,0.06);
+  border: 1px solid rgba(0,200,255,0.2);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.progress-label { color: #7ab; font-size: 0.875rem; margin-bottom: 0.6rem; }
+.progress-bar {
+  height: 6px;
+  background: rgba(0,200,255,0.15);
+  border-radius: 6px;
+  overflow: hidden;
+  .progress-fill {
+    height: 100%;
+    background: #00c8ff;
+    border-radius: 6px;
+    transition: width 0.3s ease;
+  }
+}
+
+.error-box {
+  background: rgba(255,60,80,0.1);
+  border: 1px solid rgba(255,60,80,0.3);
+  border-radius: 8px;
+  color: #ff7088;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+
+  th {
+    text-align: left;
+    color: #6b8aad;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(0,200,255,0.1);
+  }
+
+  td {
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+
+  tr:hover td { background: rgba(0,200,255,0.04); }
+
+  .ticker   { color: #cde; font-weight: 600; }
+  .score    { font-weight: 700; font-family: monospace; }
+  .decision { color: #ffd740; font-weight: 600; }
+}

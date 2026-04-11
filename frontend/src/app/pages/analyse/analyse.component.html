@@ -1,0 +1,103 @@
+<div class="page">
+  <h2 class="page-title">🔍 Analyse</h2>
+
+  <div class="search-bar">
+    <input
+      type="text"
+      [(ngModel)]="ticker"
+      placeholder="AAPL, MC.PA, BTC-USD…"
+      (keyup.enter)="run()"
+    />
+    <label class="toggle-llm">
+      <input type="checkbox" [(ngModel)]="withLlm" />
+      Rapport LLM
+    </label>
+    <button (click)="run()" [disabled]="loading() || !ticker.trim()">
+      {{ loading() ? 'Analyse en cours…' : 'Analyser' }}
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="loader-bar"><div class="bar-inner"></div></div>
+  }
+
+  @if (error()) {
+    <div class="error-box">{{ error() }}</div>
+  }
+
+  @if (result(); as r) {
+    <div class="result-grid">
+      <!-- Score card -->
+      <div class="card score-card">
+        <div class="score-value" [style.color]="scoreColor(r.scoring.score_final)">
+          {{ r.scoring.score_final | number:'1.4-4' }}
+        </div>
+        <div class="score-decision">{{ r.scoring.decision }}</div>
+        <div class="score-asset">{{ r.ticker }} · {{ r.asset_type }}</div>
+      </div>
+
+      <!-- Technical -->
+      @if (r.tech) {
+        <div class="card">
+          <h3>Technique</h3>
+          <table class="kv-table">
+            <tr><td>Prix</td><td>{{ r.tech.prix_actuel }}</td></tr>
+            <tr><td>RSI</td><td>{{ r.tech.rsi }}</td></tr>
+            <tr><td>MACD</td><td>{{ r.tech.macd }}</td></tr>
+            <tr><td>SMA20</td><td>{{ r.tech.sma20 }}</td></tr>
+            <tr><td>SMA50</td><td>{{ r.tech.sma50 }}</td></tr>
+            <tr><td>Signal</td><td class="signal">{{ r.tech.signal }}</td></tr>
+          </table>
+        </div>
+      }
+
+      <!-- Fundamental -->
+      @if (r.fund) {
+        <div class="card">
+          <h3>Fondamental</h3>
+          <table class="kv-table">
+            <tr><td>Nom</td><td>{{ r.fund.nom }}</td></tr>
+            <tr><td>Secteur</td><td>{{ r.fund.secteur }}</td></tr>
+            <tr><td>PER</td><td>{{ r.fund.per }}</td></tr>
+            <tr><td>Dividende</td><td>{{ r.fund.dividende }}</td></tr>
+            <tr><td>Signal</td><td class="signal">{{ r.fund.signal }}</td></tr>
+          </table>
+        </div>
+      }
+
+      <!-- Sentiment -->
+      @if (r.sent) {
+        <div class="card">
+          <h3>Sentiment</h3>
+          <table class="kv-table">
+            <tr><td>Articles</td><td>{{ r.sent.articles }}</td></tr>
+            <tr><td>Positif</td><td class="pos">{{ r.sent.positif }}</td></tr>
+            <tr><td>Négatif</td><td class="neg">{{ r.sent.negatif }}</td></tr>
+            <tr><td>Neutre</td><td>{{ r.sent.neutre }}</td></tr>
+            <tr><td>Signal</td><td class="signal">{{ r.sent.signal }}</td></tr>
+          </table>
+        </div>
+      }
+
+      <!-- Risk -->
+      @if (r.risk) {
+        <div class="card">
+          <h3>Risque</h3>
+          <table class="kv-table">
+            <tr><td>Volatilité</td><td>{{ r.risk.volatilite }} %</td></tr>
+            <tr><td>Drawdown</td><td>{{ r.risk.drawdown_max }} %</td></tr>
+            <tr><td>Niveau</td><td class="signal">{{ r.risk.risque }}</td></tr>
+          </table>
+        </div>
+      }
+
+      <!-- LLM Report -->
+      @if (r.rapport) {
+        <div class="card rapport-card">
+          <h3>Rapport LLM</h3>
+          <pre class="rapport-text">{{ r.rapport }}</pre>
+        </div>
+      }
+    </div>
+  }
+</div>

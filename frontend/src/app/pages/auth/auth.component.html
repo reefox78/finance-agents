@@ -1,0 +1,38 @@
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <span class="logo-icon">📈</span>
+      <h1>Finance Agents</h1>
+    </div>
+
+    <div class="auth-tabs">
+      <button [class.active]="mode === 'login'"    (click)="mode = 'login';    error.set('')">Connexion</button>
+      <button [class.active]="mode === 'register'" (click)="mode = 'register'; error.set('')">Inscription</button>
+    </div>
+
+    <form (ngSubmit)="submit()">
+      @if (mode === 'register') {
+        <div class="field">
+          <label>Nom d'utilisateur</label>
+          <input type="text" [(ngModel)]="username" name="username" required placeholder="JohnDoe" />
+        </div>
+      }
+      <div class="field">
+        <label>Email</label>
+        <input type="email" [(ngModel)]="email" name="email" required placeholder="you@example.com" />
+      </div>
+      <div class="field">
+        <label>Mot de passe</label>
+        <input type="password" [(ngModel)]="password" name="password" required placeholder="••••••••" />
+      </div>
+
+      @if (error()) {
+        <div class="error-msg">{{ error() }}</div>
+      }
+
+      <button type="submit" class="btn-submit" [disabled]="loading()">
+        {{ loading() ? 'Chargement…' : (mode === 'login' ? 'Se connecter' : 'Créer un compte') }}
+      </button>
+    </form>
+  </div>
+</div>
