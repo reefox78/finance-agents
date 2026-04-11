@@ -9,7 +9,7 @@
       @for (cat of categories; track cat) {
         <optgroup [label]="cat">
           @for (t of watchlist[cat]; track t) {
-            <option [value]="t">{{ t }}</option>
+            <option [value]="t">{{ label(t) }}</option>
           }
         </optgroup>
       }
