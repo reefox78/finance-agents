@@ -33,6 +33,7 @@ export const routes: Routes = [
         path: 'backtest',
         loadComponent: () => import('./pages/backtest/backtest.component').then(m => m.BacktestComponent),
       },
+
       {
         path: 'calibration',
         loadComponent: () => import('./pages/calibration/calibration.component').then(m => m.CalibrationComponent),

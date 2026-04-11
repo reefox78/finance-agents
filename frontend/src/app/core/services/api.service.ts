@@ -94,6 +94,14 @@ export class ApiService {
 
   // ── Logs ──────────────────────────────────────────────────────────────────
 
+  // ── Backtest ──────────────────────────────────────────────────────────────
+
+  runBacktest(body: { ticker: string; debut: string; fin: string; capital: number; mode: string }): Observable<any> {
+    return this.http.post<any>(`${this.base}/backtest/run`, body);
+  }
+
+  // ── Logs ──────────────────────────────────────────────────────────────────
+
   getLogFiles(): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/logs/files`);
   }

@@ -16,7 +16,7 @@ sys.path.insert(0, str(_backend))
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import auth, analyse, scanner, portfolio, alerts, admin, logs
+from api.routers import auth, analyse, scanner, portfolio, alerts, admin, logs, backtest
 
 app = FastAPI(
     title="Finance Agents API",
@@ -50,6 +50,7 @@ app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"]
 app.include_router(alerts.router,    prefix="/api/alerts",    tags=["alerts"])
 app.include_router(admin.router,     prefix="/api/admin",     tags=["admin"])
 app.include_router(logs.router,      prefix="/api/logs",      tags=["logs"])
+app.include_router(backtest.router,  prefix="/api/backtest",  tags=["backtest"])
 
 
 @app.get("/api/health")
