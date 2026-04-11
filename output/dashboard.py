@@ -1571,11 +1571,58 @@ with tab_scanner:
 
     lancer_scan = st.button("🚀 Lancer le scan", type="primary")
 
+    # Placeholder pour l'overlay plein écran du scanner
+    _scan_ph = st.empty()
+
     if lancer_scan and tickers_sel:
         resultats_scan = []
-        progress = st.progress(0, text="Démarrage…")
+        nb = len(tickers_sel)
+
+        def _scan_overlay_html(ticker: str, idx: int, total: int) -> str:
+            pct = int(idx / total * 100)
+            bar_color = "#00c8ff"
+            return f"""
+            <div style="position:fixed;top:0;left:0;width:100vw;height:100vh;
+                        background:rgba(2,6,18,0.93);backdrop-filter:blur(10px);
+                        -webkit-backdrop-filter:blur(10px);z-index:99998;
+                        display:flex;align-items:center;justify-content:center;
+                        pointer-events:all;">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:32px;
+                          background:rgba(10,16,35,0.98);
+                          border:1px solid rgba(0,200,255,0.22);
+                          border-radius:22px;padding:52px 72px;min-width:460px;
+                          box-shadow:0 0 100px rgba(0,200,255,0.10);">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none"
+                     style="animation:fa-spin2 0.9s linear infinite;
+                            filter:drop-shadow(0 0 14px rgba(0,200,255,0.55))">
+                  <style>@keyframes fa-spin2{{to{{transform:rotate(360deg)}}}}</style>
+                  <circle cx="12" cy="12" r="10"
+                    stroke="rgba(0,200,255,0.18)" stroke-width="2.5"/>
+                  <path d="M12 2a10 10 0 0 1 10 10"
+                    stroke="{bar_color}" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+                <div style="text-align:center;">
+                  <div style="color:#4a5a7a;font-size:11px;letter-spacing:2px;
+                              text-transform:uppercase;margin-bottom:8px;">
+                    Scanner de marché — {idx}/{total}
+                  </div>
+                  <div style="color:#c8d6f0;font-size:16px;font-weight:700;
+                              letter-spacing:1px;font-family:monospace;">
+                    Analyse&nbsp;<span style="color:{bar_color};">{ticker}</span>…
+                  </div>
+                </div>
+                <div style="width:100%;background:rgba(255,255,255,0.06);
+                            border-radius:99px;height:6px;overflow:hidden;">
+                  <div style="height:100%;width:{pct}%;border-radius:99px;
+                              background:linear-gradient(90deg,#0c6fff,{bar_color});
+                              transition:width .3s ease;"></div>
+                </div>
+                <div style="color:#2a4a6a;font-size:12px;">{pct}%</div>
+              </div>
+            </div>"""
+
         for i, t in enumerate(tickers_sel):
-            progress.progress(i / len(tickers_sel), text=f"Analyse {t}…")
+            _scan_ph.markdown(_scan_overlay_html(t, i + 1, nb), unsafe_allow_html=True)
             try:
                 r = run(t, with_llm=False, user_id=_user_id)
                 s = r["scoring"]
@@ -1596,7 +1643,9 @@ with tab_scanner:
                 })
             except Exception as e:
                 _log("warning", f"Scanner — {t} ignoré : {e}", context="scanner")
-        progress.progress(1.0, text="✅ Terminé")
+
+        _scan_ph.empty()  # retire l'overlay
+
         if resultats_scan:
             st.session_state["_scan"] = {
                 "df": pd.DataFrame(resultats_scan).sort_values("Score", ascending=False),
