@@ -1,33 +1,65 @@
 <div class="page">
   <h2 class="page-title">🔍 Analyse</h2>
 
-  <div class="search-bar">
-    <input
-      type="text"
-      [(ngModel)]="ticker"
-      placeholder="AAPL, MC.PA, BTC-USD…"
-      (keyup.enter)="run()"
-    />
+  <!-- ── Sélecteur par catégorie ── -->
+  <div class="selector-section">
+    @for (cat of categories; track cat) {
+      <div class="category-block">
+        <div class="cat-label">{{ cat }}</div>
+        <div class="ticker-grid">
+          @for (t of watchlist[cat]; track t) {
+            <button
+              class="ticker-chip"
+              [class.selected]="ticker === t"
+              (click)="selectTicker(t)"
+            >{{ t }}</button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- ── Saisie manuelle ── -->
+  <div class="custom-row">
+    <div class="custom-input-wrap">
+      <span class="custom-label">Ou saisir manuellement :</span>
+      <input
+        type="text"
+        [(ngModel)]="customTicker"
+        (ngModelChange)="onCustomInput()"
+        placeholder="ex: TSM, BABA, ETH-USD…"
+        (keyup.enter)="run()"
+      />
+    </div>
+
     <label class="toggle-llm">
       <input type="checkbox" [(ngModel)]="withLlm" />
       Rapport LLM
     </label>
-    <button (click)="run()" [disabled]="loading() || !ticker.trim()">
-      {{ loading() ? 'Analyse en cours…' : 'Analyser' }}
+
+    <button
+      class="btn-analyser"
+      (click)="run()"
+      [disabled]="loading() || !ticker"
+    >
+      {{ loading() ? 'Analyse…' : 'Analyser ' + (ticker || '—') }}
     </button>
   </div>
 
+  <!-- ── Loader ── -->
   @if (loading()) {
     <div class="loader-bar"><div class="bar-inner"></div></div>
   }
 
+  <!-- ── Erreur ── -->
   @if (error()) {
     <div class="error-box">{{ error() }}</div>
   }
 
+  <!-- ── Résultats ── -->
   @if (result(); as r) {
     <div class="result-grid">
-      <!-- Score card -->
+
       <div class="card score-card">
         <div class="score-value" [style.color]="scoreColor(r.scoring.score_final)">
           {{ r.scoring.score_final | number:'1.4-4' }}
@@ -36,7 +68,6 @@
         <div class="score-asset">{{ r.ticker }} · {{ r.asset_type }}</div>
       </div>
 
-      <!-- Technical -->
       @if (r.tech) {
         <div class="card">
           <h3>Technique</h3>
@@ -51,7 +82,6 @@
         </div>
       }
 
-      <!-- Fundamental -->
       @if (r.fund) {
         <div class="card">
           <h3>Fondamental</h3>
@@ -65,7 +95,6 @@
         </div>
       }
 
-      <!-- Sentiment -->
       @if (r.sent) {
         <div class="card">
           <h3>Sentiment</h3>
@@ -79,7 +108,6 @@
         </div>
       }
 
-      <!-- Risk -->
       @if (r.risk) {
         <div class="card">
           <h3>Risque</h3>
@@ -91,13 +119,13 @@
         </div>
       }
 
-      <!-- LLM Report -->
       @if (r.rapport) {
         <div class="card rapport-card">
           <h3>Rapport LLM</h3>
           <pre class="rapport-text">{{ r.rapport }}</pre>
         </div>
       }
+
     </div>
   }
 </div>
