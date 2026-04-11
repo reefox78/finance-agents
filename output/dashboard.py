@@ -829,48 +829,140 @@ button[kind="secondary"] {
 ::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,200,255,0.4); }
 
-/* ── Spinner plein écran — bloque les interactions pendant le chargement ─ */
-[data-testid="stSpinner"] {
-    position: fixed !important;
-    top: 0 !important; left: 0 !important;
-    width: 100vw !important; height: 100vh !important;
-    background: rgba(2, 6, 18, 0.93) !important;
-    backdrop-filter: blur(8px) !important;
-    -webkit-backdrop-filter: blur(8px) !important;
-    z-index: 99998 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    margin: 0 !important; padding: 0 !important;
-    border-radius: 0 !important;
-    pointer-events: all !important;
-}
-[data-testid="stSpinner"] > div {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    gap: 28px !important;
-    background: rgba(10, 16, 35, 0.98) !important;
-    border: 1px solid rgba(0, 200, 255, 0.2) !important;
-    border-radius: 20px !important;
-    padding: 48px 64px !important;
-    box-shadow: 0 0 80px rgba(0, 200, 255, 0.08) !important;
-}
-[data-testid="stSpinner"] svg {
-    width: 64px !important; height: 64px !important;
-    color: #00c8ff !important;
-    filter: drop-shadow(0 0 12px rgba(0, 200, 255, 0.5)) !important;
-}
-[data-testid="stSpinner"] p {
-    color: #c8d6f0 !important;
-    font-size: 15px !important;
-    font-weight: 600 !important;
-    letter-spacing: 1.5px !important;
-    text-transform: uppercase !important;
-    margin: 0 !important;
-}
+/* ── Masquer l'indicateur de chargement natif Streamlit (topbar) ─────── */
+[data-testid="stStatusWidget"] { display: none !important; }
+/* L'overlay de chargement est géré par le JS fa-loading-overlay ci-dessous */
+[data-testid="stSpinner"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Overlay de chargement plein écran — JS injecté via composant (même origine)
+# Intercepte TOUS les clics bouton, bloque le re-clic pendant 5 s minimum
+# ---------------------------------------------------------------------------
+import streamlit.components.v1 as _stc
+_stc.html("""
+<script>
+(function() {
+    var pdoc = window.parent.document;
+
+    // ── Guard : n'initialiser qu'une seule fois par session ──────────────
+    if (pdoc.getElementById('fa-ov-guard')) return;
+    var guard = pdoc.createElement('div');
+    guard.id  = 'fa-ov-guard';
+    guard.style.display = 'none';
+    pdoc.body.appendChild(guard);
+
+    // ── Keyframes spin (injectées dans le parent) ─────────────────────────
+    var kf = pdoc.createElement('style');
+    kf.textContent = '@keyframes fa-spin{to{transform:rotate(360deg)}}';
+    pdoc.head.appendChild(kf);
+
+    // ── Overlay HTML ───────────────────────────────────────────────────────
+    var ov = pdoc.createElement('div');
+    ov.id = 'fa-loading-ov';
+    ov.style.cssText = [
+        'position:fixed;top:0;left:0;width:100vw;height:100vh',
+        'background:rgba(2,6,18,0.93)',
+        'backdrop-filter:blur(10px)',
+        '-webkit-backdrop-filter:blur(10px)',
+        'z-index:99999',
+        'display:none',
+        'align-items:center',
+        'justify-content:center',
+        'pointer-events:all'
+    ].join(';');
+    ov.innerHTML = [
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:32px;',
+            'background:rgba(10,16,35,0.98);',
+            'border:1px solid rgba(0,200,255,0.22);',
+            'border-radius:22px;padding:56px 72px;',
+            'box-shadow:0 0 100px rgba(0,200,255,0.10);">',
+          '<svg width="72" height="72" viewBox="0 0 24 24" fill="none"',
+              'style="animation:fa-spin 0.9s linear infinite;',
+                     'filter:drop-shadow(0 0 14px rgba(0,200,255,0.55))">',
+            '<circle cx="12" cy="12" r="10"',
+                'stroke="rgba(0,200,255,0.18)" stroke-width="2.5"/>',
+            '<path d="M12 2a10 10 0 0 1 10 10"',
+                'stroke="#00c8ff" stroke-width="2.5" stroke-linecap="round"/>',
+          '</svg>',
+          '<p id="fa-ov-msg" style="color:#c8d6f0;font-size:15px;font-weight:700;',
+              'letter-spacing:2px;text-transform:uppercase;margin:0;',
+              'font-family:\'SF Mono\',monospace;">',
+            'Chargement...',
+          '</p>',
+        '</div>'
+    ].join('');
+    pdoc.body.appendChild(ov);
+
+    // ── État ───────────────────────────────────────────────────────────────
+    var lockUntil  = 0;
+    var stableTimer = null;
+
+    function setAllButtons(disabled) {
+        pdoc.querySelectorAll('button').forEach(function(b) {
+            // Ne pas toucher les boutons de fermeture de l'overlay d'erreur
+            if (!b.id || b.id.indexOf('fa-') === -1) b.disabled = disabled;
+        });
+    }
+
+    function showOverlay(label) {
+        var msg = pdoc.getElementById('fa-ov-msg');
+        if (msg) msg.textContent = label || 'Chargement...';
+        ov.style.display = 'flex';
+        lockUntil = Date.now() + 5000;
+        setAllButtons(true);
+    }
+
+    function tryHide() {
+        if (Date.now() < lockUntil) {
+            // Pas encore 5 s — ré-essayer quand le temps sera écoulé
+            if (stableTimer) clearTimeout(stableTimer);
+            stableTimer = setTimeout(tryHide, lockUntil - Date.now() + 50);
+            return;
+        }
+        ov.style.display = 'none';
+        setAllButtons(false);
+    }
+
+    // ── Intercepter les clics sur les boutons Streamlit ────────────────────
+    pdoc.addEventListener('click', function(e) {
+        if (Date.now() < lockUntil) { e.stopPropagation(); e.preventDefault(); return; }
+        var btn = e.target.closest('button');
+        if (!btn || btn.disabled) return;
+        // Ignorer les boutons purement UI (fermeture modale, etc.)
+        var skip = ['fa-close', 'fa-err'];
+        for (var i = 0; i < skip.length; i++) {
+            if (btn.id && btn.id.indexOf(skip[i]) !== -1) return;
+        }
+        var label = (btn.textContent || '').trim().slice(0, 40) || 'Chargement...';
+        showOverlay(label);
+    }, true);
+
+    // ── Ré-désactiver les boutons recréés par Streamlit pendant le lock ────
+    var observer = new MutationObserver(function() {
+        if (Date.now() < lockUntil) {
+            setAllButtons(true);
+        }
+        // Planifier la tentative de masquage quand le DOM se stabilise
+        if (stableTimer) clearTimeout(stableTimer);
+        stableTimer = setTimeout(tryHide, 600);
+    });
+
+    var container = pdoc.querySelector('[data-testid="stAppViewContainer"]')
+                    || pdoc.body;
+    observer.observe(container, { childList: true, subtree: true });
+
+    // ── Sécurité : masquage forcé après 45 s max ──────────────────────────
+    setInterval(function() {
+        if (ov.style.display !== 'none' && Date.now() > lockUntil + 40000) {
+            ov.style.display = 'none';
+            setAllButtons(false);
+        }
+    }, 5000);
+})();
+</script>
+""", height=0)
 
 # Raccourci global utilisé partout dans le dashboard
 _user    = st.session_state["user"]
