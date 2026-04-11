@@ -1,5 +1,7 @@
 import os
 import sys
+import logging
+import re
 import streamlit as st
 
 # ── Injection des secrets Streamlit Cloud dans os.environ ──────────────────
@@ -12,6 +14,67 @@ try:
             os.environ.setdefault(_sk, _sv)
 except Exception:
     pass   # pas de secrets configurés ou exécution hors Streamlit
+# ───────────────────────────────────────────────────────────────────────────
+
+# ===========================================================================
+# SYSTÈME DE LOGS EN MÉMOIRE — capture WARNING+ sans infos sensibles
+# ===========================================================================
+_SENSITIVE_PATTERNS = re.compile(
+    r"(api[_-]?key|secret|token|password|passwd|authorization|bearer|"
+    r"eyJ[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9]{10,}|gsk_[A-Za-z0-9]{10,}|"
+    r"postgres(?:ql)?://[^\s]+|mysql://[^\s]+|[A-Za-z0-9+/]{40,}={0,2})",
+    re.IGNORECASE,
+)
+
+def _sanitize(text: str) -> str:
+    """Remplace les valeurs potentiellement sensibles par [REDACTED]."""
+    return _SENSITIVE_PATTERNS.sub("[REDACTED]", str(text))
+
+
+class _SessionLogHandler(logging.Handler):
+    """Handler qui stocke les logs WARNING+ dans st.session_state['_logs']."""
+    MAX_ENTRIES = 200
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            entry = {
+                "ts":      record.created,
+                "level":   record.levelname,
+                "logger":  record.name,
+                "message": _sanitize(msg),
+            }
+            if "_logs" not in st.session_state:
+                st.session_state["_logs"] = []
+            logs = st.session_state["_logs"]
+            logs.append(entry)
+            # Limite circulaire
+            if len(logs) > self.MAX_ENTRIES:
+                st.session_state["_logs"] = logs[-self.MAX_ENTRIES:]
+        except Exception:
+            pass
+
+
+def _setup_log_handler() -> None:
+    """Installe le handler une seule fois par session."""
+    root = logging.getLogger()
+    if any(isinstance(h, _SessionLogHandler) for h in root.handlers):
+        return
+    handler = _SessionLogHandler()
+    handler.setLevel(logging.WARNING)
+    fmt = logging.Formatter("%(name)s — %(message)s")
+    handler.setFormatter(fmt)
+    root.addHandler(handler)
+
+
+_setup_log_handler()
+
+# Helper pour logger manuellement depuis le dashboard
+def _log(level: str, msg: str, context: str = "dashboard") -> None:
+    logging.getLogger(context).log(
+        getattr(logging, level.upper(), logging.WARNING),
+        _sanitize(msg),
+    )
 # ───────────────────────────────────────────────────────────────────────────
 
 import base64
@@ -1022,8 +1085,8 @@ with _col_u:
 _nb_alertes = _nb_alertes_cached(_user_id)
 _label_portfolio = f"💼 Portefeuille {'🔔 ' + str(_nb_alertes) if _nb_alertes else ''}"
 
-tab_analyse, tab_scanner, tab_portfolio, tab_backtest, tab_calib = st.tabs(
-    ["🔍 Analyse", "📋 Scanner", _label_portfolio, "📊 Backtest", "⚙️ Calibration"]
+tab_analyse, tab_scanner, tab_portfolio, tab_backtest, tab_calib, tab_logs = st.tabs(
+    ["🔍 Analyse", "📋 Scanner", _label_portfolio, "📊 Backtest", "⚙️ Calibration", "🪵 Logs"]
 )
 
 
@@ -1047,6 +1110,7 @@ with tab_analyse:
             with st.spinner(f"Analyse de {ticker} en cours..."):
                 resultat = run(ticker, with_llm=True, user_id=_user_id)
         except Exception as e:
+            _log("error", f"Analyse {ticker} : {e}", context="analyse")
             _error_overlay(str(e), titre=f"Erreur — {ticker}")
             resultat = None
         if resultat is not None:
@@ -1499,7 +1563,7 @@ with tab_scanner:
                     "Earnings":  r["earnings_surprise"]["signal"] if r.get("earnings_surprise") else "-",
                 })
             except Exception as e:
-                st.warning(f"{t} : {e}")
+                _log("warning", f"Scanner — {t} ignoré : {e}", context="scanner")
         progress.progress(1.0, text="✅ Terminé")
         if resultats_scan:
             st.session_state["_scan"] = {
@@ -1833,6 +1897,7 @@ with tab_portfolio:
                 positions_eval = evaluer_positions(_user_id, with_scores=not mode_rapide)
             st.session_state["pf_positions"] = positions_eval
         except Exception as _pf_e:
+            _log("error", f"Portefeuille evaluer_positions : {_pf_e}", context="portfolio")
             _error_overlay(str(_pf_e), titre="Erreur — Analyse du portefeuille")
 
     # Render initial : charge les positions avec prix (depuis le cache si dispo)
@@ -2358,6 +2423,7 @@ with tab_backtest:
                     )
                 st.session_state["_bt_result"] = bt_result
             except Exception as e:
+                _log("error", f"Backtest {bt_ticker} : {e}", context="backtest")
                 _error_overlay(str(e), titre=f"Erreur backtest — {bt_ticker}")
                 bt_result = None
 
@@ -2573,3 +2639,81 @@ with tab_calib:
             "Les poids suggérés remplacent les poids par défaut pour toutes les analyses futures. "
             "Tu peux revenir aux défauts à tout moment avec le bouton en haut de page."
         )
+
+# ===========================================================================
+# ONGLET LOGS — Warnings et erreurs de la session (sans infos sensibles)
+# ===========================================================================
+
+with tab_logs:
+    import datetime as _dt
+
+    _section_header("Journal d'événements",
+                    "Trace des avertissements et erreurs de la session en cours. "
+                    "Aucune information sensible (clé API, token, mot de passe) n'est affichée.")
+
+    _logs: list = st.session_state.get("_logs", [])
+
+    # Barre d'actions
+    _lcol1, _lcol2, _lcol3 = st.columns([2, 1, 1])
+    _log_filter = _lcol1.selectbox(
+        "Niveau",
+        ["Tous", "ERROR", "WARNING", "CRITICAL"],
+        key="log_filter",
+        label_visibility="collapsed",
+    )
+    if _lcol2.button("🗑️ Vider les logs", key="clear_logs"):
+        st.session_state["_logs"] = []
+        st.rerun()
+
+    # Filtrage
+    _filtered = [
+        e for e in reversed(_logs)
+        if _log_filter == "Tous" or e["level"] == _log_filter
+    ]
+
+    _lcol3.markdown(
+        f"<div style='text-align:right;color:#4a5a7a;font-size:12px;"
+        f"padding-top:8px;'>{len(_filtered)} entrée(s)</div>",
+        unsafe_allow_html=True,
+    )
+
+    if not _filtered:
+        st.markdown("""
+        <div style="margin-top:32px;background:rgba(8,13,28,0.6);
+                    border:1px solid rgba(255,255,255,0.06);border-radius:12px;
+                    padding:48px;text-align:center;">
+          <div style="font-size:36px;margin-bottom:12px;">✅</div>
+          <div style="font-size:15px;font-weight:700;color:#c8d6f0;margin-bottom:8px;">
+            Aucun événement à signaler
+          </div>
+          <div style="font-size:12px;color:#4a5a7a;">
+            Les avertissements et erreurs apparaîtront ici au fil de la session.
+          </div>
+        </div>""", unsafe_allow_html=True)
+    else:
+        _LEVEL_COLOR = {
+            "CRITICAL": ("#ff1744", "rgba(255,23,68,0.12)"),
+            "ERROR":    ("#ff4b4b", "rgba(255,75,75,0.10)"),
+            "WARNING":  ("#ffab00", "rgba(255,171,0,0.08)"),
+        }
+
+        for _entry in _filtered:
+            _lvl   = _entry.get("level", "WARNING")
+            _color, _bg = _LEVEL_COLOR.get(_lvl, ("#6b7fa3", "rgba(107,127,163,0.08)"))
+            _ts    = _dt.datetime.fromtimestamp(_entry["ts"]).strftime("%H:%M:%S")
+            _loggr = _entry.get("logger", "")
+            _msg   = _entry.get("message", "")
+
+            st.markdown(f"""
+            <div style="background:{_bg};border:1px solid {_color}33;
+                        border-left:3px solid {_color};border-radius:8px;
+                        padding:12px 16px;margin-bottom:8px;font-family:monospace;">
+              <div style="display:flex;gap:12px;align-items:center;margin-bottom:4px;">
+                <span style="color:{_color};font-size:11px;font-weight:700;
+                             letter-spacing:1px;">{_lvl}</span>
+                <span style="color:#3d5070;font-size:11px;">{_ts}</span>
+                <span style="color:#2a4a6a;font-size:11px;">{_loggr}</span>
+              </div>
+              <div style="color:#c8d6f0;font-size:12px;line-height:1.5;
+                          word-break:break-word;">{_msg}</div>
+            </div>""", unsafe_allow_html=True)
