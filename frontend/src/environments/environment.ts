@@ -1,4 +1,4 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:8000/api',
+  apiUrl: '/api',  // proxy → localhost:8000 (voir proxy.conf.json)
 };

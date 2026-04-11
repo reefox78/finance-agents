@@ -5,11 +5,11 @@ import json
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from orchestrator.orchestrator import run as orchestrer
-from api.deps import CurrentUser
+from api.deps import CurrentUser, decode_token
 
 router = APIRouter()
 
@@ -78,16 +78,19 @@ async def _scan_stream(
 
 @router.get("/stream")
 async def scanner_stream(
-    current_user: CurrentUser,
     categorie: str | None = Query(None),
     tickers: str | None = Query(None, description="Comma-separated tickers"),
     min_score: float = Query(0.0),
+    # EventSource doesn't support headers → token passed as query param
+    token: str = Query(..., description="JWT Bearer token"),
 ):
     """
     Scan en streaming (SSE).
     Chaque ticker envoie 2 événements : progress + result.
     Un événement 'done' final contient tous les résultats triés.
     """
+    current_user = decode_token(token)
+
     if tickers:
         ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
     else:
