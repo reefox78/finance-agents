@@ -15,10 +15,12 @@ export class DashboardComponent implements OnInit {
   alertCount = signal(0);
 
   tabs = [
-    { label: 'Analyse',    path: 'analyse',   icon: '🔍' },
-    { label: 'Scanner',    path: 'scanner',   icon: '📡' },
-    { label: 'Portefeuille', path: 'portfolio', icon: '💼' },
-    { label: 'Alertes',    path: 'alerts',    icon: '🔔' },
+    { label: 'Analyse',      path: 'analyse',     icon: '🔍' },
+    { label: 'Scanner',      path: 'scanner',     icon: '📋' },
+    { label: 'Portefeuille', path: 'portfolio',   icon: '💼' },
+    { label: 'Backtest',     path: 'backtest',    icon: '📊' },
+    { label: 'Calibration',  path: 'calibration', icon: '⚙️' },
+    { label: 'Logs',         path: 'logs',        icon: '🪵' },
   ];
 
   constructor(public auth: AuthService, private api: ApiService) {}

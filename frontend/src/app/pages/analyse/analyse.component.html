@@ -1,121 +1,156 @@
 <div class="page">
-  <h2 class="page-title">🔍 Analyse</h2>
 
-  <div class="search-bar">
+  <!-- Controls row -->
+  <div class="controls-row">
+    <div class="control-group">
+      <label class="ctrl-label">TICKER</label>
+      <select [(ngModel)]="ticker" (ngModelChange)="customTicker=''" class="fa-select ticker-sel">
+        <option value="" disabled>Sélectionner…</option>
+        @for (cat of categories; track cat) {
+          <optgroup [label]="cat">
+            @for (t of watchlist[cat]; track t) {
+              <option [value]="t">{{ label(t) }}</option>
+            }
+          </optgroup>
+        }
+      </select>
+    </div>
 
-    <!-- Dropdown groupé par catégorie -->
-    <select [(ngModel)]="ticker" (ngModelChange)="customTicker = ''" class="ticker-select">
-      <option value="" disabled>Sélectionner un ticker…</option>
-      @for (cat of categories; track cat) {
-        <optgroup [label]="cat">
-          @for (t of watchlist[cat]; track t) {
-            <option [value]="t">{{ label(t) }}</option>
-          }
-        </optgroup>
-      }
-    </select>
+    <div class="control-group">
+      <label class="ctrl-label">OU SAISIR</label>
+      <input class="fa-input custom-input" type="text"
+        [(ngModel)]="customTicker" (ngModelChange)="onCustomInput()"
+        placeholder="TSM, BABA…" (keyup.enter)="run()" />
+    </div>
 
-    <!-- Séparateur -->
-    <span class="sep">ou</span>
+    <div class="control-group">
+      <label class="ctrl-label">PÉRIODE</label>
+      <select [(ngModel)]="period" class="fa-select period-sel">
+        <option value="1mo">1 mois</option>
+        <option value="3mo">3 mois</option>
+        <option value="6mo">6 mois</option>
+        <option value="1y">1 an</option>
+        <option value="2y">2 ans</option>
+      </select>
+    </div>
 
-    <!-- Saisie libre -->
-    <input
-      type="text"
-      [(ngModel)]="customTicker"
-      (ngModelChange)="onCustomInput()"
-      placeholder="Autre ticker… (TSM, BABA…)"
-      (keyup.enter)="run()"
-      class="custom-input"
-    />
+    <div class="control-group ctrl-btn">
+      <label class="ctrl-label">&nbsp;</label>
+      <button class="btn-primary" (click)="run()" [disabled]="loading() || !ticker">
+        {{ loading() ? 'Analyse…' : 'Analyser' }}
+      </button>
+    </div>
 
     <label class="toggle-llm">
       <input type="checkbox" [(ngModel)]="withLlm" />
       Rapport LLM
     </label>
-
-    <button class="btn-analyser" (click)="run()" [disabled]="loading() || !ticker">
-      {{ loading() ? 'Analyse…' : 'Analyser' }}
-    </button>
-
   </div>
 
-  @if (loading()) {
-    <div class="loader-bar"><div class="bar-inner"></div></div>
-  }
-
-  @if (error()) {
-    <div class="error-box">{{ error() }}</div>
-  }
-
-  @if (result(); as r) {
-    <div class="result-grid">
-
-      <div class="card score-card">
-        <div class="score-value" [style.color]="scoreColor(r.scoring.score_final)">
-          {{ r.scoring.score_final | number:'1.4-4' }}
-        </div>
-        <div class="score-decision">{{ r.scoring.decision }}</div>
-        <div class="score-asset">{{ r.ticker }} · {{ r.asset_type }}</div>
-      </div>
-
-      @if (r.tech) {
-        <div class="card">
-          <h3>Technique</h3>
-          <table class="kv-table">
-            <tr><td>Prix</td><td>{{ r.tech.prix_actuel }}</td></tr>
-            <tr><td>RSI</td><td>{{ r.tech.rsi }}</td></tr>
-            <tr><td>MACD</td><td>{{ r.tech.macd }}</td></tr>
-            <tr><td>SMA20</td><td>{{ r.tech.sma20 }}</td></tr>
-            <tr><td>SMA50</td><td>{{ r.tech.sma50 }}</td></tr>
-            <tr><td>Signal</td><td class="signal">{{ r.tech.signal }}</td></tr>
-          </table>
-        </div>
+  <!-- Quick chips -->
+  @if (!result() && !loading()) {
+    <div class="quick-chips">
+      @for (t of quickTickers; track t) {
+        <span class="chip" (click)="selectQuick(t)">{{ t }}</span>
       }
-
-      @if (r.fund) {
-        <div class="card">
-          <h3>Fondamental</h3>
-          <table class="kv-table">
-            <tr><td>Nom</td><td>{{ r.fund.nom }}</td></tr>
-            <tr><td>Secteur</td><td>{{ r.fund.secteur }}</td></tr>
-            <tr><td>PER</td><td>{{ r.fund.per }}</td></tr>
-            <tr><td>Dividende</td><td>{{ r.fund.dividende }}</td></tr>
-            <tr><td>Signal</td><td class="signal">{{ r.fund.signal }}</td></tr>
-          </table>
-        </div>
-      }
-
-      @if (r.sent) {
-        <div class="card">
-          <h3>Sentiment</h3>
-          <table class="kv-table">
-            <tr><td>Articles</td><td>{{ r.sent.articles }}</td></tr>
-            <tr><td>Positif</td><td class="pos">{{ r.sent.positif }}</td></tr>
-            <tr><td>Négatif</td><td class="neg">{{ r.sent.negatif }}</td></tr>
-            <tr><td>Neutre</td><td>{{ r.sent.neutre }}</td></tr>
-            <tr><td>Signal</td><td class="signal">{{ r.sent.signal }}</td></tr>
-          </table>
-        </div>
-      }
-
-      @if (r.risk) {
-        <div class="card">
-          <h3>Risque</h3>
-          <table class="kv-table">
-            <tr><td>Volatilité</td><td>{{ r.risk.volatilite }} %</td></tr>
-            <tr><td>Drawdown</td><td>{{ r.risk.drawdown_max }} %</td></tr>
-            <tr><td>Niveau</td><td class="signal">{{ r.risk.risque }}</td></tr>
-          </table>
-        </div>
-      }
-
-      @if (r.rapport) {
-        <div class="card rapport-card">
-          <h3>Rapport LLM</h3>
-          <pre class="rapport-text">{{ r.rapport }}</pre>
-        </div>
-      }
-
     </div>
   }
+
+  @if (loading()) { <div class="loader-bar"><div class="bar-inner"></div></div> }
+  @if (error())   { <div class="error-box">{{ error() }}</div> }
+
+  @if (result(); as r) {
+    <!-- Header metrics -->
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-label">Prix actuel</div>
+        <div class="metric-value">{{ r.tech?.prix_actuel ?? '—' }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Type d'actif</div>
+        <div class="metric-value" style="font-size:16px">{{ assetLabel(r.asset_type) }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Score final</div>
+        <div class="metric-value" [style.color]="scoreColor(r.scoring.score_final)">
+          {{ r.scoring.score_final | number:'1.4-4' }}
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Décision</div>
+        <div class="metric-value" style="font-size:16px" [style.color]="decisionColor(r.scoring.decision)">
+          {{ r.scoring.decision }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Agent signals grid -->
+    <div class="section-header"><span>Signaux des agents</span></div>
+    <div class="agents-grid">
+      @if (r.tech)             { <div class="agent-card" [class]="signalClass(r.tech.signal)">
+        <div class="ac-name">Technique</div>
+        <div class="ac-signal">{{ r.tech.signal }}</div>
+        <div class="ac-detail">RSI {{ r.tech.rsi }} · MACD {{ r.tech.macd }}</div>
+      </div> }
+      @if (r.fund)             { <div class="agent-card" [class]="signalClass(r.fund.signal)">
+        <div class="ac-name">Fondamental</div>
+        <div class="ac-signal">{{ r.fund.signal }}</div>
+        <div class="ac-detail">PER {{ r.fund.per }} · {{ r.fund.secteur }}</div>
+      </div> }
+      @if (r.sent)             { <div class="agent-card" [class]="signalClass(r.sent.signal)">
+        <div class="ac-name">Sentiment</div>
+        <div class="ac-signal">{{ r.sent.signal }}</div>
+        <div class="ac-detail">{{ r.sent.positif }}✅ {{ r.sent.negatif }}❌ sur {{ r.sent.articles }} articles</div>
+      </div> }
+      @if (r.risk)             { <div class="agent-card" [class]="signalClass(r.risk.risque)">
+        <div class="ac-name">Risque</div>
+        <div class="ac-signal">{{ r.risk.risque }}</div>
+        <div class="ac-detail">Vol. {{ r.risk.volatilite }}% · DD {{ r.risk.drawdown_max }}%</div>
+      </div> }
+      @if (r.macro)            { <div class="agent-card" [class]="signalClass(r.macro.signal)">
+        <div class="ac-name">Macro</div>
+        <div class="ac-signal">{{ r.macro.signal }}</div>
+        <div class="ac-detail">{{ r.macro.environnement }}</div>
+      </div> }
+      @if (r.trends)           { <div class="agent-card" [class]="signalClass(r.trends.signal)">
+        <div class="ac-name">Trends</div>
+        <div class="ac-signal">{{ r.trends.signal }}</div>
+        <div class="ac-detail">{{ r.trends.tendance }} · {{ r.trends.variation }}%</div>
+      </div> }
+      @if (r.insider)          { <div class="agent-card" [class]="signalClass(r.insider.signal)">
+        <div class="ac-name">Insider</div>
+        <div class="ac-signal">{{ r.insider.signal }}</div>
+        <div class="ac-detail">{{ r.insider.nb_achats }} achats · {{ r.insider.nb_ventes }} ventes</div>
+      </div> }
+      @if (r.options_flow)     { <div class="agent-card" [class]="signalClass(r.options_flow.signal)">
+        <div class="ac-name">Options Flow</div>
+        <div class="ac-signal">{{ r.options_flow.signal }}</div>
+        <div class="ac-detail">P/C {{ r.options_flow.pc_ratio_vol }}</div>
+      </div> }
+      @if (r.short_interest)   { <div class="agent-card" [class]="signalClass(r.short_interest.signal)">
+        <div class="ac-name">Short Interest</div>
+        <div class="ac-signal">{{ r.short_interest.signal }}</div>
+        <div class="ac-detail">{{ r.short_interest.short_pct }}% float</div>
+      </div> }
+      @if (r.earnings_surprise){ <div class="agent-card" [class]="signalClass(r.earnings_surprise.signal)">
+        <div class="ac-name">Earnings</div>
+        <div class="ac-signal">{{ r.earnings_surprise.signal }}</div>
+        <div class="ac-detail">{{ r.earnings_surprise.latest_surprise }}% surprise</div>
+      </div> }
+      @if (r.volume_delta)     { <div class="agent-card" [class]="signalClass(r.volume_delta.signal)">
+        <div class="ac-name">Volume Delta</div>
+        <div class="ac-signal">{{ r.volume_delta.signal }}</div>
+        <div class="ac-detail">CVD {{ r.volume_delta.cvd_tendance }}</div>
+      </div> }
+    </div>
+
+    <!-- LLM Report -->
+    @if (r.rapport) {
+      <div class="section-header" style="margin-top:1.5rem"><span>Rapport de décision IA</span></div>
+      <div class="rapport-card">
+        <pre class="rapport-text">{{ r.rapport }}</pre>
+      </div>
+    }
+  }
+
 </div>

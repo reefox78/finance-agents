@@ -29,6 +29,18 @@ export const routes: Routes = [
         path: 'alerts',
         loadComponent: () => import('./pages/alerts/alerts.component').then(m => m.AlertsComponent),
       },
+      {
+        path: 'backtest',
+        loadComponent: () => import('./pages/backtest/backtest.component').then(m => m.BacktestComponent),
+      },
+      {
+        path: 'calibration',
+        loadComponent: () => import('./pages/calibration/calibration.component').then(m => m.CalibrationComponent),
+      },
+      {
+        path: 'logs',
+        loadComponent: () => import('./pages/activity-logs/activity-logs.component').then(m => m.ActivityLogsComponent),
+      },
     ],
   },
   {

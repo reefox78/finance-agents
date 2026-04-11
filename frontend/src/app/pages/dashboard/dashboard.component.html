@@ -1,34 +1,39 @@
-<div class="dashboard">
-  <nav class="sidebar">
-    <div class="brand">
-      <span class="brand-icon">📈</span>
-      <span class="brand-name">Finance Agents</span>
+<div class="app-shell">
+
+  <!-- ── TOP HEADER ── -->
+  <header class="top-header">
+    <div class="header-brand">
+      <img src="/logo.png" alt="logo" class="header-logo" />
+      <div>
+        <div class="header-title">FINANCE AGENTS</div>
+        <div class="header-sub">AIDE À LA DÉCISION · ANALYSE · PORTEFEUILLE</div>
+      </div>
     </div>
 
-    <ul class="nav-links">
+    <nav class="tab-nav">
       @for (tab of tabs; track tab.path) {
-        <li>
-          <a [routerLink]="tab.path" routerLinkActive="active">
-            <span class="nav-icon">{{ tab.icon }}</span>
-            <span class="nav-label">{{ tab.label }}</span>
-            @if (tab.path === 'alerts' && alertCount() > 0) {
-              <span class="badge">{{ alertCount() }}</span>
-            }
-          </a>
-        </li>
+        <a [routerLink]="tab.path" routerLinkActive="active" class="tab-link">
+          {{ tab.icon }} {{ tab.label }}
+          @if (tab.path === 'portfolio' && alertCount() > 0) {
+            <span class="tab-badge">🔔 {{ alertCount() }}</span>
+          }
+        </a>
       }
-    </ul>
+    </nav>
 
-    <div class="sidebar-footer">
+    <div class="header-user">
+      <span class="connected-dot"></span>
+      <span class="username">{{ auth.currentUser()?.username }}</span>
       @if (auth.isAdmin) {
-        <a routerLink="/admin" class="admin-link">⚙️ Administration</a>
+        <a routerLink="/admin" class="admin-link">Admin</a>
       }
-      <span class="user-name">{{ auth.currentUser()?.username }}</span>
-      <button class="logout-btn" (click)="auth.logout()">Déconnexion</button>
+      <button class="btn-logout" (click)="auth.logout()">Déconnexion</button>
     </div>
-  </nav>
+  </header>
 
-  <main class="content">
+  <!-- ── PAGE CONTENT ── -->
+  <main class="page-content">
     <router-outlet />
   </main>
+
 </div>
