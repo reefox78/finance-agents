@@ -1,62 +1,52 @@
 <div class="page">
   <h2 class="page-title">🔍 Analyse</h2>
 
-  <!-- ── Sélecteur par catégorie ── -->
-  <div class="selector-section">
-    @for (cat of categories; track cat) {
-      <div class="category-block">
-        <div class="cat-label">{{ cat }}</div>
-        <div class="ticker-grid">
-          @for (t of watchlist[cat]; track t) {
-            <button
-              class="ticker-chip"
-              [class.selected]="ticker === t"
-              (click)="selectTicker(t)"
-            >{{ t }}</button>
-          }
-        </div>
-      </div>
-    }
-  </div>
+  <div class="search-bar">
 
-  <!-- ── Saisie manuelle ── -->
-  <div class="custom-row">
-    <div class="custom-input-wrap">
-      <span class="custom-label">Ou saisir manuellement :</span>
-      <input
-        type="text"
-        [(ngModel)]="customTicker"
-        (ngModelChange)="onCustomInput()"
-        placeholder="ex: TSM, BABA, ETH-USD…"
-        (keyup.enter)="run()"
-      />
-    </div>
+    <!-- Dropdown groupé par catégorie -->
+    <select [(ngModel)]="ticker" (ngModelChange)="customTicker = ''" class="ticker-select">
+      <option value="" disabled>Sélectionner un ticker…</option>
+      @for (cat of categories; track cat) {
+        <optgroup [label]="cat">
+          @for (t of watchlist[cat]; track t) {
+            <option [value]="t">{{ t }}</option>
+          }
+        </optgroup>
+      }
+    </select>
+
+    <!-- Séparateur -->
+    <span class="sep">ou</span>
+
+    <!-- Saisie libre -->
+    <input
+      type="text"
+      [(ngModel)]="customTicker"
+      (ngModelChange)="onCustomInput()"
+      placeholder="Autre ticker… (TSM, BABA…)"
+      (keyup.enter)="run()"
+      class="custom-input"
+    />
 
     <label class="toggle-llm">
       <input type="checkbox" [(ngModel)]="withLlm" />
       Rapport LLM
     </label>
 
-    <button
-      class="btn-analyser"
-      (click)="run()"
-      [disabled]="loading() || !ticker"
-    >
-      {{ loading() ? 'Analyse…' : 'Analyser ' + (ticker || '—') }}
+    <button class="btn-analyser" (click)="run()" [disabled]="loading() || !ticker">
+      {{ loading() ? 'Analyse…' : 'Analyser' }}
     </button>
+
   </div>
 
-  <!-- ── Loader ── -->
   @if (loading()) {
     <div class="loader-bar"><div class="bar-inner"></div></div>
   }
 
-  <!-- ── Erreur ── -->
   @if (error()) {
     <div class="error-box">{{ error() }}</div>
   }
 
-  <!-- ── Résultats ── -->
   @if (result(); as r) {
     <div class="result-grid">
 

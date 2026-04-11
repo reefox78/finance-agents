@@ -2,95 +2,58 @@
 
 .page-title { color: #00c8ff; font-size: 1.4rem; margin: 0 0 1.5rem; }
 
-/* ── Catégories ── */
-.selector-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.category-block {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(0,200,255,0.08);
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
-}
-
-.cat-label {
-  color: #6b8aad;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 0.6rem;
-}
-
-.ticker-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.ticker-chip {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(0,200,255,0.15);
-  border-radius: 6px;
-  color: #7a9bbb;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.3rem 0.65rem;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-  letter-spacing: 0.02em;
-
-  &:hover {
-    background: rgba(0,200,255,0.08);
-    color: #cde;
-    border-color: rgba(0,200,255,0.3);
-  }
-
-  &.selected {
-    background: rgba(0,200,255,0.15);
-    border-color: #00c8ff;
-    color: #00c8ff;
-    font-weight: 700;
-  }
-}
-
-/* ── Ligne custom + bouton ── */
-.custom-row {
+/* ── Barre de recherche ── */
+.search-bar {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.75rem;
 }
 
-.custom-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
+.ticker-select {
   flex: 1;
-  min-width: 240px;
+  min-width: 200px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(0,200,255,0.2);
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  color: #e0f0ff;
+  font-size: 0.95rem;
+  outline: none;
+  cursor: pointer;
+  appearance: auto;
+  transition: border-color 0.2s;
 
-  .custom-label {
-    color: #6b8aad;
-    font-size: 0.82rem;
-    white-space: nowrap;
+  &:focus { border-color: #00c8ff; }
+
+  option, optgroup {
+    background: #0d1b2e;
+    color: #cde;
   }
 
-  input {
-    flex: 1;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(0,200,255,0.2);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    color: #e0f0ff;
-    font-size: 0.9rem;
-    outline: none;
-    &::placeholder { color: #3a5a7a; }
-    &:focus { border-color: #00c8ff; }
-  }
+  optgroup { color: #6b8aad; font-size: 0.8rem; }
+}
+
+.sep {
+  color: #4a6a8a;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.custom-input {
+  flex: 1;
+  min-width: 160px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(0,200,255,0.2);
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  color: #e0f0ff;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+  &::placeholder { color: #3a5a7a; }
+  &:focus { border-color: #00c8ff; }
 }
 
 .toggle-llm {
