@@ -85,11 +85,14 @@ def _fetch_prix_actuel(ticker: str) -> float | None:
     if not ticker:
         return None
     try:
+        from data.market_data import get_stock_data
+        df = get_stock_data(ticker, period="1d")
+        if not df.empty:
+            return float(df["Close"].iloc[-1])
+    except Exception:
+        pass
+    try:
         import yfinance as yf
-        info = yf.Ticker(ticker).info
-        prix = info.get("regularMarketPrice") or info.get("currentPrice")
-        if prix:
-            return float(prix)
         hist = yf.Ticker(ticker).history(period="1d")
         return float(hist["Close"].iloc[-1]) if not hist.empty else None
     except Exception:
@@ -958,7 +961,14 @@ with tab_analyse:
             with st.spinner(f"Analyse de {ticker} en cours..."):
                 resultat = run(ticker, with_llm=True, user_id=_user_id)
         except Exception as e:
-            st.error(f"Erreur lors de l'analyse de **{ticker}** : {e}")
+            _emsg = str(e)
+            if "rate" in _emsg.lower() or "429" in _emsg or "too many" in _emsg.lower():
+                st.error(
+                    f"**Yahoo Finance est temporairement surchargé** (rate limit 429). "
+                    f"Patiente 15–30 secondes puis relance l'analyse de **{ticker}**."
+                )
+            else:
+                st.error(f"Erreur lors de l'analyse de **{ticker}** : {e}")
             st.stop()
         st.session_state["_analyse"] = {
             "ticker": ticker, "period": period,
@@ -1730,13 +1740,20 @@ with tab_portfolio:
     mode_rapide = col_mode.checkbox("Mode rapide", value=True, key="pf_rapide",
                                      help="P&L uniquement (instantané). Décocher pour le scoring multi-agent complet.")
 
-    positions_raw = evaluer_positions(_user_id, with_scores=False)
-
     if lancer_eval:
-        with st.spinner("Analyse en cours..."):
+        # Invalide le cache market_data pour forcer un rafraîchissement des prix
+        try:
+            from data.market_data import _cache_data, _cache_info
+            _cache_data.clear()
+            _cache_info.clear()
+        except Exception:
+            pass
+        with st.spinner("Analyse en cours..." if not mode_rapide else "Récupération des prix..."):
             positions_eval = evaluer_positions(_user_id, with_scores=not mode_rapide)
         st.session_state["pf_positions"] = positions_eval
 
+    # Render initial : charge les positions avec prix (depuis le cache si dispo)
+    positions_raw = evaluer_positions(_user_id, with_scores=False)
     positions_eval = st.session_state.get("pf_positions", positions_raw)
 
     if not positions_eval:

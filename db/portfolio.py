@@ -9,13 +9,17 @@ from db.client import execute, get_conn
 
 
 def _prix_actuel(ticker: str) -> float | None:
-    """Récupère le dernier cours via yfinance."""
+    """Récupère le dernier cours via le cache market_data (évite le rate-limit)."""
+    try:
+        from data.market_data import get_stock_data
+        df = get_stock_data(ticker, period="1d")
+        if not df.empty:
+            return float(df["Close"].iloc[-1])
+    except Exception:
+        pass
+    # Fallback direct yfinance
     try:
         import yfinance as yf
-        info = yf.Ticker(ticker).info
-        prix = info.get("regularMarketPrice") or info.get("currentPrice")
-        if prix:
-            return float(prix)
         hist = yf.Ticker(ticker).history(period="1d")
         return float(hist["Close"].iloc[-1]) if not hist.empty else None
     except Exception:
