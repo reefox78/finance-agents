@@ -1,0 +1,93 @@
+<div class="page logs-page">
+
+  <div class="section-header">
+    <span>🪵 Logs système</span>
+    <div class="header-actions">
+      <span class="admin-badge">Admin uniquement</span>
+      <button class="btn-secondary btn-sm" (click)="loadFiles()" title="Rafraîchir la liste">↻ Rafraîchir</button>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="error-box">{{ error() }}</div>
+  }
+
+  <div class="logs-layout">
+
+    <!-- ── Sidebar : liste des fichiers ── -->
+    <aside class="log-sidebar">
+      <div class="sidebar-title">Fichiers de log</div>
+
+      @if (loadingFiles()) {
+        <div class="loader-bar"><div class="bar-inner"></div></div>
+      }
+
+      @if (!loadingFiles() && files().length === 0) {
+        <div class="sidebar-empty">Aucun fichier de log trouvé.</div>
+      }
+
+      @for (f of files(); track f.name) {
+        <div class="log-file-item"
+             [class.active]="selected()?.name === f.name"
+             (click)="selectFile(f)">
+          <div class="file-icon">{{ componentIcon(f.component) }}</div>
+          <div class="file-meta">
+            <div class="file-component">{{ f.component }}</div>
+            <div class="file-date">{{ f.date }}</div>
+            <div class="file-size">{{ f.size_kb }} Ko</div>
+          </div>
+        </div>
+      }
+    </aside>
+
+    <!-- ── Viewer : contenu du log ── -->
+    <section class="log-viewer-wrap">
+
+      @if (!selected()) {
+        <div class="no-selection">
+          <div class="ns-icon">📂</div>
+          <div>Sélectionnez un fichier de log</div>
+        </div>
+      } @else {
+
+        <!-- Toolbar -->
+        <div class="viewer-toolbar">
+          <div class="viewer-info">
+            <span class="vi-component">{{ componentIcon(selected().component) }} {{ selected().component }}</span>
+            <span class="vi-date">{{ selected().date }}</span>
+          </div>
+
+          <div class="filter-tabs">
+            <button [class.active]="filter() === 'all'"     (click)="setFilter('all')">Tout ({{ lines().length }})</button>
+            <button [class.active]="filter() === 'error'"   (click)="setFilter('error')"   class="tab-error">Erreurs ({{ errorCount() }})</button>
+            <button [class.active]="filter() === 'warning'" (click)="setFilter('warning')" class="tab-warn">Warnings ({{ warningCount() }})</button>
+            <button [class.active]="filter() === 'success'" (click)="setFilter('success')" class="tab-ok">Succès ({{ successCount() }})</button>
+          </div>
+
+          <label class="autoscroll-toggle">
+            <input type="checkbox" [(ngModel)]="autoScroll" />
+            Auto-scroll
+          </label>
+        </div>
+
+        <!-- Log content -->
+        @if (loading()) {
+          <div class="loader-bar"><div class="bar-inner"></div></div>
+        }
+
+        <div class="log-viewer" #logViewer>
+          @if (!loading() && filteredLines().length === 0) {
+            <div class="viewer-empty">Aucune ligne pour ce filtre.</div>
+          }
+          @for (line of filteredLines(); track $index) {
+            <div class="log-line" [class]="'line-' + line.level">
+              <span class="line-text">{{ line.text }}</span>
+            </div>
+          }
+        </div>
+
+      }
+    </section>
+
+  </div>
+</div>

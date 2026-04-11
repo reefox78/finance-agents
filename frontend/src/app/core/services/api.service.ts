@@ -91,4 +91,14 @@ export class ApiService {
   deleteAlert(id: string): Observable<any> {
     return this.http.delete(`${this.base}/alerts/${id}`);
   }
+
+  // ── Logs ──────────────────────────────────────────────────────────────────
+
+  getLogFiles(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/logs/files`);
+  }
+
+  getLogContent(filename: string): Observable<any> {
+    return this.http.get<any>(`${this.base}/logs/content/${encodeURIComponent(filename)}`);
+  }
 }
