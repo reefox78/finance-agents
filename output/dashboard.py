@@ -874,16 +874,22 @@ _stc.html("""
             { childList: true, subtree: true }
         );
 
-        // Intercepter les clics bouton
+        // Intercepter les clics bouton (pas les onglets ni les selects)
         pdoc.addEventListener('click', function(e) {
+            var btn = e.target.closest('button');
+            if (!btn || btn.disabled) return;
+            // Ignorer les onglets Streamlit
+            if (btn.getAttribute('role') === 'tab') return;
+            if (btn.closest('[data-baseweb="tab-list"]')) return;
+            // Ignorer les boutons purement nav/UI (déconnexion, fermer, etc.)
+            var txt = (btn.textContent || '').trim().toLowerCase();
+            if (txt === 'déconnexion' || txt === '✕ fermer' || txt === '') return;
+
             if (Date.now() < lockUntil) {
                 e.stopPropagation(); e.preventDefault(); return;
             }
-            var btn = e.target.closest('button');
-            if (!btn || btn.disabled) return;
             lockUntil = Date.now() + 5000;
             lockButtons();
-            // Déverrouiller après 5 s (au cas où pas de rerun)
             setTimeout(unlockButtons, 5100);
         }, true);
 
