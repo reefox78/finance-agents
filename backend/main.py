@@ -5,8 +5,13 @@ Exposes all analysis, scanner, portfolio and auth capabilities as REST endpoints
 import sys
 from pathlib import Path
 
-# Add project root to path so existing agents/db/orchestrator modules are importable
-sys.path.insert(0, str(Path(__file__).parent.parent))
+_root    = Path(__file__).parent.parent  # finance-agents/
+_backend = Path(__file__).parent         # finance-agents/backend/
+
+# project root → agents/, db/, orchestrator/ importables
+sys.path.insert(0, str(_root))
+# backend dir → api/ importable
+sys.path.insert(0, str(_backend))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
