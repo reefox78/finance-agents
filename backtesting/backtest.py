@@ -416,31 +416,33 @@ class StrategieMultiAgent(_TechniqueMixin, bt.Strategy):
 # ---------------------------------------------------------------------------
 
 class TradeLogger(bt.Analyzer):
-    """Enregistre chaque trade (entrée + sortie) pour affichage dans le dashboard."""
+    """
+    Enregistre chaque trade terminé avec le vrai P&L Backtrader.
+    Utilise notify_trade() pour obtenir pnl et pnlcomm (net de commission)
+    directement depuis l'objet Trade — plus de calcul manuel.
+    """
 
     def start(self):
-        self.trades      = []
-        self._open_price = None
-        self._open_date  = None
+        self.trades     = []
+        self._open_info = {}   # date + prix d'entrée enregistrés à l'ouverture
 
-    def next(self):
-        pos = self.strategy.position
-        if pos.size > 0 and self._open_price is None:
-            self._open_price = pos.price
-            self._open_date  = self.strategy.datetime.date().strftime("%Y-%m-%d")
-        elif pos.size == 0 and self._open_price is not None:
-            close_price = self.strategy.data.close[0]
-            pnl = round((close_price - self._open_price) * 10, 2)
+    def notify_trade(self, trade):
+        if trade.justopened:
+            self._open_info = {
+                "date_achat": self.strategy.datetime.date().strftime("%Y-%m-%d"),
+                "prix_achat": round(trade.price, 4),
+            }
+        elif trade.isclosed:
+            exit_price = self.strategy.data.close[0]
             self.trades.append({
-                "date_achat":  self._open_date,
-                "prix_achat":  round(self._open_price, 2),
-                "date":        self.strategy.datetime.date().strftime("%Y-%m-%d"),
-                "prix_vente":  round(close_price, 2),
-                "pnl":         pnl,
-                "pnlnet":      round(pnl * 0.999, 2),
+                "date_achat": self._open_info.get("date_achat", ""),
+                "prix_achat": self._open_info.get("prix_achat", 0.0),
+                "date":       self.strategy.datetime.date().strftime("%Y-%m-%d"),
+                "prix_vente": round(exit_price, 4),
+                "pnl":        round(float(trade.pnl), 2),
+                "pnlnet":     round(float(trade.pnlcomm), 2),
             })
-            self._open_price = None
-            self._open_date  = None
+            self._open_info = {}
 
     def get_analysis(self):
         return self.trades
