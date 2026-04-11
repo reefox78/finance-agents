@@ -164,47 +164,68 @@ def _fetch_prix_actuel(ticker: str) -> float | None:
 
 def _error_overlay(msg: str, titre: str = "Erreur") -> None:
     """Affiche un overlay plein écran avec le message d'erreur.
-    L'utilisateur peut le fermer via le bouton JS (sans rerun Streamlit).
+    Utilise st.components.v1.html() pour injecter le bouton Fermer dans le DOM
+    parent via JS — le seul moyen fiable d'avoir un onclick dans Streamlit.
     """
     import html as _html
+    import streamlit.components.v1 as _stc
+
     safe_msg = _html.escape(str(msg))
     is_rate = any(x in str(msg).lower() for x in ["rate", "429", "too many"])
     if is_rate:
-        titre  = "Yahoo Finance surchargé"
+        titre   = "Yahoo Finance surchargé"
         safe_msg = ("Yahoo Finance est temporairement saturé (rate limit 429).<br>"
                     "Attends <strong>15–30 secondes</strong> puis relance l'analyse.")
-    st.markdown(f"""
-    <div id="fa-err-overlay"
-         style="position:fixed;top:0;left:0;width:100vw;height:100vh;
-                background:rgba(2,6,18,0.93);backdrop-filter:blur(8px);
-                -webkit-backdrop-filter:blur(8px);z-index:99999;
-                display:flex;align-items:center;justify-content:center;">
-      <div style="background:rgba(10,16,35,0.98);
-                  border:1px solid rgba(255,60,60,0.35);
-                  border-radius:20px;padding:48px 56px;max-width:540px;
-                  text-align:center;
-                  box-shadow:0 0 80px rgba(255,60,60,0.12);">
-        <div style="font-size:44px;margin-bottom:16px;">⚠️</div>
-        <div style="color:#ff4b4b;font-size:16px;font-weight:700;
-                    letter-spacing:1px;text-transform:uppercase;margin-bottom:20px;">
-          {_html.escape(titre)}
-        </div>
-        <div style="color:#c8d6f0;font-size:13px;line-height:1.7;
-                    background:rgba(255,60,60,0.06);border-radius:10px;
-                    padding:18px 20px;margin-bottom:28px;">
-          {safe_msg}
-        </div>
-        <button onclick="document.getElementById('fa-err-overlay').style.display='none'"
-                style="background:rgba(0,200,255,0.1);color:#00c8ff;
-                       border:1px solid rgba(0,200,255,0.3);border-radius:10px;
-                       padding:11px 36px;font-size:13px;font-weight:700;
-                       cursor:pointer;letter-spacing:1px;text-transform:uppercase;
-                       transition:all .2s;">
-          ✕ &nbsp;Fermer
-        </button>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    safe_titre = _html.escape(titre)
+
+    _stc.html(f"""
+<script>
+(function() {{
+  try {{
+    var pdoc = window.parent.document;
+    // Supprimer un éventuel overlay précédent
+    var old = pdoc.getElementById('fa-err-ov');
+    if (old) old.remove();
+
+    var ov = pdoc.createElement('div');
+    ov.id = 'fa-err-ov';
+    ov.style.cssText = [
+      'position:fixed','top:0','left:0','width:100vw','height:100vh',
+      'background:rgba(2,6,18,0.93)','backdrop-filter:blur(8px)',
+      '-webkit-backdrop-filter:blur(8px)','z-index:99999',
+      'display:flex','align-items:center','justify-content:center'
+    ].join(';');
+
+    ov.innerHTML =
+      '<div style="background:rgba(10,16,35,0.98);' +
+        'border:1px solid rgba(255,60,60,0.35);border-radius:20px;' +
+        'padding:48px 56px;max-width:540px;text-align:center;' +
+        'box-shadow:0 0 80px rgba(255,60,60,0.12);">' +
+        '<div style="font-size:44px;margin-bottom:16px;">⚠️</div>' +
+        '<div style="color:#ff4b4b;font-size:16px;font-weight:700;' +
+          'letter-spacing:1px;text-transform:uppercase;margin-bottom:20px;">' +
+          '{safe_titre}</div>' +
+        '<div style="color:#c8d6f0;font-size:13px;line-height:1.7;' +
+          'background:rgba(255,60,60,0.06);border-radius:10px;' +
+          'padding:18px 20px;margin-bottom:28px;">' +
+          '{safe_msg}</div>' +
+        '<button id="fa-err-close" style="background:rgba(0,200,255,0.1);' +
+          'color:#00c8ff;border:1px solid rgba(0,200,255,0.3);' +
+          'border-radius:10px;padding:11px 36px;font-size:13px;font-weight:700;' +
+          'cursor:pointer;letter-spacing:1px;text-transform:uppercase;">' +
+          '✕  Fermer</button>' +
+      '</div>';
+
+    pdoc.body.appendChild(ov);
+
+    pdoc.getElementById('fa-err-close').addEventListener('click', function() {{
+      var el = pdoc.getElementById('fa-err-ov');
+      if (el) el.remove();
+    }});
+  }} catch(e) {{}}
+}})();
+</script>
+""", height=1)
 
 
 # Définitions affichées en tooltip sur les termes techniques
