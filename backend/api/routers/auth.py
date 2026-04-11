@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
 
 from db.auth import inscrire, connecter, get_user
+from db.client import execute
 from api.deps import create_access_token, CurrentUser
 
 router = APIRouter()
@@ -27,6 +28,15 @@ class TokenResponse(BaseModel):
     user_id: str
     username: str
     email: str
+    is_admin: bool = False
+
+
+def _is_admin(user_id: str) -> bool:
+    row = execute(
+        "SELECT is_admin FROM users WHERE id = %s",
+        (user_id,), fetch="one"
+    )
+    return bool(row["is_admin"]) if row else False
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -35,12 +45,14 @@ def register(body: RegisterBody):
         user = inscrire(body.username, body.email, body.password)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    token = create_access_token(str(user["id"]), user["username"], user["email"])
+    admin = _is_admin(str(user["id"]))
+    token = create_access_token(str(user["id"]), user["username"], user["email"], admin)
     return TokenResponse(
         access_token=token,
         user_id=str(user["id"]),
         username=user["username"],
         email=user["email"],
+        is_admin=admin,
     )
 
 
@@ -50,12 +62,14 @@ def login(body: LoginBody):
         user = connecter(body.email, body.password)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
-    token = create_access_token(user["id"], user["username"], user["email"])
+    admin = _is_admin(user["id"])
+    token = create_access_token(user["id"], user["username"], user["email"], admin)
     return TokenResponse(
         access_token=token,
         user_id=user["id"],
         username=user["username"],
         email=user["email"],
+        is_admin=admin,
     )
 
 
@@ -68,4 +82,5 @@ def me(current_user: CurrentUser):
         "id":       str(user["id"]),
         "username": user["username"],
         "email":    user["email"],
+        "is_admin": current_user.get("is_admin", False),
     }

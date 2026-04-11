@@ -73,6 +73,15 @@
   flex-direction: column;
   gap: 0.5rem;
 
+  .admin-link {
+    display: block;
+    color: #ffd740;
+    font-size: 0.8rem;
+    text-decoration: none;
+    padding: 0.35rem 0;
+    &:hover { color: #ffe88a; }
+  }
+
   .user-name { color: #7a9bbb; font-size: 0.8rem; }
 
   .logout-btn {

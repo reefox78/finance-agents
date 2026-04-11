@@ -8,11 +8,13 @@ export interface AuthUser {
   user_id: string;
   username: string;
   email: string;
+  is_admin?: boolean;
 }
 
 interface TokenResponse extends AuthUser {
   access_token: string;
   token_type: string;
+  is_admin: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -51,9 +53,18 @@ export class AuthService {
     this.router.navigate(['/auth']);
   }
 
+  get isAdmin(): boolean {
+    return !!this.currentUser()?.is_admin;
+  }
+
   private _saveSession(res: TokenResponse): void {
     localStorage.setItem(this.TOKEN_KEY, res.access_token);
-    const user: AuthUser = { user_id: res.user_id, username: res.username, email: res.email };
+    const user: AuthUser = {
+      user_id:  res.user_id,
+      username: res.username,
+      email:    res.email,
+      is_admin: res.is_admin ?? false,
+    };
     localStorage.setItem(this.USER_KEY, JSON.stringify(user));
     this.currentUser.set(user);
   }

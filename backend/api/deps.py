@@ -16,11 +16,12 @@ EXPIRE_DAYS = 30
 bearer_scheme = HTTPBearer()
 
 
-def create_access_token(user_id: str, username: str, email: str) -> str:
+def create_access_token(user_id: str, username: str, email: str, is_admin: bool = False) -> str:
     payload = {
         "sub":      user_id,
         "username": username,
         "email":    email,
+        "is_admin": is_admin,
         "exp":      datetime.now(timezone.utc) + timedelta(days=EXPIRE_DAYS),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
@@ -43,3 +44,15 @@ def get_current_user(
 
 
 CurrentUser = Annotated[dict, Depends(get_current_user)]
+
+
+def get_admin_user(current_user: CurrentUser) -> dict:
+    if not current_user.get("is_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux administrateurs",
+        )
+    return current_user
+
+
+AdminUser = Annotated[dict, Depends(get_admin_user)]

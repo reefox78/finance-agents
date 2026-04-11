@@ -20,6 +20,9 @@
     </ul>
 
     <div class="sidebar-footer">
+      @if (auth.isAdmin) {
+        <a routerLink="/admin" class="admin-link">⚙️ Administration</a>
+      }
       <span class="user-name">{{ auth.currentUser()?.username }}</span>
       <button class="logout-btn" (click)="auth.logout()">Déconnexion</button>
     </div>
