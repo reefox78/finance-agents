@@ -99,6 +99,51 @@ def _fetch_prix_actuel(ticker: str) -> float | None:
         return None
 
 
+def _error_overlay(msg: str, titre: str = "Erreur") -> None:
+    """Affiche un overlay plein écran avec le message d'erreur.
+    L'utilisateur peut le fermer via le bouton JS (sans rerun Streamlit).
+    """
+    import html as _html
+    safe_msg = _html.escape(str(msg))
+    is_rate = any(x in str(msg).lower() for x in ["rate", "429", "too many"])
+    if is_rate:
+        titre  = "Yahoo Finance surchargé"
+        safe_msg = ("Yahoo Finance est temporairement saturé (rate limit 429).<br>"
+                    "Attends <strong>15–30 secondes</strong> puis relance l'analyse.")
+    st.markdown(f"""
+    <div id="fa-err-overlay"
+         style="position:fixed;top:0;left:0;width:100vw;height:100vh;
+                background:rgba(2,6,18,0.93);backdrop-filter:blur(8px);
+                -webkit-backdrop-filter:blur(8px);z-index:99999;
+                display:flex;align-items:center;justify-content:center;">
+      <div style="background:rgba(10,16,35,0.98);
+                  border:1px solid rgba(255,60,60,0.35);
+                  border-radius:20px;padding:48px 56px;max-width:540px;
+                  text-align:center;
+                  box-shadow:0 0 80px rgba(255,60,60,0.12);">
+        <div style="font-size:44px;margin-bottom:16px;">⚠️</div>
+        <div style="color:#ff4b4b;font-size:16px;font-weight:700;
+                    letter-spacing:1px;text-transform:uppercase;margin-bottom:20px;">
+          {_html.escape(titre)}
+        </div>
+        <div style="color:#c8d6f0;font-size:13px;line-height:1.7;
+                    background:rgba(255,60,60,0.06);border-radius:10px;
+                    padding:18px 20px;margin-bottom:28px;">
+          {safe_msg}
+        </div>
+        <button onclick="document.getElementById('fa-err-overlay').style.display='none'"
+                style="background:rgba(0,200,255,0.1);color:#00c8ff;
+                       border:1px solid rgba(0,200,255,0.3);border-radius:10px;
+                       padding:11px 36px;font-size:13px;font-weight:700;
+                       cursor:pointer;letter-spacing:1px;text-transform:uppercase;
+                       transition:all .2s;">
+          ✕ &nbsp;Fermer
+        </button>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 # Définitions affichées en tooltip sur les termes techniques
 _TOOLTIPS = {
     "ticker":        "Symbole boursier de l'actif. Ex : AAPL = Apple, BTC-USD = Bitcoin, EURUSD=X = paire de devises Euro/Dollar.",
@@ -720,6 +765,47 @@ button[kind="secondary"] {
 ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
 ::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,200,255,0.4); }
+
+/* ── Spinner plein écran — bloque les interactions pendant le chargement ─ */
+[data-testid="stSpinner"] {
+    position: fixed !important;
+    top: 0 !important; left: 0 !important;
+    width: 100vw !important; height: 100vh !important;
+    background: rgba(2, 6, 18, 0.93) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    z-index: 99998 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important; padding: 0 !important;
+    border-radius: 0 !important;
+    pointer-events: all !important;
+}
+[data-testid="stSpinner"] > div {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 28px !important;
+    background: rgba(10, 16, 35, 0.98) !important;
+    border: 1px solid rgba(0, 200, 255, 0.2) !important;
+    border-radius: 20px !important;
+    padding: 48px 64px !important;
+    box-shadow: 0 0 80px rgba(0, 200, 255, 0.08) !important;
+}
+[data-testid="stSpinner"] svg {
+    width: 64px !important; height: 64px !important;
+    color: #00c8ff !important;
+    filter: drop-shadow(0 0 12px rgba(0, 200, 255, 0.5)) !important;
+}
+[data-testid="stSpinner"] p {
+    color: #c8d6f0 !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    letter-spacing: 1.5px !important;
+    text-transform: uppercase !important;
+    margin: 0 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -961,19 +1047,13 @@ with tab_analyse:
             with st.spinner(f"Analyse de {ticker} en cours..."):
                 resultat = run(ticker, with_llm=True, user_id=_user_id)
         except Exception as e:
-            _emsg = str(e)
-            if "rate" in _emsg.lower() or "429" in _emsg or "too many" in _emsg.lower():
-                st.error(
-                    f"**Yahoo Finance est temporairement surchargé** (rate limit 429). "
-                    f"Patiente 15–30 secondes puis relance l'analyse de **{ticker}**."
-                )
-            else:
-                st.error(f"Erreur lors de l'analyse de **{ticker}** : {e}")
-            st.stop()
-        st.session_state["_analyse"] = {
-            "ticker": ticker, "period": period,
-            "asset_type": asset_type, "result": resultat,
-        }
+            _error_overlay(str(e), titre=f"Erreur — {ticker}")
+            resultat = None
+        if resultat is not None:
+            st.session_state["_analyse"] = {
+                "ticker": ticker, "period": period,
+                "asset_type": asset_type, "result": resultat,
+            }
 
     _ar = st.session_state.get("_analyse")
 
@@ -1748,9 +1828,12 @@ with tab_portfolio:
             _cache_info.clear()
         except Exception:
             pass
-        with st.spinner("Analyse en cours..." if not mode_rapide else "Récupération des prix..."):
-            positions_eval = evaluer_positions(_user_id, with_scores=not mode_rapide)
-        st.session_state["pf_positions"] = positions_eval
+        try:
+            with st.spinner("Analyse en cours..." if not mode_rapide else "Récupération des prix..."):
+                positions_eval = evaluer_positions(_user_id, with_scores=not mode_rapide)
+            st.session_state["pf_positions"] = positions_eval
+        except Exception as _pf_e:
+            _error_overlay(str(_pf_e), titre="Erreur — Analyse du portefeuille")
 
     # Render initial : charge les positions avec prix (depuis le cache si dispo)
     positions_raw = evaluer_positions(_user_id, with_scores=False)
@@ -2262,96 +2345,97 @@ with tab_backtest:
 
     if lancer_bt:
         if bt_debut >= bt_fin:
-            st.error("La date de début doit être antérieure à la date de fin.")
-            st.stop()
-        with st.spinner("Backtest en cours..."):
-            bt_result = run_backtest(
-                bt_ticker,
-                debut=bt_debut.strftime("%Y-%m-%d"),
-                fin=bt_fin.strftime("%Y-%m-%d"),
-                capital=float(bt_capital), mode=bt_mode
-            )
+            _error_overlay("La date de début doit être antérieure à la date de fin.", titre="Dates invalides")
+            bt_result = None
+        else:
+            try:
+                with st.spinner("Backtest en cours..."):
+                    bt_result = run_backtest(
+                        bt_ticker,
+                        debut=bt_debut.strftime("%Y-%m-%d"),
+                        fin=bt_fin.strftime("%Y-%m-%d"),
+                        capital=float(bt_capital), mode=bt_mode
+                    )
+                st.session_state["_bt_result"] = bt_result
+            except Exception as e:
+                _error_overlay(str(e), titre=f"Erreur backtest — {bt_ticker}")
+                bt_result = None
 
-        col_b1, col_b2, col_b3, col_b4 = st.columns(4)
-        col_b1.metric("Capital final", f"{bt_result['valeur_fin']:,} $")
-        col_b2.metric("Rendement",     f"{bt_result['rendement']} %")
-        col_b3.metric("Nb trades",     len(bt_result["trades"]))
-        col_b4.metric("Mode",          bt_result["mode"])
+        if bt_result is not None:
+            col_b1, col_b2, col_b3, col_b4 = st.columns(4)
+            col_b1.metric("Capital final", f"{bt_result['valeur_fin']:,} $")
+            col_b2.metric("Rendement",     f"{bt_result['rendement']} %")
+            col_b3.metric("Nb trades",     len(bt_result["trades"]))
+            col_b4.metric("Mode",          bt_result["mode"])
 
-        # --- Graphique prix + signaux buy/sell (Plotly) ---
-        df_bt = bt_result.get("df")
-        if df_bt is not None and not df_bt.empty:
-            trades = bt_result["trades"]
-            achats = {t["date_achat"]: t["prix_achat"] for t in trades}
-            ventes = {t["date"]:       t["prix_vente"]  for t in trades}
+            # --- Graphique prix + signaux buy/sell (Plotly) ---
+            df_bt = bt_result.get("df")
+            if df_bt is not None and not df_bt.empty:
+                trades = bt_result["trades"]
+                achats = {t["date_achat"]: t["prix_achat"] for t in trades}
+                ventes = {t["date"]:       t["prix_vente"]  for t in trades}
 
-            dates_idx = [str(d)[:10] for d in df_bt.index]
-
-            fig_bt = go.Figure()
-            fig_bt.add_trace(go.Candlestick(
-                x=df_bt.index,
-                open=df_bt["Open"], high=df_bt["High"],
-                low=df_bt["Low"],   close=df_bt["Close"],
-                name="Prix", increasing_line_color="#2ecc71",
-                decreasing_line_color="#e74c3c"
-            ))
-
-            # Signaux achat (triangles verts)
-            if achats:
-                fig_bt.add_trace(go.Scatter(
-                    x=list(achats.keys()), y=list(achats.values()),
-                    mode="markers",
-                    marker=dict(symbol="triangle-up", size=14,
-                                color="#27ae60", line=dict(width=1, color="white")),
-                    name="Achat"
+                fig_bt = go.Figure()
+                fig_bt.add_trace(go.Candlestick(
+                    x=df_bt.index,
+                    open=df_bt["Open"], high=df_bt["High"],
+                    low=df_bt["Low"],   close=df_bt["Close"],
+                    name="Prix", increasing_line_color="#2ecc71",
+                    decreasing_line_color="#e74c3c"
                 ))
-            # Signaux vente (triangles rouges)
-            if ventes:
-                fig_bt.add_trace(go.Scatter(
-                    x=list(ventes.keys()), y=list(ventes.values()),
-                    mode="markers",
-                    marker=dict(symbol="triangle-down", size=14,
-                                color="#e74c3c", line=dict(width=1, color="white")),
-                    name="Vente"
+                if achats:
+                    fig_bt.add_trace(go.Scatter(
+                        x=list(achats.keys()), y=list(achats.values()),
+                        mode="markers",
+                        marker=dict(symbol="triangle-up", size=14,
+                                    color="#27ae60", line=dict(width=1, color="white")),
+                        name="Achat"
+                    ))
+                if ventes:
+                    fig_bt.add_trace(go.Scatter(
+                        x=list(ventes.keys()), y=list(ventes.values()),
+                        mode="markers",
+                        marker=dict(symbol="triangle-down", size=14,
+                                    color="#e74c3c", line=dict(width=1, color="white")),
+                        name="Vente"
+                    ))
+                _dark_layout(fig_bt, height=420)
+                fig_bt.update_layout(
+                    title=dict(text=f"Prix + signaux — {bt_ticker}",
+                               font=dict(color="#8ba8d0", size=13)),
+                    xaxis_rangeslider_visible=False,
+                    legend=dict(orientation="h", y=1.08, bgcolor="rgba(0,0,0,0)"),
+                )
+                st.plotly_chart(fig_bt, use_container_width=True)
+
+            # --- Courbe d'équité ---
+            if bt_result["equity"]:
+                fig_eq = go.Figure()
+                fig_eq.add_trace(go.Scatter(
+                    x=[e["date"]   for e in bt_result["equity"]],
+                    y=[e["valeur"] for e in bt_result["equity"]],
+                    mode="lines+markers", name="Capital",
+                    line=dict(color="#2ecc71", width=2),
+                    fill="tozeroy", fillcolor="rgba(46,204,113,0.08)"
                 ))
+                _dark_layout(fig_eq, height=260)
+                fig_eq.update_layout(
+                    title=dict(text="Courbe d'équité",
+                               font=dict(color="#8ba8d0", size=13)),
+                )
+                st.plotly_chart(fig_eq, use_container_width=True)
 
-            _dark_layout(fig_bt, height=420)
-            fig_bt.update_layout(
-                title=dict(text=f"Prix + signaux — {bt_ticker}",
-                           font=dict(color="#8ba8d0", size=13)),
-                xaxis_rangeslider_visible=False,
-                legend=dict(orientation="h", y=1.08, bgcolor="rgba(0,0,0,0)"),
-            )
-            st.plotly_chart(fig_bt, use_container_width=True)
-
-        # --- Courbe d'équité ---
-        if bt_result["equity"]:
-            fig_eq = go.Figure()
-            fig_eq.add_trace(go.Scatter(
-                x=[e["date"]   for e in bt_result["equity"]],
-                y=[e["valeur"] for e in bt_result["equity"]],
-                mode="lines+markers", name="Capital",
-                line=dict(color="#2ecc71", width=2),
-                fill="tozeroy", fillcolor="rgba(46,204,113,0.08)"
-            ))
-            _dark_layout(fig_eq, height=260)
-            fig_eq.update_layout(
-                title=dict(text="Courbe d'équité",
-                           font=dict(color="#8ba8d0", size=13)),
-            )
-            st.plotly_chart(fig_eq, use_container_width=True)
-
-        # --- Détail des trades ---
-        if bt_result["trades"]:
-            st.markdown("**Détail des trades**")
-            df_trades = pd.DataFrame(bt_result["trades"])
-            df_trades["résultat"] = df_trades["pnl"].apply(
-                lambda x: "✅" if x > 0 else "❌"
-            )
-            cols_ordre = ["résultat", "date_achat", "prix_achat",
-                          "date", "prix_vente", "pnl", "pnlnet"]
-            cols_ordre = [c for c in cols_ordre if c in df_trades.columns]
-            st.dataframe(df_trades[cols_ordre], use_container_width=True, hide_index=True)
+            # --- Détail des trades ---
+            if bt_result["trades"]:
+                st.markdown("**Détail des trades**")
+                df_trades = pd.DataFrame(bt_result["trades"])
+                df_trades["résultat"] = df_trades["pnl"].apply(
+                    lambda x: "✅" if x > 0 else "❌"
+                )
+                cols_ordre = ["résultat", "date_achat", "prix_achat",
+                              "date", "prix_vente", "pnl", "pnlnet"]
+                cols_ordre = [c for c in cols_ordre if c in df_trades.columns]
+                st.dataframe(df_trades[cols_ordre], use_container_width=True, hide_index=True)
 
 # ===========================================================================
 # Onglet Calibration
