@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 
-SECRET_KEY  = os.getenv("JWT_SECRET", "change-me-in-production")
+SECRET_KEY  = os.getenv("JWT_SECRET") or os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM   = "HS256"
 EXPIRE_DAYS = 30
 
