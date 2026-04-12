@@ -46,6 +46,16 @@ def _new_id() -> str:
     return str(uuid.uuid4())
 
 
+def _calculer_pnl(prix_vente: float, prix_moyen: float,
+                  quantite: float, frais: float = 0.0) -> dict:
+    """P&L d'une vente : brut, net (frais déduits), pct."""
+    pnl_brut = round((prix_vente - prix_moyen) * quantite, 2)
+    pnl_net  = round(pnl_brut - frais, 2)
+    pnl_pct  = round(pnl_net / (prix_moyen * quantite) * 100, 2) \
+               if prix_moyen > 0 and quantite > 0 else 0.0
+    return {"pnl_brut": pnl_brut, "pnl_net": pnl_net, "pnl_pct": pnl_pct}
+
+
 def _calculer_cump(qty_avant: float, pm_avant: float,
                    qty_achat: float, prix: float, frais: float = 0.0) -> tuple[float, float]:
     """
@@ -159,8 +169,7 @@ def ajouter_vente(user_id: str, ticker: str, prix_vente: float, quantite: float,
 
     frais            = round(float(frais), 4)
     prix_moyen_achat = float(pos["prix_moyen"])
-    from data.portfolio import calculer_pnl
-    pnl              = calculer_pnl(float(prix_vente), prix_moyen_achat, quantite, frais)
+    pnl              = _calculer_pnl(float(prix_vente), prix_moyen_achat, quantite, frais)
     pnl_brut         = pnl["pnl_brut"]
     pnl_eur          = pnl["pnl_net"]
 

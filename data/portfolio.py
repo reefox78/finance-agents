@@ -1,5 +1,18 @@
 """
-Gestion du portefeuille avec calcul CUMP (Coût Unitaire Moyen Pondéré).
+MODE LOCAL / CLI — Gestion du portefeuille avec calcul CUMP (Coût Unitaire Moyen Pondéré).
+
+Rôles de ce module :
+  1. FONCTIONS PURES (utilisées par toute l'appli et les tests unitaires) :
+       calculer_cump()  →  formule CUMP, importée par les tests
+       calculer_pnl()   →  calcul P&L, importée par les tests
+
+  2. PERSISTANCE JSON LOCALE (utilisée par alerts/monitor.py en mode sans DB
+     et par les CLIs main.py / scanner.py) :
+       lister_positions(), ajouter_achat(), ajouter_vente(), etc.
+       → fichier : data/portfolio.json
+
+  ⚠️  Pour le backend FastAPI, utiliser db/portfolio.py (PostgreSQL).
+      Ce module-ci ne doit PAS être importé dans les routers FastAPI.
 
 Logique :
   - Chaque ACHAT recalcule le prix moyen pondéré de la position
