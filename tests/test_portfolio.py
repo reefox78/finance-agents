@@ -8,6 +8,129 @@ Les tests sont isolés : chacun utilise un fichier portfolio temporaire (tmp_pat
 
 import pytest
 import data.portfolio as portfolio
+from data.portfolio import calculer_cump, calculer_pnl
+
+
+# ===========================================================================
+# TestCalculerCUMP — formule pure, sans accès fichier
+# ===========================================================================
+
+class TestCalculerCUMP:
+    """
+    Tests de la formule CUMP isolée.
+    Ces tests détectent le bug classique : recalcul incorrect après vente partielle.
+    """
+
+    def test_premier_achat_sans_frais(self):
+        """Premier achat depuis zéro — cas de base."""
+        qty, cump = calculer_cump(0, 0, 10, 100)
+        assert qty  == pytest.approx(10.0)
+        assert cump == pytest.approx(100.0)
+
+    def test_premier_achat_avec_frais(self):
+        """Les frais majorent le CUMP : (10×100 + 1) / 10 = 100.10."""
+        qty, cump = calculer_cump(0, 0, 10, 100, frais=1.0)
+        assert qty  == pytest.approx(10.0)
+        assert cump == pytest.approx(100.10, rel=1e-4)
+
+    def test_deuxieme_achat_recalcule_cump(self):
+        """
+        Deux achats successifs :
+          Achat 1 : 10 @ 100 → CUMP = 100
+          Achat 2 : 20 @ 120 → CUMP = (10×100 + 20×120) / 30 = 113.33…
+        """
+        qty1, cump1 = calculer_cump(0, 0, 10, 100)
+        qty2, cump2 = calculer_cump(qty1, cump1, 20, 120)
+        assert qty2  == pytest.approx(30.0)
+        assert cump2 == pytest.approx(113.333, rel=1e-3)
+
+    def test_achat_apres_vente_partielle(self):
+        """
+        BUG CLASSIQUE — ce test révèle le défaut de _recalculer_cump (db).
+
+        Si on re-somme toutes les transactions d'achat au lieu de partir
+        de l'état courant, on obtient qty=15 et CUMP≈93.33 au lieu de
+        qty=10 et CUMP=90.
+
+        Scénario :
+          Achat : 10 @ 100 → qty=10, CUMP=100
+          Vente : 5 @ 110  → qty=5,  CUMP inchangé = 100
+          Achat : 5 @ 80   → doit donner qty=10, CUMP=(5×100 + 5×80)/10 = 90
+        """
+        _, cump1 = calculer_cump(0, 0, 10, 100)         # achat initial
+        # après vente partielle : qty=5, CUMP toujours 100
+        qty_apres_vente = 5.0
+        qty_final, cump_final = calculer_cump(qty_apres_vente, cump1, 5, 80)
+        assert qty_final  == pytest.approx(10.0)
+        assert cump_final == pytest.approx(90.0, rel=1e-4)
+
+    def test_achat_prix_zero_retourne_zero(self):
+        """Quantité nulle → aucune position (cas de reset)."""
+        qty, cump = calculer_cump(0, 0, 0, 100)
+        assert qty  == pytest.approx(0.0)
+        assert cump == pytest.approx(0.0)
+
+    def test_frais_eleves_impactent_cump(self):
+        """Des frais élevés augmentent significativement le CUMP."""
+        _, cump_sans = calculer_cump(0, 0, 1, 1000, frais=0)
+        _, cump_avec = calculer_cump(0, 0, 1, 1000, frais=10)
+        assert cump_avec > cump_sans
+        assert cump_avec == pytest.approx(1010.0, rel=1e-4)
+
+    def test_achat_fractionne_crypto(self):
+        """Achat de 0.001 BTC — les quantités fractionnaires fonctionnent."""
+        qty, cump = calculer_cump(0, 0, 0.001, 70000)
+        assert qty  == pytest.approx(0.001, rel=1e-6)
+        assert cump == pytest.approx(70000.0)
+
+
+# ===========================================================================
+# TestCalculerPNL — formule pure P&L
+# ===========================================================================
+
+class TestCalculerPNL:
+
+    def test_gain_simple(self):
+        """P&L = (110 - 100) × 10 = 100€ brut, 100€ net (sans frais)."""
+        r = calculer_pnl(prix_vente=110, prix_moyen=100, quantite=10)
+        assert r["pnl_brut"] == pytest.approx(100.0)
+        assert r["pnl_net"]  == pytest.approx(100.0)
+        assert r["pnl_pct"]  == pytest.approx(10.0)
+
+    def test_frais_reduisent_pnl_net(self):
+        """P&L brut = 100€, frais = 1€ → P&L net = 99€."""
+        r = calculer_pnl(prix_vente=110, prix_moyen=100, quantite=10, frais=1.0)
+        assert r["pnl_brut"] == pytest.approx(100.0)
+        assert r["pnl_net"]  == pytest.approx(99.0)
+        assert r["pnl_pct"]  == pytest.approx(9.9)
+
+    def test_perte(self):
+        """Vente en dessous du CUMP → P&L négatif."""
+        r = calculer_pnl(prix_vente=80, prix_moyen=100, quantite=10)
+        assert r["pnl_brut"] == pytest.approx(-200.0)
+        assert r["pnl_net"]  == pytest.approx(-200.0)
+        assert r["pnl_pct"]  < 0
+
+    def test_pnl_pct_coherent_avec_pnl_net(self):
+        """pnl_pct = pnl_net / (prix_moyen × qty) × 100."""
+        r = calculer_pnl(prix_vente=150, prix_moyen=100, quantite=5, frais=2)
+        attendu = r["pnl_net"] / (100 * 5) * 100
+        assert r["pnl_pct"] == pytest.approx(attendu, rel=1e-4)
+
+    def test_vente_au_cump_pnl_zero_avant_frais(self):
+        """Vente exactement au CUMP → P&L brut = 0."""
+        r = calculer_pnl(prix_vente=100, prix_moyen=100, quantite=10)
+        assert r["pnl_brut"] == pytest.approx(0.0)
+
+    def test_vente_au_cump_pnl_net_negatif_si_frais(self):
+        """Vente au CUMP avec frais → P&L net légèrement négatif (les frais pèsent)."""
+        r = calculer_pnl(prix_vente=100, prix_moyen=100, quantite=10, frais=1.0)
+        assert r["pnl_net"] == pytest.approx(-1.0)
+
+    def test_prix_moyen_zero_retourne_pct_zero(self):
+        """Prix moyen nul (cas de données corrompues) → pct = 0 sans division par zéro."""
+        r = calculer_pnl(prix_vente=100, prix_moyen=0, quantite=10)
+        assert r["pnl_pct"] == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------

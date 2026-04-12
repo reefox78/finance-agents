@@ -46,32 +46,38 @@ def _new_id() -> str:
     return str(uuid.uuid4())
 
 
-def _recalculer_cump(conn, user_id: str, ticker: str) -> None:
-    """Recalcule quantite + prix_moyen depuis les achats actifs."""
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT COALESCE(SUM(quantite * prix + frais), 0) AS cout_total,
-                   COALESCE(SUM(quantite), 0)               AS qty_total
-            FROM transactions
-            WHERE user_id = %s AND ticker = %s AND type = 'achat'
-            """,
-            (user_id, ticker)
-        )
-        row = cur.fetchone()
-        cout_total, qty_total = row
-        prix_moyen = float(cout_total) / float(qty_total) if float(qty_total) > 0 else 0.0
+def _calculer_cump(qty_avant: float, pm_avant: float,
+                   qty_achat: float, prix: float, frais: float = 0.0) -> tuple[float, float]:
+    """
+    Formule pure du CUMP (Coût Unitaire Moyen Pondéré).
 
-        cur.execute(
-            """
-            INSERT INTO positions (user_id, ticker, quantite, prix_moyen)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (user_id, ticker) DO UPDATE
-              SET quantite   = EXCLUDED.quantite,
-                  prix_moyen = EXCLUDED.prix_moyen
-            """,
-            (user_id, ticker, float(qty_total), round(prix_moyen, 6))
-        )
+    Calcule le nouveau CUMP après un achat en partant de l'état COURANT
+    de la position (qty_avant, pm_avant) — sans relire l'historique des
+    transactions.  Cela garantit un résultat correct même après des
+    ventes partielles.
+
+    Args:
+        qty_avant : quantité détenue avant cet achat
+        pm_avant  : CUMP actuel avant cet achat
+        qty_achat : quantité du nouvel achat
+        prix      : prix unitaire du nouvel achat
+        frais     : frais d'achat (majorent le coût de revient)
+
+    Returns:
+        (nouveau_qty, nouveau_cump)
+
+    Exemples:
+        Premier achat 10 @ 100 frais=1 :
+            _calculer_cump(0, 0, 10, 100, 1) → (10, 100.1)
+
+        Deuxième achat après vente partielle (5 restants @ CUMP 100, achat 5 @ 80) :
+            _calculer_cump(5, 100, 5, 80) → (10, 90.0)
+    """
+    nouveau_qty = qty_avant + qty_achat
+    if nouveau_qty <= 0:
+        return 0.0, 0.0
+    nouveau_pm = (qty_avant * pm_avant + qty_achat * prix + frais) / nouveau_qty
+    return round(nouveau_qty, 6), round(nouveau_pm, 6)
 
 
 # ---------------------------------------------------------------------------
@@ -81,34 +87,50 @@ def _recalculer_cump(conn, user_id: str, ticker: str) -> None:
 def ajouter_achat(user_id: str, ticker: str, prix: float, quantite: float,
                   date: str = None, notes: str = "", frais: float = 0.0,
                   broker_key: str = None) -> dict:
-    """Enregistre un achat et recalcule le CUMP."""
-    ticker = ticker.upper().strip()
-    date   = date or datetime.now().strftime("%Y-%m-%d")
+    """
+    Enregistre un achat et recalcule le CUMP.
+
+    Le CUMP est calculé à partir de l'état COURANT de la position
+    (quantite + prix_moyen actuels) sans relire toutes les transactions
+    historiques — ce qui garantit un résultat correct après ventes partielles.
+    """
+    ticker   = ticker.upper().strip()
+    date     = date or datetime.now().strftime("%Y-%m-%d")
+    prix     = round(float(prix), 6)
+    quantite = round(float(quantite), 6)
+    frais    = round(float(frais), 4)
+
+    # ── Lire la position AVANT de la modifier ────────────────────────────────
+    pos_avant   = get_position(user_id, ticker)
+    qty_avant   = float(pos_avant["quantite"])   if pos_avant else 0.0
+    pm_avant    = float(pos_avant["prix_moyen"]) if pos_avant else 0.0
+
+    # ── Formule CUMP ──────────────────────────────────────────────────────────
+    nouveau_qty, nouveau_pm = _calculer_cump(qty_avant, pm_avant, quantite, prix, frais)
 
     with get_conn() as conn:
         with conn.cursor() as cur:
-            # Upsert position (crée si inexistante)
+            # Upsert position avec les valeurs calculées
             cur.execute(
                 """
                 INSERT INTO positions (user_id, ticker, quantite, prix_moyen, broker_key)
-                VALUES (%s, %s, 0, 0, %s)
+                VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (user_id, ticker) DO UPDATE
-                  SET broker_key = COALESCE(EXCLUDED.broker_key, positions.broker_key)
+                  SET quantite   = EXCLUDED.quantite,
+                      prix_moyen = EXCLUDED.prix_moyen,
+                      broker_key = COALESCE(EXCLUDED.broker_key, positions.broker_key)
                 """,
-                (user_id, ticker, broker_key)
+                (user_id, ticker, nouveau_qty, nouveau_pm, broker_key)
             )
-            # Insère la transaction
+            # Journaliser la transaction
             cur.execute(
                 """
                 INSERT INTO transactions
                   (user_id, ticker, type, date, prix, quantite, frais, notes)
                 VALUES (%s, %s, 'achat', %s, %s, %s, %s, %s)
                 """,
-                (user_id, ticker, date,
-                 round(float(prix), 6), round(float(quantite), 6),
-                 round(float(frais), 4), notes or "")
+                (user_id, ticker, date, prix, quantite, frais, notes or "")
             )
-        _recalculer_cump(conn, user_id, ticker)
         conn.commit()
 
     return get_position(user_id, ticker)
@@ -137,8 +159,10 @@ def ajouter_vente(user_id: str, ticker: str, prix_vente: float, quantite: float,
 
     frais            = round(float(frais), 4)
     prix_moyen_achat = float(pos["prix_moyen"])
-    pnl_brut         = round((float(prix_vente) - prix_moyen_achat) * quantite, 2)
-    pnl_eur          = round(pnl_brut - frais, 2)
+    from data.portfolio import calculer_pnl
+    pnl              = calculer_pnl(float(prix_vente), prix_moyen_achat, quantite, frais)
+    pnl_brut         = pnl["pnl_brut"]
+    pnl_eur          = pnl["pnl_net"]
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -167,8 +191,7 @@ def ajouter_vente(user_id: str, ticker: str, prix_vente: float, quantite: float,
             )
         conn.commit()
 
-    pnl_pct = round(pnl_eur / (prix_moyen_achat * quantite) * 100, 2) if prix_moyen_achat else 0.0
-    return {"id": str(tx_id), "pnl_brut": pnl_brut, "pnl_eur": pnl_eur, "pnl_pct": pnl_pct}
+    return {"id": str(tx_id), "pnl_brut": pnl_brut, "pnl_eur": pnl_eur, "pnl_pct": pnl["pnl_pct"]}
 
 
 # ---------------------------------------------------------------------------
@@ -369,9 +392,20 @@ def modifier_note_transaction(user_id: str, tx_id: str, note: str) -> None:
 
 
 def supprimer_position(user_id: str, ticker: str) -> None:
+    """
+    Supprime la position ET toutes ses transactions.
+
+    Important : supprimer les transactions évite que `ajouter_achat`
+    hérite d'un historique fantôme si le ticker est rajouté plus tard.
+    """
+    ticker = ticker.upper().strip()
+    execute(
+        "DELETE FROM transactions WHERE user_id = %s AND ticker = %s",
+        (user_id, ticker)
+    )
     execute(
         "DELETE FROM positions WHERE user_id = %s AND ticker = %s",
-        (user_id, ticker.upper().strip())
+        (user_id, ticker)
     )
 
 

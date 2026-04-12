@@ -1,0 +1,169 @@
+<div class="page">
+
+  <!-- ── Header ── -->
+  <div class="page-header">
+    <div class="header-left">
+      <h1 class="page-title">Calibration des agents</h1>
+      <p class="page-sub">Mesure la précision de chaque agent sur l'historique réel et ajuste leurs poids dans le score final.</p>
+    </div>
+    @if (status()) {
+      <div class="mode-badge" [class.mode-custom]="status().mode === 'custom'">
+        @if (status().mode === 'custom') { Poids personnalisés actifs }
+        @else { Poids par défaut }
+      </div>
+    }
+  </div>
+
+  @if (error()) { <div class="error-box">{{ error() }}</div> }
+  @if (saved())  { <div class="success-box">Poids sauvegardés — actifs immédiatement.</div> }
+
+  <!-- ── Loading states ── -->
+  @if (loading() === 'status') {
+    <div class="loader-bar"><div class="bar-inner"></div></div>
+  }
+
+  @if (status(); as s) {
+
+    <!-- ── Actions row ── -->
+    <div class="actions-row">
+      <button class="btn-primary" (click)="runCalibration()"
+              [disabled]="loading() === 'running'">
+        @if (loading() === 'running') {
+          <span class="spin">⟳</span> Calibration en cours…
+        } @else {
+          ▶ Lancer la calibration
+        }
+      </button>
+      @if (calibResult()?.poids_suggeres) {
+        <button class="btn-secondary" (click)="applySuggested()">
+          ↙ Appliquer les suggestions
+        </button>
+      }
+      <button class="btn-danger" (click)="resetToDefault()"
+              [disabled]="loading() === 'resetting' || s.mode === 'default'">
+        ↺ Réinitialiser les poids
+      </button>
+      <span class="hint">La calibration peut prendre 30–60 s (appels yfinance par ticker)</span>
+    </div>
+
+    @if (loading() === 'running') {
+      <div class="running-info">
+        <div class="loader-bar"><div class="bar-inner"></div></div>
+        <p>Calcul en cours — récupération des cours réels et évaluation des prédictions…</p>
+      </div>
+    }
+
+    <!-- ── Résultats de calibration ── -->
+    @if (calibResult(); as cr) {
+      <div class="section-header"><span>Résultats de calibration</span>
+        <span class="sub-info">{{ cr.nb_tickers }} ticker(s) · {{ cr.nb_points_total }} point(s) analysé(s)</span>
+      </div>
+
+      @if (cr.nb_points_total === 0) {
+        <div class="empty-state">
+          Pas encore assez de données historiques. Lancez des analyses depuis la page Analyse pour alimenter l'historique.
+        </div>
+      } @else {
+        <div class="calib-table-wrap">
+          <table class="calib-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Prédictions</th>
+                <th>Exactitude</th>
+                <th>Poids actuel</th>
+                <th>Poids suggéré</th>
+                <th>Évolution</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (agent of agents; track agent) {
+                <tr>
+                  <td class="agent-name">{{ label(agent) }}</td>
+                  <td class="center">
+                    @if (cr.agents?.[agent]) {
+                      {{ cr.agents[agent].nb_predictions }}
+                      <span class="sub-val">({{ cr.agents[agent].nb_correctes }} correctes)</span>
+                    } @else { <span class="na">—</span> }
+                  </td>
+                  <td class="center">
+                    @if (cr.agents?.[agent]?.exactitude !== null && cr.agents?.[agent] !== undefined) {
+                      <span class="accuracy-pill"
+                            [style.background]="accuracyColor(cr.agents[agent].exactitude) + '22'"
+                            [style.color]="accuracyColor(cr.agents[agent].exactitude)"
+                            [style.borderColor]="accuracyColor(cr.agents[agent].exactitude) + '55'">
+                        {{ accuracyLabel(cr.agents[agent].exactitude) }}
+                      </span>
+                    } @else {
+                      <span class="na">N/A</span>
+                    }
+                  </td>
+                  <td>
+                    <div class="weight-bar-row">
+                      <div class="weight-bar-bg">
+                        <div class="weight-bar-fill current" [style.width]="barWidth(s.poids_actifs[agent])"></div>
+                      </div>
+                      <span class="weight-val">{{ (s.poids_actifs[agent] * 100).toFixed(1) }}%</span>
+                    </div>
+                  </td>
+                  <td>
+                    @if (cr.poids_suggeres?.[agent] !== undefined) {
+                      <div class="weight-bar-row">
+                        <div class="weight-bar-bg">
+                          <div class="weight-bar-fill suggested" [style.width]="barWidth(cr.poids_suggeres[agent])"></div>
+                        </div>
+                        <span class="weight-val">{{ (cr.poids_suggeres[agent] * 100).toFixed(1) }}%</span>
+                      </div>
+                    } @else { <span class="na">—</span> }
+                  </td>
+                  <td class="center">
+                    <span class="delta" [class]="deltaClass(agent)">
+                      @if (delta(agent) !== 0) {
+                        {{ delta(agent) > 0 ? '+' : '' }}{{ (delta(agent) * 100).toFixed(1) }}%
+                      } @else { — }
+                    </span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+
+    <!-- ── Éditeur de poids ── -->
+    <div class="section-header" style="margin-top:2rem">
+      <span>Éditeur de poids</span>
+      <span class="sub-info">
+        Total :
+        <strong [style.color]="totalColor()">{{ (totalPoids * 100).toFixed(1) }}%</strong>
+        <span class="total-hint">(risque et macro agissent comme multiplicateurs — non inclus)</span>
+      </span>
+    </div>
+
+    <div class="weights-grid">
+      @for (agent of agents; track agent) {
+        <div class="weight-row">
+          <span class="w-label">{{ label(agent) }}</span>
+          <input class="w-slider" type="range" min="0" max="0.5" step="0.001"
+                 [(ngModel)]="editedWeights[agent]" />
+          <input class="w-input" type="number" min="0" max="0.5" step="0.001"
+                 [(ngModel)]="editedWeights[agent]" />
+          <span class="w-default" title="Valeur par défaut">
+            déf. {{ (s.poids_defaut[agent] * 100).toFixed(0) }}%
+          </span>
+        </div>
+      }
+    </div>
+
+    <div class="save-row">
+      <button class="btn-primary" (click)="saveWeights()"
+              [disabled]="loading() === 'saving'">
+        @if (loading() === 'saving') { Sauvegarde… } @else { Sauvegarder les poids }
+      </button>
+      <span class="save-hint">Les poids seront appliqués immédiatement à toutes les prochaines analyses.</span>
+    </div>
+
+  }
+
+</div>

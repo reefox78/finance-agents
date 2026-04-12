@@ -112,3 +112,20 @@ def supprimer(ticker: str, current_user: CurrentUser):
 def supprimer_tx(tx_id: str, current_user: CurrentUser):
     supprimer_vente(current_user["sub"], tx_id)
     return {"ok": True}
+
+
+@router.get("/analyse-history/{ticker}")
+def analyse_history(ticker: str, current_user: CurrentUser):
+    """
+    Retourne l'historique des analyses pour un ticker donné
+    (score, décision, prix, scores_agents par agent).
+    Résultats du plus récent au plus ancien.
+    """
+    ticker = ticker.upper().strip()
+    try:
+        from db.score_history import lire_historique as _db
+        entries = _db(current_user["sub"], ticker)
+    except Exception:
+        from data.score_history import lire_historique as _local
+        entries = _local(ticker)
+    return list(reversed(entries))

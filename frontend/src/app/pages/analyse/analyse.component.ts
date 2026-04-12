@@ -1,35 +1,16 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ViewChild, ElementRef, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router, ActivatedRoute } from '@angular/router';
+import { Chart, registerables } from 'chart.js';
+import 'chartjs-adapter-date-fns';
+import zoomPlugin from 'chartjs-plugin-zoom';
 import { ApiService } from '../../core/services/api.service';
+import { TICKER_NAMES, WATCHLIST, WATCHLIST_CATEGORIES, tickerLabel } from '../../core/constants/watchlist';
 
-const NAMES: Record<string, string> = {
-  'AAPL':'Apple','MSFT':'Microsoft','NVDA':'Nvidia','GOOGL':'Alphabet','META':'Meta',
-  'AMZN':'Amazon','TSLA':'Tesla','JPM':'JPMorgan Chase','XOM':'ExxonMobil','SPY':'S&P 500 ETF',
-  'V':'Visa','MA':'Mastercard','UNH':'UnitedHealth','JNJ':'Johnson & Johnson','WMT':'Walmart',
-  'HD':'Home Depot','BAC':'Bank of America','PG':'Procter & Gamble','COST':'Costco','NFLX':'Netflix',
-  'MC.PA':'LVMH','TTE.PA':'TotalEnergies','SAN.PA':'Sanofi','BNP.PA':'BNP Paribas','OR.PA':"L'Oréal",
-  'AI.PA':'Air Liquide','SAF.PA':'Safran','ASML.AS':'ASML','SAP.DE':'SAP','SIE.DE':'Siemens',
-  'SHELL.AS':'Shell','NOVN.SW':'Novartis','ROG.SW':'Roche','AZN.L':'AstraZeneca','HSBA.L':'HSBC',
-  'RMS.PA':'Hermès','CS.PA':'AXA','AIR.PA':'Airbus','DTE.DE':'Deutsche Telekom','ALV.DE':'Allianz',
-  'BTC-USD':'Bitcoin','ETH-USD':'Ethereum','SOL-USD':'Solana','BNB-USD':'BNB','XRP-USD':'XRP',
-  'ADA-USD':'Cardano','DOGE-USD':'Dogecoin','DOT-USD':'Polkadot','AVAX-USD':'Avalanche','LINK-USD':'Chainlink',
-  'MATIC-USD':'Polygon','UNI-USD':'Uniswap','ATOM-USD':'Cosmos','LTC-USD':'Litecoin','TON-USD':'Toncoin',
-  'NEAR-USD':'NEAR Protocol','ICP-USD':'Internet Computer','FIL-USD':'Filecoin','APT-USD':'Aptos','ARB-USD':'Arbitrum',
-  'EURUSD=X':'Euro / Dollar','GBPUSD=X':'Livre / Dollar','USDJPY=X':'Dollar / Yen',
-  'USDCHF=X':'Dollar / Franc suisse','AUDUSD=X':'AUD / Dollar','USDCAD=X':'Dollar / CAD',
-  'NZDUSD=X':'NZD / Dollar','EURGBP=X':'Euro / Livre','EURJPY=X':'Euro / Yen','GBPJPY=X':'Livre / Yen',
-  'USDCNY=X':'Dollar / Yuan','USDINR=X':'Dollar / Roupie','USDMXN=X':'Dollar / Peso',
-  'USDBRL=X':'Dollar / Réal','USDKRW=X':'Dollar / Won','USDSGD=X':'Dollar / SGD',
-  'USDHKD=X':'Dollar / HKD','EURCHF=X':'Euro / CHF','AUDCAD=X':'AUD / CAD','CADJPY=X':'CAD / Yen',
-};
+Chart.register(...registerables, zoomPlugin);
 
-const WATCHLIST: Record<string, string[]> = {
-  'Actions US': ['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA','JPM','XOM','SPY','V','MA','UNH','JNJ','WMT','HD','BAC','PG','COST','NFLX'],
-  'Actions EU': ['MC.PA','TTE.PA','SAN.PA','BNP.PA','OR.PA','AI.PA','SAF.PA','ASML.AS','SAP.DE','SIE.DE','SHELL.AS','NOVN.SW','ROG.SW','AZN.L','HSBA.L','RMS.PA','CS.PA','AIR.PA','DTE.DE','ALV.DE'],
-  'Crypto':     ['BTC-USD','ETH-USD','SOL-USD','BNB-USD','XRP-USD','ADA-USD','DOGE-USD','DOT-USD','AVAX-USD','LINK-USD','MATIC-USD','UNI-USD','ATOM-USD','LTC-USD','TON-USD','NEAR-USD','ICP-USD','FIL-USD','APT-USD','ARB-USD'],
-  'Forex':      ['EURUSD=X','GBPUSD=X','USDJPY=X','USDCHF=X','AUDUSD=X','USDCAD=X','NZDUSD=X','EURGBP=X','EURJPY=X','GBPJPY=X','USDCNY=X','USDINR=X','USDMXN=X','USDBRL=X','USDKRW=X','USDSGD=X','USDHKD=X','EURCHF=X','AUDCAD=X','CADJPY=X'],
-};
+const NAMES = TICKER_NAMES;
 
 @Component({
   selector: 'app-analyse',
@@ -38,9 +19,14 @@ const WATCHLIST: Record<string, string[]> = {
   templateUrl: './analyse.component.html',
   styleUrl: './analyse.component.scss',
 })
-export class AnalyseComponent {
+export class AnalyseComponent implements OnInit, OnDestroy {
+  @ViewChild('priceCanvas',  { static: true }) priceCanvas!:  ElementRef<HTMLCanvasElement>;
+  @ViewChild('volumeCanvas', { static: true }) volumeCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('rsiCanvas',    { static: true }) rsiCanvas!:    ElementRef<HTMLCanvasElement>;
+  @ViewChild('macdCanvas',   { static: true }) macdCanvas!:   ElementRef<HTMLCanvasElement>;
+
   watchlist    = WATCHLIST;
-  categories   = Object.keys(WATCHLIST);
+  categories   = WATCHLIST_CATEGORIES;
   quickTickers = ['AAPL', 'MC.PA', 'BTC-USD', 'EURUSD=X'];
 
   ticker       = '';
@@ -51,15 +37,33 @@ export class AnalyseComponent {
   result   = signal<any>(null);
   error    = signal('');
 
-  constructor(private api: ApiService) {}
+  private _charts: Chart<any, any, any>[] = [];
+  private _syncing = false;
 
-  label(t: string): string {
-    return NAMES[t] ? `${t} (${NAMES[t]})` : t;
+  constructor(private api: ApiService, private router: Router, private route: ActivatedRoute) {}
+
+  ngOnInit(): void {
+    this.route.queryParams.subscribe(params => {
+      if (params['ticker']) {
+        this.ticker = params['ticker'];
+        this.customTicker = '';
+        this.run();
+      }
+    });
   }
 
-  onCustomInput(): void {
-    this.ticker = this.customTicker.trim().toUpperCase();
+  ngOnDestroy(): void { this._destroyCharts(); }
+
+  label(t: string): string { return NAMES[t] ? `${t} (${NAMES[t]})` : t; }
+
+  acheter(): void {
+    const r = this.result();
+    const prix = r?.tech?.prix_actuel ?? '';
+    this.router.navigate(['/portfolio'], {
+      queryParams: { achat: '1', ticker: this.ticker, prix }
+    });
   }
+  onCustomInput(): void { this.ticker = this.customTicker.trim().toUpperCase(); }
 
   selectQuick(t: string): void {
     this.ticker = t;
@@ -72,36 +76,260 @@ export class AnalyseComponent {
     if (!t) return;
     this.error.set('');
     this.result.set(null);
+    this._destroyCharts();
     this.loading.set(true);
-    this.api.analyse(t, this.withLlm).subscribe({
-      next:  r => { this.result.set(r); this.loading.set(false); },
+    this.api.analyse(t, this.withLlm, false, this.period).subscribe({
+      next: r => {
+        this.result.set(r);
+        this.loading.set(false);
+        if (r.chart?.dates?.length > 1) {
+          setTimeout(() => this._buildCharts(r.chart), 0);
+        }
+      },
       error: e => { this.error.set(e.error?.detail ?? 'Erreur serveur'); this.loading.set(false); },
+    });
+  }
+
+  resetZoom(): void {
+    this._charts.forEach(c => {
+      if (c.options.scales?.['x']) {
+        (c.options.scales['x'] as any).min = undefined;
+        (c.options.scales['x'] as any).max = undefined;
+      }
+      c.update('none');
     });
   }
 
   scoreColor(s: number): string {
     return s >= 0.1 ? '#2ecc71' : s <= -0.1 ? '#e74c3c' : '#f1c40f';
   }
-
   decisionColor(d: string): string {
     if (d === 'ACHETER') return '#2ecc71';
     if (d === 'VENDRE')  return '#e74c3c';
     return '#f1c40f';
   }
-
-  signalClass(signal: string): string {
-    if (!signal) return '';
-    const s = signal.toUpperCase();
+  signalClass(sig: string): string {
+    if (!sig) return '';
+    const s = sig.toUpperCase();
     if (s.includes('ACHE') || s === 'HAUSSIER' || s === 'FAIBLE' || s === 'POSITIF') return 'sig-buy';
     if (s.includes('VEND') || s === 'BAISSIER' || s === 'ÉLEVÉ'  || s === 'NEGATIF') return 'sig-sell';
     return 'sig-neutral';
   }
-
   assetLabel(t: string): string {
-    const m: Record<string, string> = {
-      us_stock: 'Action US', eu_stock: 'Action EU',
-      crypto: 'Crypto', forex: 'Forex',
+    return ({ us_stock:'Action US', eu_stock:'Action EU', crypto:'Crypto', forex:'Forex' } as any)[t] ?? t;
+  }
+
+  // ── Charts ─────────────────────────────────────────────────────────────────
+
+  private _destroyCharts(): void {
+    this._charts.forEach(c => c.destroy());
+    this._charts = [];
+  }
+
+  /** Appelé sur zoom/pan — synchronise les bornes X de tous les autres charts */
+  private _syncFrom(source: any): void {
+    if (this._syncing) return;
+    this._syncing = true;
+    const { min, max } = source.scales['x'];
+    for (const c of this._charts) {
+      if (c === source) continue;
+      if (c.options.scales?.['x']) {
+        (c.options.scales['x'] as any).min = min;
+        (c.options.scales['x'] as any).max = max;
+        c.update('none');
+      }
+    }
+    this._syncing = false;
+  }
+
+  private _zoomOpts(): any {
+    return {
+      zoom: {
+        wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' as const,
+        onZoomComplete: ({ chart }: any) => this._syncFrom(chart),
+      },
+      pan: {
+        enabled: true, mode: 'x' as const,
+        onPanComplete: ({ chart }: any) => this._syncFrom(chart),
+      },
     };
-    return m[t] ?? t;
+  }
+
+  private _baseOpts(title: string): any {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index' as const, intersect: false },
+      plugins: {
+        legend:  { labels: { color: '#7a9bbb', font: { size: 10 }, boxWidth: 10 } },
+        title:   { display: !!title, text: title, color: '#9ab5cc', font: { size: 11, weight: '600' as const }, padding: { bottom: 6 } },
+        tooltip: { backgroundColor: 'rgba(10,15,30,0.92)', borderColor: 'rgba(0,200,255,0.25)', borderWidth: 1, titleColor: '#c8d6f0', bodyColor: '#7a9bbb', padding: 8 },
+        zoom: this._zoomOpts(),
+      },
+    };
+  }
+
+  private _xScale(display = true): any {
+    return {
+      type: 'time' as const,
+      time: { unit: 'week' as const },
+      adapters: { date: {} },
+      display,
+      ticks: { color: '#4a6a8a', maxRotation: 0, font: { size: 9 } },
+      grid: { color: 'rgba(255,255,255,0.04)' },
+    };
+  }
+
+  private _yScale(extra: any = {}): any {
+    return {
+      ticks: { color: '#4a6a8a', font: { size: 9 } },
+      grid: { color: 'rgba(255,255,255,0.06)' },
+      ...extra,
+    };
+  }
+
+  private _buildCharts(c: any): void {
+    const dates = c.dates as string[];
+    const xy = (arr: (number | null)[]) =>
+      arr.map((y, i) => ({ x: dates[i], y: y ?? undefined }));
+
+    // ── Chart 1 : Prix + SMA + Bollinger ────────────────────────────────────
+    const c1 = new Chart(this.priceCanvas.nativeElement, {
+      type: 'line',
+      data: {
+        datasets: [
+          {
+            label: 'Bollinger +2σ',
+            data: xy(c.bb_upper),
+            borderColor: 'rgba(0,200,255,0.3)', backgroundColor: 'rgba(0,200,255,0.07)',
+            borderWidth: 1, borderDash: [4, 3], pointRadius: 0, fill: '+1', tension: 0.2, order: 5,
+          },
+          {
+            label: 'Bollinger −2σ',
+            data: xy(c.bb_lower),
+            borderColor: 'rgba(0,200,255,0.3)', backgroundColor: 'rgba(0,200,255,0.07)',
+            borderWidth: 1, borderDash: [4, 3], pointRadius: 0, fill: false as any, tension: 0.2, order: 5,
+          },
+          {
+            label: 'Moy. 20j',
+            data: xy(c.sma20),
+            borderColor: 'rgba(52,152,219,0.9)', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 3,
+          },
+          {
+            label: 'Moy. 50j',
+            data: xy(c.sma50),
+            borderColor: 'rgba(230,126,34,0.9)', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 3,
+          },
+          {
+            label: 'Prix',
+            data: xy(c.close),
+            borderColor: '#00c8ff', backgroundColor: 'rgba(0,200,255,0.07)',
+            fill: false as any, borderWidth: 2, pointRadius: 0, tension: 0.1, order: 1,
+          },
+        ],
+      },
+      options: {
+        ...this._baseOpts('Prix · Moyennes mobiles · Bollinger Bands'),
+        scales: { x: this._xScale(), y: this._yScale() },
+      },
+    });
+    this._charts.push(c1);
+
+    // ── Chart 2 : Volume ─────────────────────────────────────────────────────
+    const c2 = new Chart(this.volumeCanvas.nativeElement, {
+      type: 'bar',
+      data: {
+        datasets: [{
+          label: 'Volume',
+          data: dates.map((d, i) => ({ x: d, y: c.volume[i] ?? 0 })),
+          backgroundColor: c.vol_colors,
+          borderWidth: 0, barPercentage: 0.9, categoryPercentage: 1.0,
+        }],
+      },
+      options: {
+        ...this._baseOpts('Volume échangé'),
+        scales: {
+          x: this._xScale(false),
+          y: this._yScale({
+            ticks: {
+              color: '#4a6a8a', font: { size: 9 },
+              callback: (v: any) => v >= 1e9 ? (v/1e9).toFixed(1)+'G' : v >= 1e6 ? (v/1e6).toFixed(0)+'M' : String(v),
+            },
+          }),
+        },
+      },
+    });
+    this._charts.push(c2);
+
+    // ── Chart 3 : RSI ────────────────────────────────────────────────────────
+    const c3 = new Chart(this.rsiCanvas.nativeElement, {
+      type: 'line',
+      data: {
+        datasets: [
+          {
+            label: 'RSI 14',
+            data: xy(c.rsi),
+            borderColor: '#e67e22', backgroundColor: 'transparent',
+            borderWidth: 1.5, pointRadius: 0, tension: 0.2,
+          },
+          // Zones visuelles 70 / 30 via deux lignes constantes
+          {
+            label: 'Suracheté (70)',
+            data: dates.map(d => ({ x: d, y: 70 })),
+            borderColor: 'rgba(231,76,60,0.5)', backgroundColor: 'transparent',
+            borderWidth: 1, borderDash: [4, 3], pointRadius: 0, order: 5,
+          },
+          {
+            label: 'Survendu (30)',
+            data: dates.map(d => ({ x: d, y: 30 })),
+            borderColor: 'rgba(46,204,113,0.5)', backgroundColor: 'transparent',
+            borderWidth: 1, borderDash: [4, 3], pointRadius: 0, order: 5,
+          },
+        ],
+      },
+      options: {
+        ...this._baseOpts('RSI (14)'),
+        scales: { x: this._xScale(false), y: this._yScale({ min: 0, max: 100 }) },
+      },
+    });
+    this._charts.push(c3);
+
+    // ── Chart 4 : MACD ───────────────────────────────────────────────────────
+    const histColors = (c.macd_hist as (number|null)[]).map(v =>
+      (v ?? 0) >= 0 ? 'rgba(46,204,113,0.65)' : 'rgba(231,76,60,0.65)'
+    );
+    const c4 = new Chart(this.macdCanvas.nativeElement, {
+      type: 'bar',
+      data: {
+        datasets: [
+          {
+            type: 'bar' as any,
+            label: 'Histogramme MACD',
+            data: xy(c.macd_hist),
+            backgroundColor: histColors, borderWidth: 0, barPercentage: 0.8, order: 3,
+          },
+          {
+            type: 'line' as any,
+            label: 'MACD (12−26)',
+            data: xy(c.macd),
+            borderColor: '#3498db', backgroundColor: 'transparent',
+            borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 1,
+          },
+          {
+            type: 'line' as any,
+            label: 'Signal (9)',
+            data: xy(c.macd_signal),
+            borderColor: '#e74c3c', backgroundColor: 'transparent',
+            borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 2,
+          },
+        ],
+      },
+      options: {
+        ...this._baseOpts('MACD (12, 26, 9)'),
+        scales: { x: this._xScale(), y: this._yScale() },
+      },
+    });
+    this._charts.push(c4);
   }
 }

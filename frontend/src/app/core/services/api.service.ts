@@ -11,10 +11,12 @@ export class ApiService {
 
   // ── Analyse ──────────────────────────────────────────────────────────────
 
-  analyse(ticker: string, withLlm = true, modeRapide = false): Observable<any> {
+  analyse(ticker: string, withLlm = true, modeRapide = false, period = '3mo'): Observable<any> {
     const params = new HttpParams()
       .set('with_llm', withLlm)
-      .set('mode_rapide', modeRapide);
+      .set('mode_rapide', modeRapide)
+      .set('period', period)
+      .set('with_chart', true);
     return this.http.get(`${this.base}/analyse/${ticker}`, { params });
   }
 
@@ -50,6 +52,10 @@ export class ApiService {
 
   getTransactions(ticker: string): Observable<any[]> {
     return this.http.get<any[]>(`${this.base}/portfolio/transactions/${ticker}`);
+  }
+
+  getAnalyseHistory(ticker: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/portfolio/analyse-history/${ticker}`);
   }
 
   addAchat(body: any): Observable<any> {
@@ -92,7 +98,23 @@ export class ApiService {
     return this.http.delete(`${this.base}/alerts/${id}`);
   }
 
-  // ── Logs ──────────────────────────────────────────────────────────────────
+  // ── Calibration ───────────────────────────────────────────────────────────
+
+  getCalibrationStatus(): Observable<any> {
+    return this.http.get<any>(`${this.base}/calibration/status`);
+  }
+
+  runCalibration(): Observable<any> {
+    return this.http.post<any>(`${this.base}/calibration/run`, {});
+  }
+
+  applyWeights(poids: Record<string, number>): Observable<any> {
+    return this.http.post<any>(`${this.base}/calibration/apply`, { poids });
+  }
+
+  resetWeights(): Observable<any> {
+    return this.http.delete<any>(`${this.base}/calibration/reset`);
+  }
 
   // ── Backtest ──────────────────────────────────────────────────────────────
 

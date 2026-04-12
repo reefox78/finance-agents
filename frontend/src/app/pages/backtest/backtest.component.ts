@@ -1,10 +1,17 @@
 import { Component, signal, ViewChild, ElementRef, OnDestroy } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Chart, registerables } from 'chart.js';
+import {
+  Chart, registerables,
+  TimeScale, LinearScale, PointElement, LineElement,
+  BarElement, ScatterController, LineController, BarController,
+  Filler, Tooltip, Legend, Title,
+} from 'chart.js';
+import 'chartjs-adapter-date-fns';
+import zoomPlugin from 'chartjs-plugin-zoom';
 import { ApiService } from '../../core/services/api.service';
 
-Chart.register(...registerables);
+Chart.register(...registerables, zoomPlugin);
 
 const NAMES: Record<string, string> = {
   'AAPL':'Apple','MSFT':'Microsoft','NVDA':'Nvidia','GOOGL':'Alphabet','META':'Meta',
@@ -21,10 +28,10 @@ const NAMES: Record<string, string> = {
 };
 
 const WATCHLIST: Record<string, string[]> = {
-  'Actions US': ['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA','JPM','XOM','SPY','V','MA','UNH','JNJ','WMT','HD','BAC','PG','COST','NFLX'],
-  'Actions EU': ['MC.PA','TTE.PA','SAN.PA','BNP.PA','OR.PA','AI.PA','SAF.PA','ASML.AS','SAP.DE','SIE.DE','SHELL.AS','NOVN.SW','ROG.SW','AZN.L','HSBA.L','RMS.PA','CS.PA','AIR.PA','DTE.DE','ALV.DE'],
-  'Crypto':     ['BTC-USD','ETH-USD','SOL-USD','BNB-USD','XRP-USD'],
-  'Forex':      ['EURUSD=X','GBPUSD=X','USDJPY=X','USDCHF=X','AUDUSD=X','USDCAD=X'],
+  'Actions US':  ['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA','JPM','XOM','SPY','V','MA','UNH','JNJ','WMT','HD','BAC','PG','COST','NFLX'],
+  'Actions EU':  ['MC.PA','TTE.PA','SAN.PA','BNP.PA','OR.PA','AI.PA','SAF.PA','ASML.AS','SAP.DE','SIE.DE','SHELL.AS','NOVN.SW','ROG.SW','AZN.L','HSBA.L','RMS.PA','CS.PA','AIR.PA','DTE.DE','ALV.DE'],
+  'Crypto':      ['BTC-USD','ETH-USD','SOL-USD','BNB-USD','XRP-USD'],
+  'Forex':       ['EURUSD=X','GBPUSD=X','USDJPY=X','USDCHF=X','AUDUSD=X','USDCAD=X'],
 };
 
 @Component({
@@ -35,7 +42,6 @@ const WATCHLIST: Record<string, string[]> = {
   styleUrls: ['./backtest.component.scss'],
 })
 export class BacktestComponent implements OnDestroy {
-  // Canvas toujours présents dans le DOM (pas dans un @if) → ViewChild fonctionne
   @ViewChild('priceCanvas',  { static: true }) priceCanvas!:  ElementRef<HTMLCanvasElement>;
   @ViewChild('equityCanvas', { static: true }) equityCanvas!: ElementRef<HTMLCanvasElement>;
   @ViewChild('pnlCanvas',    { static: true }) pnlCanvas!:    ElementRef<HTMLCanvasElement>;
@@ -53,12 +59,9 @@ export class BacktestComponent implements OnDestroy {
   result  = signal<any>(null);
   error   = signal('');
 
-  private _priceChart?: Chart;
-  private _equityChart?: Chart;
-  private _pnlChart?: Chart;
+  private _charts: Chart[] = [];
 
   constructor(private api: ApiService) {}
-
   ngOnDestroy(): void { this._destroyCharts(); }
 
   label(t: string): string { return NAMES[t] ? `${t} — ${NAMES[t]}` : t; }
@@ -68,34 +71,30 @@ export class BacktestComponent implements OnDestroy {
     this.result.set(null);
     this._destroyCharts();
     this.loading.set(true);
-
-    this.api.runBacktest({
-      ticker: this.ticker, debut: this.debut,
-      fin: this.fin, capital: this.capital, mode: this.mode,
-    }).subscribe({
-      next: r => {
-        this.result.set(r);
-        this.loading.set(false);
-        // Canvas déjà dans le DOM → on peut construire immédiatement
-        setTimeout(() => this._buildCharts(r), 0);
-      },
-      error: e => {
-        this.error.set(e.error?.detail ?? 'Erreur serveur');
-        this.loading.set(false);
-      },
+    this.api.runBacktest({ ticker: this.ticker, debut: this.debut, fin: this.fin, capital: this.capital, mode: this.mode }).subscribe({
+      next: r => { this.result.set(r); this.loading.set(false); setTimeout(() => this._buildCharts(r), 0); },
+      error: e => { this.error.set(e.error?.detail ?? 'Erreur serveur'); this.loading.set(false); },
     });
   }
 
-  pnlClass(v: number): string { return v > 0 ? 'pos' : v < 0 ? 'neg' : ''; }
-  rendClass():    string { return this.pnlClass(this.result()?.rendement ?? 0); }
-  winRateClass(): string { return (this.result()?.win_rate ?? 50) >= 50 ? 'pos' : 'neg'; }
+  resetZoom(): void { this._charts.forEach(c => (c as any).resetZoom?.()); }
+
+  pnlClass(v: number)  { return v > 0 ? 'pos' : v < 0 ? 'neg' : ''; }
+  rendClass()          { return this.pnlClass(this.result()?.rendement ?? 0); }
+  winRateClass()       { return (this.result()?.win_rate ?? 50) >= 50 ? 'pos' : 'neg'; }
 
   // ── Charts ────────────────────────────────────────────────────────────────
 
   private _destroyCharts(): void {
-    this._priceChart?.destroy();  this._priceChart  = undefined;
-    this._equityChart?.destroy(); this._equityChart = undefined;
-    this._pnlChart?.destroy();    this._pnlChart    = undefined;
+    this._charts.forEach(c => c.destroy());
+    this._charts = [];
+  }
+
+  private _zoomOpts() {
+    return {
+      zoom:  { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' as const },
+      pan:   { enabled: true, mode: 'x' as const },
+    };
   }
 
   private _buildCharts(r: any): void {
@@ -103,65 +102,94 @@ export class BacktestComponent implements OnDestroy {
     const equity: any[] = r.equity  ?? [];
     const prices: any[] = r.prices  ?? [];
     const positive = r.rendement >= 0;
+    const lineColor = positive ? '#2ecc71' : '#e74c3c';
 
-    // ── Chart 1 : Prix de clôture + signaux ──────────────────────────────
+    // ── Chart 1 : Prix + signaux de trading ──────────────────────────────
     if (prices.length > 1) {
-      const labels    = prices.map((p: any) => p.date);
-      const closes    = prices.map((p: any) => p.close);
-      const buyPts    = trades.map((t: any) => ({ x: t.date_achat, y: t.prix_achat  }));
-      const sellPts   = trades.map((t: any) => ({ x: t.date,       y: t.prix_vente  }));
+      const priceData = prices.map((p: any) => ({ x: p.date, y: p.close }));
 
-      this._priceChart = new Chart(this.priceCanvas.nativeElement, {
+      // Trouver la date de prix la plus proche pour chaque trade
+      const priceDates = prices.map((p: any) => p.date);
+      const nearestDate = (d: string) => priceDates.reduce((best: string, curr: string) =>
+        Math.abs(Date.parse(curr) - Date.parse(d)) < Math.abs(Date.parse(best) - Date.parse(d)) ? curr : best
+      );
+      const closePriceAt = (d: string) => {
+        const nearest = nearestDate(d);
+        return prices.find((p: any) => p.date === nearest)?.close ?? 0;
+      };
+
+      const buyPts  = trades.map((t: any) => ({ x: nearestDate(t.date_achat), y: t.prix_achat }));
+      const sellPts = trades.map((t: any) => ({ x: nearestDate(t.date),       y: t.prix_vente }));
+
+      const c1 = new Chart(this.priceCanvas.nativeElement, {
         type: 'line',
         data: {
-          labels,
           datasets: [
             {
               label: 'Prix clôture',
-              data: closes,
+              data: priceData,
               borderColor: 'rgba(0,200,255,0.85)',
-              backgroundColor: 'rgba(0,200,255,0.07)',
-              fill: true, borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 3,
+              backgroundColor: 'rgba(0,200,255,0.06)',
+              fill: true, borderWidth: 1.5, pointRadius: 0, tension: 0.1, order: 3,
             },
             {
               label: 'Achat ▲',
               data: buyPts,
               type: 'scatter' as any,
               backgroundColor: '#2ecc71', borderColor: '#27ae60', borderWidth: 2,
-              pointStyle: 'triangle', pointRadius: 10, order: 1,
+              pointStyle: 'triangle', pointRadius: 11, order: 1,
             },
             {
               label: 'Vente ▼',
               data: sellPts,
               type: 'scatter' as any,
               backgroundColor: '#e74c3c', borderColor: '#c0392b', borderWidth: 2,
-              pointStyle: 'triangle', rotation: 180, pointRadius: 10, order: 2,
+              pointStyle: 'triangle', rotation: 180, pointRadius: 11, order: 2,
             },
           ],
         },
-        options: this._opts('Prix & signaux'),
+        options: {
+          ...this._opts('Prix & signaux'),
+          scales: {
+            x: { type: 'time', time: { unit: 'month' }, adapters: { date: {} },
+                 ticks: { color: '#4a6a8a', maxRotation: 0, font: { size: 10 } },
+                 grid: { color: 'rgba(255,255,255,0.04)' } },
+            y: { ticks: { color: '#4a6a8a', font: { size: 10 } },
+                 grid: { color: 'rgba(255,255,255,0.06)' } },
+          },
+          plugins: { ...this._opts('Prix & signaux').plugins, zoom: this._zoomOpts() },
+        },
       });
+      this._charts.push(c1);
     }
 
-    // ── Chart 2 : Courbe de capital ───────────────────────────────────────
+    // ── Chart 2 : Courbe de capital avec marqueurs alignés ───────────────
     if (equity.length > 1) {
+      // Equity utilise les indices — pas de dates scatter mal alignées
       const eLabels = equity.map((p: any) => p.date);
-      const eValues = equity.map((p: any) => p.valeur);
-      const buyEq   = trades.map((t: any, i: number) => ({ x: t.date_achat, y: equity[i]?.valeur ?? 0 }));
-      const sellEq  = trades.map((t: any, i: number) => ({ x: t.date, y: equity[i + 1]?.valeur ?? equity[equity.length - 1]?.valeur ?? 0 }));
+      const eValues = equity.map((p: any) => ({ x: p.date, y: p.valeur }));
 
-      this._equityChart = new Chart(this.equityCanvas.nativeElement, {
+      // Buy = equity[i] (capital avant le trade i), Sell = equity[i+1]
+      const buyEq  = trades.map((t: any, i: number) => ({
+        x: t.date_achat,
+        y: equity[i]?.valeur ?? equity[0].valeur,
+      }));
+      const sellEq = trades.map((t: any, i: number) => ({
+        x: t.date,
+        y: equity[i + 1]?.valeur ?? equity[equity.length - 1]?.valeur,
+      }));
+
+      const c2 = new Chart(this.equityCanvas.nativeElement, {
         type: 'line',
         data: {
-          labels: eLabels,
           datasets: [
             {
               label: 'Capital (€)',
               data: eValues,
-              borderColor: positive ? '#2ecc71' : '#e74c3c',
+              borderColor: lineColor,
               backgroundColor: positive ? 'rgba(46,204,113,0.10)' : 'rgba(231,76,60,0.10)',
               fill: true, borderWidth: 2,
-              pointRadius: 4, pointBackgroundColor: positive ? '#2ecc71' : '#e74c3c',
+              pointRadius: 5, pointBackgroundColor: lineColor,
               tension: 0.3, order: 3,
             },
             {
@@ -169,19 +197,30 @@ export class BacktestComponent implements OnDestroy {
               data: buyEq,
               type: 'scatter' as any,
               backgroundColor: '#2ecc71', borderColor: '#27ae60', borderWidth: 2,
-              pointStyle: 'triangle', pointRadius: 10, order: 1,
+              pointStyle: 'triangle', pointRadius: 11, order: 1,
             },
             {
               label: 'Vente ▼',
               data: sellEq,
               type: 'scatter' as any,
               backgroundColor: '#e74c3c', borderColor: '#c0392b', borderWidth: 2,
-              pointStyle: 'triangle', rotation: 180, pointRadius: 10, order: 2,
+              pointStyle: 'triangle', rotation: 180, pointRadius: 11, order: 2,
             },
           ],
         },
-        options: this._opts('Courbe de capital (€)'),
+        options: {
+          ...this._opts('Courbe de capital (€)'),
+          scales: {
+            x: { type: 'time', time: { unit: 'month' }, adapters: { date: {} },
+                 ticks: { color: '#4a6a8a', maxRotation: 0, font: { size: 10 } },
+                 grid: { color: 'rgba(255,255,255,0.04)' } },
+            y: { ticks: { color: '#4a6a8a', font: { size: 10 } },
+                 grid: { color: 'rgba(255,255,255,0.06)' } },
+          },
+          plugins: { ...this._opts('Courbe de capital (€)').plugins, zoom: this._zoomOpts() },
+        },
       });
+      this._charts.push(c2);
     }
 
     // ── Chart 3 : P&L par trade ───────────────────────────────────────────
@@ -191,40 +230,32 @@ export class BacktestComponent implements OnDestroy {
       const colors  = pValues.map((v: number) => v >= 0 ? 'rgba(46,204,113,0.75)' : 'rgba(231,76,60,0.75)');
       const borders = pValues.map((v: number) => v >= 0 ? '#2ecc71' : '#e74c3c');
 
-      this._pnlChart = new Chart(this.pnlCanvas.nativeElement, {
+      const c3 = new Chart(this.pnlCanvas.nativeElement, {
         type: 'bar',
         data: {
           labels: pLabels,
-          datasets: [{
-            label: 'P&L net (€)',
-            data: pValues,
-            backgroundColor: colors,
-            borderColor: borders,
-            borderWidth: 1.5,
-            borderRadius: 4,
-          }],
+          datasets: [{ label: 'P&L net (€)', data: pValues,
+            backgroundColor: colors, borderColor: borders, borderWidth: 1.5, borderRadius: 4 }],
         },
         options: {
           ...this._opts('P&L net par trade (€)'),
           plugins: {
-            ...this._opts('').plugins,
+            ...this._opts('P&L net par trade (€)').plugins,
+            zoom: this._zoomOpts(),
             tooltip: {
-              ...this._opts('').plugins?.tooltip,
+              ...this._opts('').plugins.tooltip,
               callbacks: {
                 label: (ctx: any) => {
                   const t = trades[ctx.dataIndex];
                   const s = t.pnlnet >= 0 ? '+' : '';
-                  return [
-                    ` P&L net : ${s}${t.pnlnet.toFixed(2)} €`,
-                    ` Achat : ${t.date_achat} @ ${t.prix_achat}`,
-                    ` Vente : ${t.date} @ ${t.prix_vente}`,
-                  ];
+                  return [` P&L : ${s}${t.pnlnet.toFixed(2)} €`, ` ${t.date_achat} → ${t.date}`];
                 },
               },
             },
           },
         },
       });
+      this._charts.push(c3);
     }
   }
 
@@ -234,32 +265,9 @@ export class BacktestComponent implements OnDestroy {
       maintainAspectRatio: false,
       interaction: { mode: 'index' as any, intersect: false },
       plugins: {
-        legend: { labels: { color: '#7a9bbb', font: { size: 11 }, boxWidth: 12 } },
-        title: {
-          display: !!title,
-          text: title,
-          color: '#9ab5cc',
-          font: { size: 12, weight: '600' as any },
-          padding: { bottom: 10 },
-        },
-        tooltip: {
-          backgroundColor: 'rgba(10,15,30,0.92)',
-          borderColor: 'rgba(0,200,255,0.25)',
-          borderWidth: 1,
-          titleColor: '#c8d6f0',
-          bodyColor: '#7a9bbb',
-          padding: 10,
-        },
-      },
-      scales: {
-        x: {
-          ticks: { color: '#4a6a8a', maxTicksLimit: 10, maxRotation: 0, font: { size: 10 } },
-          grid:  { color: 'rgba(255,255,255,0.04)' },
-        },
-        y: {
-          ticks: { color: '#4a6a8a', font: { size: 10 } },
-          grid:  { color: 'rgba(255,255,255,0.06)' },
-        },
+        legend:  { labels: { color: '#7a9bbb', font: { size: 11 }, boxWidth: 12 } },
+        title:   { display: !!title, text: title, color: '#9ab5cc', font: { size: 12, weight: '600' as any }, padding: { bottom: 8 } },
+        tooltip: { backgroundColor: 'rgba(10,15,30,0.92)', borderColor: 'rgba(0,200,255,0.25)', borderWidth: 1, titleColor: '#c8d6f0', bodyColor: '#7a9bbb', padding: 10 },
       },
     };
   }
