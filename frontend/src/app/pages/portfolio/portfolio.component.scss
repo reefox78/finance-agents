@@ -1,5 +1,9 @@
 .page { max-width: 1300px; }
 
+/* Prix loading state */
+.prix-loading { margin-left: 6px; font-size: 12px; opacity: 0.8; }
+.loading-input { opacity: 0.6; }
+
 /* Toast */
 .toast {
   position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 999;

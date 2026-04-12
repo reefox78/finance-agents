@@ -2,8 +2,8 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { finalize, timeout, catchError } from 'rxjs/operators';
-import { of } from 'rxjs';
+import { finalize, timeout, catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { of, Subject } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import {
   WATCHLIST, WATCHLIST_CATEGORIES, TICKER_NAMES, tickerLabel,
@@ -55,6 +55,8 @@ export class PortfolioComponent implements OnInit {
 
   // ── Achat form ────────────────────────────────────────────────────────────
   achat = { ticker: '', customTicker: '', prix: 0, quantite: 1, date: '', frais: 1, notes: '' };
+  prixLoading = false;
+  private _tickerChange$ = new Subject<string>();
 
   // ── Vente / Objectifs ─────────────────────────────────────────────────────
   vente: Record<string, { qty: number; prix: number; date: string; notes: string; frais: number }> = {};
@@ -80,6 +82,23 @@ export class PortfolioComponent implements OnInit {
     this.loadPositions();
     this.api.getHistorique().subscribe({ next: h => this.historique.set(h), error: () => {} });
 
+    // Auto-fill prix actuel quand le ticker change (debounce 400 ms)
+    this._tickerChange$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      switchMap(ticker => {
+        if (!ticker) return of(null);
+        this.prixLoading = true;
+        return this.api.getPrix(ticker).pipe(catchError(() => of(null)));
+      }),
+    ).subscribe(res => {
+      this.prixLoading = false;
+      if (res?.prix) {
+        this.achat.prix = res.prix;
+        this._autoFrais();
+      }
+    });
+
     // Pré-remplissage depuis la page Analyse (query params)
     this.route.queryParams.subscribe(params => {
       if (params['achat'] === '1' && params['ticker']) {
@@ -89,11 +108,17 @@ export class PortfolioComponent implements OnInit {
         if (!isNaN(prixParam)) {
           this.achat.prix = prixParam;
           this._autoFrais();
+        } else {
+          this._fetchPrix(params['ticker']);
         }
-        // Scroll vers le formulaire
         setTimeout(() => document.querySelector('.expander')?.scrollIntoView({ behavior: 'smooth' }), 300);
       }
     });
+  }
+
+  /** Déclenche la récupération du prix pour un ticker donné. */
+  private _fetchPrix(ticker: string): void {
+    if (ticker) this._tickerChange$.next(ticker);
   }
 
   loadPositions(): void {
@@ -120,7 +145,14 @@ export class PortfolioComponent implements OnInit {
     return this.achat.customTicker?.trim().toUpperCase() || this.achat.ticker;
   }
 
-  onAchatChange(): void { this._autoFrais(); }
+  onAchatChange(): void {
+    this._autoFrais();
+    this._fetchPrix(this.effectiveTicker);
+  }
+
+  onTickerSelect(): void {
+    this._fetchPrix(this.effectiveTicker);
+  }
 
   private _autoFrais(): void {
     const montant = this.achat.prix * this.achat.quantite;

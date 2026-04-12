@@ -58,6 +58,10 @@ export class ApiService {
     return this.http.get<any[]>(`${this.base}/portfolio/analyse-history/${ticker}`);
   }
 
+  getPrix(ticker: string): Observable<{ ticker: string; prix: number }> {
+    return this.http.get<{ ticker: string; prix: number }>(`${this.base}/portfolio/price/${encodeURIComponent(ticker)}`);
+  }
+
   addAchat(body: any): Observable<any> {
     return this.http.post(`${this.base}/portfolio/achat`, body);
   }

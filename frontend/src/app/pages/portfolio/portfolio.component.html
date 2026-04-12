@@ -139,9 +139,13 @@
           <!-- Autres champs -->
           <div class="form-grid">
             <div class="field">
-              <label class="ctrl-label">Prix d'achat (€)</label>
+              <label class="ctrl-label">
+                Prix d'achat (€)
+                @if (prixLoading) { <span class="prix-loading">⏳</span> }
+              </label>
               <input class="fa-input" type="number" [(ngModel)]="achat.prix" name="prix"
-                     required step="0.01" placeholder="150.00"
+                     required step="0.01" placeholder="Chargement…"
+                     [class.loading-input]="prixLoading"
                      (ngModelChange)="onAchatChange()" />
             </div>
             <div class="field">

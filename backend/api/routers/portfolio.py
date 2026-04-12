@@ -114,6 +114,26 @@ def supprimer_tx(tx_id: str, current_user: CurrentUser):
     return {"ok": True}
 
 
+@router.get("/price/{ticker}")
+def get_price(ticker: str, current_user: CurrentUser):
+    """Retourne le prix actuel d'un ticker (léger, pour pré-remplir le formulaire d'achat)."""
+    ticker = ticker.upper().strip()
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker).info
+        prix = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
+        if prix:
+            return {"ticker": ticker, "prix": round(float(prix), 4)}
+        hist = yf.Ticker(ticker).history(period="1d")
+        if not hist.empty:
+            return {"ticker": ticker, "prix": round(float(hist["Close"].iloc[-1]), 4)}
+        raise HTTPException(status_code=404, detail=f"Prix introuvable pour {ticker}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/analyse-history/{ticker}")
 def analyse_history(ticker: str, current_user: CurrentUser):
     """
