@@ -1,0 +1,34 @@
+services:
+
+  # ── Backend FastAPI ────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .                      # racine du projet (accès à agents/, db/, etc.)
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"                   # accès direct optionnel en dev
+    env_file:
+      - config/.env                   # DATABASE_URL, JWT_SECRET, GROQ_API_KEY, FRED_API_KEY
+    volumes:
+      - ./logs:/app/logs              # logs persistants
+      - ./data:/app/data              # portfolio.json local + cache market data
+      - ./config:/app/config:ro       # .env + watchlist.json (lecture seule)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ── Frontend Angular + nginx ───────────────────────────────────────────
+  frontend:
+    build:
+      context: .                      # racine du projet
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "80:80"                       # http://localhost
+    depends_on:
+      backend:
+        condition: service_healthy    # attend que le backend soit prêt
+    restart: unless-stopped

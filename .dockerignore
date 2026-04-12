@@ -1,0 +1,40 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Node / Angular
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Git
+.git/
+.gitignore
+
+# Logs & données temporaires
+logs/
+*.log
+output/*.txt
+output/*.csv
+
+# Secrets (ne jamais envoyer dans l'image)
+config/.env
+config/brokers.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
