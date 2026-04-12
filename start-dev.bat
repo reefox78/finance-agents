@@ -1,38 +1,45 @@
 @echo off
-chcp 65001 > nul
-title Finance Agents — Dev
+title Finance Agents - Dev
 cd /d "%~dp0"
 
-:: ── Trouver Python (venv en priorité) ─────────────────────────────────────
-if exist "venv\Scripts\python.exe" (
-    set PYTHON=venv\Scripts\python.exe
-) else if exist ".venv\Scripts\python.exe" (
-    set PYTHON=.venv\Scripts\python.exe
+:: Stocker le chemin racine dans une variable (avec backslash final)
+set "ROOT=%~dp0"
+
+:: Trouver Python (venv en priorite)
+if exist "%ROOT%venv\Scripts\python.exe" (
+    set "PYTHON=%ROOT%venv\Scripts\python.exe"
+) else if exist "%ROOT%.venv\Scripts\python.exe" (
+    set "PYTHON=%ROOT%.venv\Scripts\python.exe"
 ) else (
-    set PYTHON=python
+    set "PYTHON=python"
 )
 
 cls
 echo.
 echo  ============================================================
-echo    Finance Agents ^|^| Dev Server
+echo    Finance Agents - Dev Server
 echo  ============================================================
 echo.
+echo  Python : %PYTHON%
+echo  Racine : %ROOT%
+echo.
 
 
-:: ══════════════════════════════════════════════════════════════
-::  ETAPE 1/4  Tests Python (pytest)
-:: ══════════════════════════════════════════════════════════════
-echo  [1/4]  Tests Python
+:: ============================================================
+::  1/4  Tests Python
+:: ============================================================
+echo  [1/4]  Tests Python (pytest)
 echo  ------------------------------------------------------------
 echo.
-%PYTHON% -m pytest tests/ -v --tb=short --color=yes
+
+"%PYTHON%" -m pytest "%ROOT%tests" -v --tb=short
+set "PYTEST_CODE=%ERRORLEVEL%"
 echo.
 
-if %ERRORLEVEL% NEQ 0 (
+if %PYTEST_CODE% NEQ 0 (
     echo  ============================================================
-    echo    ERREUR  ^|^|  Tests Python KO
-    echo    Corriger les erreurs ci-dessus puis relancer start-dev.bat
+    echo    ERREUR - Tests Python KO
+    echo    Corriger les erreurs puis relancer start-dev.bat
     echo  ============================================================
     echo.
     pause
@@ -43,21 +50,23 @@ echo  [OK] Tests Python : tous passes
 echo.
 
 
-:: ══════════════════════════════════════════════════════════════
-::  ETAPE 2/4  Tests Angular (vitest / jsdom)
-:: ══════════════════════════════════════════════════════════════
-echo  [2/4]  Tests Angular
+:: ============================================================
+::  2/4  Tests Angular
+:: ============================================================
+echo  [2/4]  Tests Angular (vitest / jsdom)
 echo  ------------------------------------------------------------
 echo.
-cd frontend
+
+cd "%ROOT%frontend"
 call npm run test:ci
-cd ..
+set "NPM_CODE=%ERRORLEVEL%"
+cd "%ROOT%"
 echo.
 
-if %ERRORLEVEL% NEQ 0 (
+if %NPM_CODE% NEQ 0 (
     echo  ============================================================
-    echo    ERREUR  ^|^|  Tests Angular KO
-    echo    Corriger les erreurs ci-dessus puis relancer start-dev.bat
+    echo    ERREUR - Tests Angular KO
+    echo    Corriger les erreurs puis relancer start-dev.bat
     echo  ============================================================
     echo.
     pause
@@ -68,37 +77,41 @@ echo  [OK] Tests Angular : tous passes
 echo.
 
 
-:: ══════════════════════════════════════════════════════════════
-::  ETAPE 3/4  Lancement Backend  (tests deja valides)
-:: ══════════════════════════════════════════════════════════════
+:: ============================================================
+::  3/4  Lancement Backend
+:: ============================================================
 echo  [3/4]  Demarrage Backend  http://localhost:8000
 echo  ------------------------------------------------------------
-start "Backend :8000" cmd /k "%PYTHON% backend\start.py --skip-tests"
-echo  OK - fenetre "Backend :8000" ouverte
+
+start "Backend :8000" cmd /k ""%PYTHON%" "%ROOT%backend\start.py" --skip-tests"
+
+echo  Fenetre Backend :8000 ouverte.
 echo.
 
 
-:: ══════════════════════════════════════════════════════════════
-::  ETAPE 4/4  Lancement Frontend (ng serve direct, tests deja faits)
-:: ══════════════════════════════════════════════════════════════
+:: ============================================================
+::  4/4  Lancement Frontend
+:: ============================================================
 echo  [4/4]  Demarrage Frontend  http://localhost:4200
 echo  ------------------------------------------------------------
-start "Frontend :4200" cmd /k "cd /d %~dp0frontend && npm run serve"
-echo  OK - fenetre "Frontend :4200" ouverte
+
+start "Frontend :4200" /d "%ROOT%frontend" cmd /k "npm run serve"
+
+echo  Fenetre Frontend :4200 ouverte.
 echo.
 
 
-:: ══════════════════════════════════════════════════════════════
-::  Recap
-:: ══════════════════════════════════════════════════════════════
+:: ============================================================
+::  Recap final
+:: ============================================================
 echo  ============================================================
-echo    Tous les tests sont passes  --  serveurs demarres !
+echo    Tous les tests passes - serveurs demarres !
 echo.
-echo    Frontend  -^>  http://localhost:4200
-echo    Backend   -^>  http://localhost:8000
-echo    API Docs  -^>  http://localhost:8000/docs
+echo    Frontend  ->  http://localhost:4200
+echo    Backend   ->  http://localhost:8000
+echo    API Docs  ->  http://localhost:8000/docs
 echo.
-echo    Fermer les fenetres "Backend" et "Frontend" pour arreter
+echo    Fermer les fenetres Backend et Frontend pour arreter.
 echo  ============================================================
 echo.
 pause
