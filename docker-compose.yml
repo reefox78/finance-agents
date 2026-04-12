@@ -14,6 +14,8 @@ services:
       - ./data:/app/data              # portfolio.json local + cache market data
       - ./config:/app/config:ro       # .env + watchlist.json (lecture seule)
     restart: unless-stopped
+    networks:
+      - finance-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -32,3 +34,15 @@ services:
       backend:
         condition: service_healthy    # attend que le backend soit prêt
     restart: unless-stopped
+    networks:
+      - finance-net
+
+networks:
+  finance-net:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.28.0.0/16"
+        - subnet: "fd42:dead:beef::/48"
