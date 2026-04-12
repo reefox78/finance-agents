@@ -12,15 +12,38 @@ Usage :
 """
 
 import os
+import socket
 import psycopg2
 import psycopg2.pool
+import psycopg2.extensions
 from dotenv import load_dotenv
 
 load_dotenv("config/.env")   # local dev — ignoré silencieusement si absent
 
-# Pool initialisé au premier appel (lazy) pour supporter Streamlit Cloud
-# où DATABASE_URL est injecté dans os.environ APRÈS l'import du module.
+# Pool initialisé au premier appel (lazy)
 _pool: psycopg2.pool.ThreadedConnectionPool | None = None
+
+
+def _conn_params(db_url: str) -> dict:
+    """
+    Parse DATABASE_URL et injecte hostaddr (IPv4) si disponible.
+    Nécessaire sous Docker où IPv6 est désactivé par défaut :
+    psycopg2 tente l'IPv6 en premier → 'Network is unreachable'.
+    En gardant `host` (pour la vérification SSL) et en ajoutant
+    `hostaddr` (IPv4), on force la connexion en IPv4.
+    """
+    params = psycopg2.extensions.parse_dsn(db_url)
+    host = params.get("host", "")
+    if host:
+        try:
+            ipv4_results = socket.getaddrinfo(host, None, socket.AF_INET)
+            if ipv4_results:
+                params["hostaddr"] = ipv4_results[0][4][0]
+        except Exception:
+            pass   # résolution échouée → on laisse psycopg2 gérer
+    params.setdefault("sslmode", "require")
+    params.setdefault("connect_timeout", "10")
+    return params
 
 
 def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
@@ -29,14 +52,11 @@ def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
         db_url = os.getenv("DATABASE_URL")
         if not db_url:
             raise EnvironmentError(
-                "DATABASE_URL manquant. "
-                "Configurez config/.env (local) ou les Secrets Streamlit Cloud."
+                "DATABASE_URL manquant. Configurez config/.env."
             )
         _pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=1, maxconn=5,
-            dsn=db_url,
-            sslmode="require",
-            connect_timeout=10,
+            **_conn_params(db_url),
         )
     return _pool
 
