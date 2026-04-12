@@ -1,0 +1,56 @@
+<div class="page">
+  <h2 class="page-title">📡 Scanner</h2>
+
+  <div class="controls">
+    <select [(ngModel)]="categorie">
+      <option value="">Toute la watchlist</option>
+      <option value="us_stocks">US Stocks</option>
+      <option value="eu_stocks">EU Stocks</option>
+      <option value="crypto">Crypto</option>
+      <option value="forex">Forex</option>
+    </select>
+    <label class="score-filter">
+      Score min :
+      <input type="number" [(ngModel)]="minScore" step="0.05" min="-1" max="1" />
+    </label>
+    <button (click)="startScan()" [disabled]="loading()">
+      {{ loading() ? 'Scan en cours…' : 'Lancer le scan' }}
+    </button>
+  </div>
+
+  @if (loading() && progress(); as p) {
+    <div class="progress-overlay">
+      <div class="progress-inner">
+        <div class="progress-label">Analyse {{ p.ticker }} ({{ p.current }}/{{ p.total }})</div>
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="(p.current / p.total) * 100"></div>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (error()) {
+    <div class="error-box">{{ error() }}</div>
+  }
+
+  @if (results().length > 0) {
+    <table class="results-table">
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Score</th>
+          <th>Décision</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of results(); track r.ticker) {
+          <tr>
+            <td class="ticker">{{ r.ticker }}</td>
+            <td class="score" [style.color]="scoreColor(r.score)">{{ r.score | number:'1.4-4' }}</td>
+            <td class="decision">{{ r.decision }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

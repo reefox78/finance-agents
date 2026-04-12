@@ -1,0 +1,230 @@
+<div class="page">
+
+  <!-- Controls row -->
+  <div class="controls-row">
+    <div class="control-group">
+      <label class="ctrl-label">TICKER</label>
+      <select [(ngModel)]="ticker" (ngModelChange)="customTicker=''" class="fa-select ticker-sel">
+        <option value="" disabled>Sélectionner…</option>
+        @for (cat of categories; track cat) {
+          <optgroup [label]="cat">
+            @for (t of watchlist[cat]; track t) {
+              <option [value]="t">{{ label(t) }}</option>
+            }
+          </optgroup>
+        }
+      </select>
+    </div>
+    <div class="control-group">
+      <label class="ctrl-label">OU SAISIR</label>
+      <input class="fa-input custom-input" type="text"
+        [(ngModel)]="customTicker" (ngModelChange)="onCustomInput()"
+        placeholder="TSM, BABA…" (keyup.enter)="run()" />
+    </div>
+    <div class="control-group">
+      <label class="ctrl-label">PÉRIODE</label>
+      <select [(ngModel)]="period" class="fa-select period-sel">
+        <option value="1mo">1 mois</option>
+        <option value="3mo">3 mois</option>
+        <option value="6mo">6 mois</option>
+        <option value="1y">1 an</option>
+        <option value="2y">2 ans</option>
+      </select>
+    </div>
+    <div class="control-group ctrl-btn">
+      <label class="ctrl-label">&nbsp;</label>
+      <button class="btn-primary" (click)="run()" [disabled]="loading() || !ticker">
+        {{ loading() ? 'Analyse…' : 'Analyser' }}
+      </button>
+    </div>
+    <label class="toggle-llm">
+      <input type="checkbox" [(ngModel)]="withLlm" />
+      Rapport LLM
+    </label>
+  </div>
+
+  <!-- Quick chips -->
+  @if (!result() && !loading()) {
+    <div class="quick-chips">
+      @for (t of quickTickers; track t) {
+        <span class="chip" (click)="selectQuick(t)">{{ t }}</span>
+      }
+    </div>
+  }
+
+  @if (loading()) { <div class="loader-bar"><div class="bar-inner"></div></div> }
+  @if (error())   { <div class="error-box">{{ error() }}</div> }
+
+  <!-- ── Graphique technique — canvases toujours dans le DOM ── -->
+  <div [class.hidden]="!result()?.chart?.dates?.length">
+    <div class="chart-section-header">
+      <span>Graphique technique</span>
+      <button class="zoom-reset-btn" (click)="resetZoom()">↺ Reset zoom</button>
+    </div>
+    <!-- Légende explicative -->
+    <div class="chart-legend-bar">
+      <span class="leg-item"><span class="leg-dot" style="background:#00c8ff"></span>Prix</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#3498db"></span>Moy. 20j — moyenne des 20 dernières clôtures</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#e67e22"></span>Moy. 50j — tendance long terme</span>
+      <span class="leg-item"><span class="leg-dot leg-dashed" style="border-color:rgba(0,200,255,0.6)"></span>Bollinger ±2σ — zone de volatilité normale</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#e67e22"></span>RSI &lt;30 survendu · &gt;70 suracheté</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#3498db"></span>MACD = différence EMA12−EMA26</span>
+    </div>
+    <div class="chart-block">
+      <div class="chart-panel tall">  <canvas #priceCanvas></canvas></div>
+      <div class="chart-panel small"> <canvas #volumeCanvas></canvas></div>
+      <div class="chart-panel medium"><canvas #rsiCanvas></canvas></div>
+      <div class="chart-panel small"> <canvas #macdCanvas></canvas></div>
+    </div>
+  </div>
+
+  @if (result(); as r) {
+
+    <!-- Header metrics -->
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-label">Prix actuel</div>
+        <div class="metric-value">{{ r.tech?.prix_actuel ?? '—' }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Type d'actif</div>
+        <div class="metric-value" style="font-size:16px">{{ assetLabel(r.asset_type) }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Score final</div>
+        <div class="metric-value" [style.color]="scoreColor(r.scoring.score_final)">
+          {{ r.scoring.score_final | number:'1.4-4' }}
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Décision</div>
+        <div class="metric-value" style="font-size:16px" [style.color]="decisionColor(r.scoring.decision)">
+          {{ r.scoring.decision }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Buy shortcut -->
+    <div class="buy-bar">
+      <button class="btn-buy" (click)="acheter()">
+        ➕ Acheter {{ ticker }} au prix actuel
+      </button>
+      <span class="buy-hint">Ouvre le formulaire d'achat dans Portefeuille avec le ticker et le prix pré-remplis.</span>
+    </div>
+
+    <!-- Agent signals grid -->
+    <div class="section-header"><span>Signaux des agents</span></div>
+    <div class="agents-grid">
+
+      @if (r.tech) {
+        <div class="agent-card" [class]="signalClass(r.tech.signal)">
+          <div class="ac-name">Technique
+            <span class="help-tip">?<span class="help-text">Analyse les indicateurs de prix : RSI (force du mouvement), MACD (tendance), moyennes mobiles, Bollinger Bands. Détecte les signaux d'achat/vente à court terme.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.tech.signal }}</div>
+          <div class="ac-detail">RSI {{ r.tech.rsi }} · MACD {{ r.tech.macd }}</div>
+        </div>
+      }
+      @if (r.fund) {
+        <div class="agent-card" [class]="signalClass(r.fund.signal)">
+          <div class="ac-name">Fondamental
+            <span class="help-tip">?<span class="help-text">Évalue la santé financière de l'entreprise : PER (combien on paye pour 1€ de bénéfice), chiffre d'affaires, marges. Indique si l'action est sous- ou surévaluée.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.fund.signal }}</div>
+          <div class="ac-detail">PER {{ r.fund.per }} · {{ r.fund.secteur }}</div>
+        </div>
+      }
+      @if (r.sent) {
+        <div class="agent-card" [class]="signalClass(r.sent.signal)">
+          <div class="ac-name">Sentiment
+            <span class="help-tip">?<span class="help-text">Analyse les actualités et réseaux sociaux pour mesurer l'opinion du marché. Un sentiment positif = les investisseurs sont optimistes sur cet actif.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.sent.signal }}</div>
+          <div class="ac-detail">{{ r.sent.positif }}✅ {{ r.sent.negatif }}❌ sur {{ r.sent.articles }} articles</div>
+        </div>
+      }
+      @if (r.risk) {
+        <div class="agent-card" [class]="signalClass(r.risk.risque)">
+          <div class="ac-name">Risque
+            <span class="help-tip">?<span class="help-text">Mesure la volatilité (amplitude des variations de prix) et le drawdown max (pire chute depuis un sommet). Plus ces chiffres sont élevés, plus l'actif est risqué.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.risk.risque }}</div>
+          <div class="ac-detail">Vol. {{ r.risk.volatilite }}% · DD {{ r.risk.drawdown_max }}%</div>
+        </div>
+      }
+      @if (r.macro) {
+        <div class="agent-card" [class]="signalClass(r.macro.signal)">
+          <div class="ac-name">Macro
+            <span class="help-tip">?<span class="help-text">Analyse le contexte économique global : taux d'intérêt de la Fed, inflation, indicateurs FRED. Un environnement macro défavorable pèse sur tous les marchés.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.macro.signal }}</div>
+          <div class="ac-detail">{{ r.macro.environnement }}</div>
+        </div>
+      }
+      @if (r.trends) {
+        <div class="agent-card" [class]="signalClass(r.trends.signal)">
+          <div class="ac-name">Trends
+            <span class="help-tip">?<span class="help-text">Détecte l'intérêt du grand public via Google Trends. Une forte hausse des recherches peut précéder un mouvement de prix, surtout sur les cryptos.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.trends.signal }}</div>
+          <div class="ac-detail">{{ r.trends.tendance }} · {{ r.trends.variation }}%</div>
+        </div>
+      }
+      @if (r.insider) {
+        <div class="agent-card" [class]="signalClass(r.insider.signal)">
+          <div class="ac-name">Insider
+            <span class="help-tip">?<span class="help-text">Suit les transactions des dirigeants et initiés (PDG, CFO…). Quand les dirigeants achètent massivement leurs propres actions, c'est souvent un signal bullish.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.insider.signal }}</div>
+          <div class="ac-detail">{{ r.insider.nb_achats }} achats · {{ r.insider.nb_ventes }} ventes</div>
+        </div>
+      }
+      @if (r.options_flow) {
+        <div class="agent-card" [class]="signalClass(r.options_flow.signal)">
+          <div class="ac-name">Options Flow
+            <span class="help-tip">?<span class="help-text">Analyse les flux d'options (puts vs calls). Un ratio P/C élevé = les investisseurs achètent des protections baissières. Les institutionnels utilisent les options pour anticiper les mouvements.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.options_flow.signal }}</div>
+          <div class="ac-detail">P/C {{ r.options_flow.pc_ratio_vol }}</div>
+        </div>
+      }
+      @if (r.short_interest) {
+        <div class="agent-card" [class]="signalClass(r.short_interest.signal)">
+          <div class="ac-name">Short Interest
+            <span class="help-tip">?<span class="help-text">Mesure le % d'actions vendues à découvert (les "shorts" parient sur une baisse). Un taux très élevé peut déclencher un short squeeze (rachat forcé qui propulse le prix).</span></span>
+          </div>
+          <div class="ac-signal">{{ r.short_interest.signal }}</div>
+          <div class="ac-detail">{{ r.short_interest.short_pct }}% float</div>
+        </div>
+      }
+      @if (r.earnings_surprise) {
+        <div class="agent-card" [class]="signalClass(r.earnings_surprise.signal)">
+          <div class="ac-name">Earnings
+            <span class="help-tip">?<span class="help-text">Compare les résultats réels aux attentes des analystes. Une surprise positive (résultats meilleurs qu'attendus) pousse généralement le cours à la hausse.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.earnings_surprise.signal }}</div>
+          <div class="ac-detail">{{ r.earnings_surprise.latest_surprise }}% surprise</div>
+        </div>
+      }
+      @if (r.volume_delta) {
+        <div class="agent-card" [class]="signalClass(r.volume_delta.signal)">
+          <div class="ac-name">Volume Delta
+            <span class="help-tip">?<span class="help-text">Mesure la pression acheteuse vs vendeuse via le volume cumulatif (CVD). Un CVD positif = plus d'acheteurs agressifs que de vendeurs. Signal de momentum.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.volume_delta.signal }}</div>
+          <div class="ac-detail">CVD {{ r.volume_delta.cvd_tendance }}</div>
+        </div>
+      }
+
+    </div>
+
+    <!-- LLM Report -->
+    @if (r.rapport) {
+      <div class="section-header" style="margin-top:1.5rem"><span>Rapport de décision IA</span></div>
+      <div class="rapport-card">
+        <pre class="rapport-text">{{ r.rapport }}</pre>
+      </div>
+    }
+  }
+
+</div>

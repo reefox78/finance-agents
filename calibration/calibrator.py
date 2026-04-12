@@ -29,9 +29,17 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from data.score_history  import lire_historique as _lire_local, lister_tickers as _tickers_local
-from db.score_history    import lire_historique as _lire_db, lister_tickers as _tickers_db
+from data.score_history   import lire_historique as _lire_local, lister_tickers as _tickers_local
 from orchestrator.scoring import POIDS as POIDS_DEFAUT
+
+# Import DB optionnel — peut ne pas être disponible (table inexistante, etc.)
+try:
+    from db.score_history import lire_historique as _lire_db, lister_tickers as _tickers_db
+    _DB_OK = True
+except Exception:
+    _lire_db = None
+    _tickers_db = None
+    _DB_OK = False
 
 ROOT            = Path(__file__).parent.parent
 FICHIER_POIDS   = ROOT / "config" / "weights_custom.json"
@@ -92,7 +100,7 @@ def calibrer(ticker: str, horizon: int = HORIZON_JOURS, user_id: str = None) -> 
       "poids_suggeres": {agent: float, ...}
     }
     """
-    historique   = _lire_db(user_id, ticker) if user_id else _lire_local(ticker)
+    historique   = (_lire_db(user_id, ticker) if (_DB_OK and user_id) else _lire_local(ticker))
     maintenant   = datetime.now()
     stats: dict  = {}   # agent → {correct: int, total: int}
     nb_points    = 0
@@ -153,7 +161,7 @@ def calibrer_global(horizon: int = HORIZON_JOURS, user_id: str = None) -> dict:
     Agrège les données de calibration de tous les tickers disponibles.
     Retourne le même format que calibrer() mais sans le champ "ticker".
     """
-    tickers           = _tickers_db(user_id) if user_id else _tickers_local()
+    tickers           = (_tickers_db(user_id) if (_DB_OK and user_id) else _tickers_local())
     aggreg: dict      = {}
     nb_tickers_actifs = 0
     nb_points_total   = 0

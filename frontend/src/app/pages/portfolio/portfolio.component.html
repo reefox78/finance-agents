@@ -1,0 +1,521 @@
+<div class="page">
+
+  <!-- Toast -->
+  @if (toast()) { <div class="toast">{{ toast() }}</div> }
+
+  <!-- Error -->
+  @if (error()) { <div class="error-box">{{ error() }}</div> }
+
+  <!-- Alert banner -->
+  @if (!loading() && positions().length > 0 && (nbVendre > 0 || nbSurveiller > 0)) {
+    <div class="alert-banner">
+      <span>
+        @if (nbVendre > 0) { <span class="badge-sell">{{ nbVendre }} VENDRE</span> }
+        @if (nbSurveiller > 0) { <span class="badge-watch">{{ nbSurveiller }} SURVEILLER</span> }
+        — Vérifiez vos positions
+      </span>
+      <button class="btn-secondary btn-sm" (click)="analyserPositions()" [disabled]="analyzing()">
+        {{ analyzing() ? 'Analyse…' : 'Vérifier' }}
+      </button>
+    </div>
+  }
+
+  <!-- Stats row -->
+  <div class="metrics-row">
+    <div class="metric-card">
+      <div class="metric-label">Positions</div>
+      <div class="metric-value">{{ positions().length }}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Investi</div>
+      <div class="metric-value">{{ totalInvesti | number:'1.0-0' }} €</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Valeur actuelle</div>
+      <div class="metric-value" [class]="pnlClass(totalPnl)">{{ totalValeur | number:'1.0-0' }} €</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">P&L total</div>
+      <div class="metric-value" [class]="pnlClass(totalPnl)">
+        {{ totalPnl | number:'1.0-0' }} € ({{ totalPnlPct | number:'1.1-1' }}%)
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings row -->
+  <div class="settings-row">
+
+    <!-- Broker & Fiscalité expander -->
+    <div class="expander">
+      <button class="expander-btn" (click)="showBroker = !showBroker">
+        <span>⚙️ Broker &amp; Fiscalité</span>
+        <span class="exp-arrow">{{ showBroker ? '▲' : '▼' }}</span>
+      </button>
+      @if (showBroker) {
+        <div class="expander-body">
+          <div class="settings-grid">
+            <div class="setting-item">
+              <label class="ctrl-label">Broker</label>
+              <select class="fa-select" [(ngModel)]="selectedBroker" (ngModelChange)="onAchatChange()">
+                @for (b of brokerList; track b) {
+                  <option [value]="b">{{ b }}</option>
+                }
+              </select>
+              <div class="broker-info">{{ brokerDescription }}</div>
+            </div>
+            <div class="setting-item">
+              <label class="ctrl-label">Régime fiscal</label>
+              <select class="fa-select" [(ngModel)]="selectedRegime">
+                @for (r of regimes; track r.key) {
+                  <option [value]="r.key">{{ r.label }}</option>
+                }
+              </select>
+              @if (selectedRegime === 'bareme') {
+                <div class="tmi-row">
+                  <label class="ctrl-label">TMI %</label>
+                  <input class="fa-input tmi-input" type="number" [(ngModel)]="tmi" min="0" max="45" step="1" />
+                </div>
+              }
+              <div class="broker-info">Taux applicable sur plus-values : <strong>{{ currentRegimeTaux }}%</strong></div>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Analyser button -->
+    <div class="analyse-controls">
+      <label class="toggle-mode">
+        <input type="checkbox" [(ngModel)]="modeRapide" />
+        Mode rapide (sans IA)
+      </label>
+      <button class="btn-primary" (click)="analyserPositions()" [disabled]="analyzing() || positions().length === 0">
+        {{ analyzing() ? '⏳ Analyse…' : '🔍 Analyser mes positions' }}
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Achat expander -->
+  <div class="expander" style="margin-bottom:1.5rem">
+    <button class="expander-btn" (click)="showAchat = !showAchat">
+      <span>➕ Enregistrer un achat</span>
+      <span class="exp-arrow">{{ showAchat ? '▲' : '▼' }}</span>
+    </button>
+    @if (showAchat) {
+      <div class="expander-body">
+        <form class="achat-form" (ngSubmit)="submitAchat()">
+
+          <!-- Sélecteur de ticker (même liste que Analyse) -->
+          <div class="ticker-row">
+            <div class="field field-wide">
+              <label class="ctrl-label">Choisir dans la watchlist</label>
+              <select class="fa-select" [(ngModel)]="achat.ticker" name="tickerSelect"
+                      (ngModelChange)="achat.customTicker = ''; onAchatChange()">
+                <option value="">— Sélectionner —</option>
+                @for (cat of categories; track cat) {
+                  <optgroup [label]="cat">
+                    @for (t of watchlist[cat]; track t) {
+                      <option [value]="t">{{ tickerLabel(t) }}</option>
+                    }
+                  </optgroup>
+                }
+              </select>
+            </div>
+            <div class="field-or">ou</div>
+            <div class="field field-wide">
+              <label class="ctrl-label">Saisir manuellement</label>
+              <input class="fa-input" type="text" [(ngModel)]="achat.customTicker" name="customTicker"
+                     placeholder="TSM, BABA…"
+                     (ngModelChange)="achat.ticker = ''; onAchatChange()" />
+            </div>
+            <div class="ticker-preview">
+              @if (effectiveTicker) {
+                <span class="ticker-badge">{{ effectiveTicker }}</span>
+              }
+            </div>
+          </div>
+
+          <!-- Autres champs -->
+          <div class="form-grid">
+            <div class="field">
+              <label class="ctrl-label">
+                Prix d'achat (€)
+                @if (prixLoading) { <span class="prix-loading">⏳</span> }
+              </label>
+              <input class="fa-input" type="number" [(ngModel)]="achat.prix" name="prix"
+                     required step="0.01" placeholder="Chargement…"
+                     [class.loading-input]="prixLoading"
+                     (ngModelChange)="onAchatChange()" />
+            </div>
+            <div class="field">
+              <label class="ctrl-label">Quantité</label>
+              <input class="fa-input" type="number" [(ngModel)]="achat.quantite" name="quantite"
+                     required step="0.0001" placeholder="10"
+                     (ngModelChange)="onAchatChange()" />
+            </div>
+            <div class="field">
+              <label class="ctrl-label">Date</label>
+              <input class="fa-input" type="date" [(ngModel)]="achat.date" name="date" />
+            </div>
+            <div class="field">
+              <label class="ctrl-label">
+                Frais broker (€)
+                <span class="auto-hint">auto — {{ selectedBroker }}</span>
+              </label>
+              <input class="fa-input" type="number" [(ngModel)]="achat.frais" name="frais" step="0.01" />
+            </div>
+            <div class="field">
+              <label class="ctrl-label">Notes</label>
+              <input class="fa-input" type="text" [(ngModel)]="achat.notes" name="notes" placeholder="Optionnel" />
+            </div>
+          </div>
+
+          <!-- Récap frais & coût total -->
+          @if (achat.prix > 0 && achat.quantite > 0) {
+            <div class="cost-summary">
+              <span>Montant : <strong>{{ achat.prix * achat.quantite | number:'1.2-2' }} €</strong></span>
+              <span>+ Frais : <strong>{{ achat.frais | number:'1.2-2' }} €</strong></span>
+              <span class="cost-total">= Coût total : <strong>{{ (achat.prix * achat.quantite + achat.frais) | number:'1.2-2' }} €</strong></span>
+            </div>
+          }
+
+          <button class="btn-primary" type="submit">Enregistrer l'achat</button>
+        </form>
+      </div>
+    }
+  </div>
+
+  @if (loading()) { <div class="loader-bar"><div class="bar-inner"></div></div> }
+
+  <!-- Positions -->
+  @if (!loading() && positions().length === 0) {
+    <div class="empty-state">
+      <div class="empty-icon">💼</div>
+      <div>Aucune position ouverte. Cliquez sur "Enregistrer un achat" pour commencer.</div>
+    </div>
+  }
+
+  <div class="positions-grid">
+    @for (pos of positions(); track pos.ticker) {
+      <div class="pos-card" [class.sig-sell]="pos.signal_sortie === 'VENDRE'" [class.sig-watch]="pos.signal_sortie === 'SURVEILLER'">
+
+        <!-- Position header -->
+        <div class="pos-header">
+          <div class="pos-ticker clickable" (click)="openHistoModal(pos.ticker)"
+               title="Voir l'historique des analyses">
+            {{ pos.ticker }}
+            <span class="ticker-hist-icon">📊</span>
+          </div>
+          <div class="pos-signal" [class]="pos.signal_sortie === 'VENDRE' ? 'sig-badge-sell' : pos.signal_sortie === 'SURVEILLER' ? 'sig-badge-watch' : 'sig-badge-hold'">
+            {{ signalIcon(pos.signal_sortie) }} {{ pos.signal_sortie || '—' }}
+          </div>
+        </div>
+
+        <!-- Price & P&L row -->
+        <div class="pos-metrics">
+          <div class="pos-metric">
+            <div class="pm-label">CUMP</div>
+            <div class="pm-val">{{ pos.prix_moyen | number:'1.2-2' }}</div>
+          </div>
+          <div class="pos-metric">
+            <div class="pm-label">Prix actuel</div>
+            <div class="pm-val">{{ pos.prix_actuel ? (pos.prix_actuel | number:'1.2-2') : '—' }}</div>
+          </div>
+          <div class="pos-metric">
+            <div class="pm-label">Qté</div>
+            <div class="pm-val">{{ pos.quantite }}</div>
+          </div>
+          <div class="pos-metric">
+            <div class="pm-label">Valeur</div>
+            <div class="pm-val">{{ pos.valeur ? (pos.valeur | number:'1.0-0') + ' €' : '—' }}</div>
+          </div>
+          <div class="pos-metric">
+            <div class="pm-label">P&L €</div>
+            <div class="pm-val" [class]="pnlClass(pos.pnl_eur)">
+              {{ pos.pnl_eur !== null && pos.pnl_eur !== undefined ? (pos.pnl_eur | number:'1.2-2') + ' €' : '—' }}
+            </div>
+          </div>
+          <div class="pos-metric">
+            <div class="pm-label">P&L %</div>
+            <div class="pm-val" [class]="pnlClass(pos.pnl_pct)">
+              {{ pos.pnl_pct !== null && pos.pnl_pct !== undefined ? (pos.pnl_pct | number:'1.2-2') + ' %' : '—' }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent scores -->
+        @if (pos.score_agents !== null && pos.score_agents !== undefined) {
+          <div class="pos-score">
+            Score agents : <span [class]="pnlClass(pos.score_agents)">{{ pos.score_agents | number:'1.3-3' }}</span>
+            @if (pos.stop_loss_pct) { · Stop {{ pos.stop_loss_pct }}% }
+            @if (pos.cible_pct)     { · Cible {{ pos.cible_pct }}% }
+          </div>
+        }
+
+        <!-- Action buttons -->
+        <div class="pos-actions">
+          <button class="btn-sm btn-secondary" (click)="toggleExpand(pos.ticker, 'objectifs', pos)"
+            [class.active]="expandedPos[pos.ticker] === 'objectifs'">🎯 Objectifs</button>
+          <button class="btn-sm btn-secondary" (click)="toggleExpand(pos.ticker, 'vente', pos)"
+            [class.active]="expandedPos[pos.ticker] === 'vente'">📤 Vendre</button>
+          <button class="btn-sm btn-secondary" (click)="toggleExpand(pos.ticker, 'transactions', pos)"
+            [class.active]="expandedPos[pos.ticker] === 'transactions'">📋 Historique</button>
+          <button class="btn-sm btn-danger" (click)="supprimerPosition(pos.ticker)">🗑️ Suppr.</button>
+        </div>
+
+        <!-- Objectifs form -->
+        @if (expandedPos[pos.ticker] === 'objectifs' && objectifs[pos.ticker]) {
+          <div class="inline-form">
+            <div class="form-grid">
+              <div class="field">
+                <label class="ctrl-label">Stop loss (%)</label>
+                <input class="fa-input" type="number" [(ngModel)]="objectifs[pos.ticker].stop" [name]="'stop_' + pos.ticker" step="0.5" />
+              </div>
+              <div class="field">
+                <label class="ctrl-label">Cible (%)</label>
+                <input class="fa-input" type="number" [(ngModel)]="objectifs[pos.ticker].cible" [name]="'cible_' + pos.ticker" step="0.5" />
+              </div>
+            </div>
+            <button class="btn-primary btn-sm" (click)="submitObjectifs(pos.ticker)">Enregistrer</button>
+          </div>
+        }
+
+        <!-- Vente form -->
+        @if (expandedPos[pos.ticker] === 'vente' && vente[pos.ticker]) {
+          <div class="inline-form">
+            <div class="form-grid">
+              <div class="field">
+                <label class="ctrl-label">Quantité</label>
+                <input class="fa-input" type="number" [(ngModel)]="vente[pos.ticker].qty" [name]="'vqty_' + pos.ticker" step="0.0001" />
+              </div>
+              <div class="field">
+                <label class="ctrl-label">Prix de vente</label>
+                <input class="fa-input" type="number" [(ngModel)]="vente[pos.ticker].prix" [name]="'vprix_' + pos.ticker" step="0.01" />
+              </div>
+              <div class="field">
+                <label class="ctrl-label">Date</label>
+                <input class="fa-input" type="date" [(ngModel)]="vente[pos.ticker].date" [name]="'vdate_' + pos.ticker" />
+              </div>
+              <div class="field">
+                <label class="ctrl-label">Frais (€)</label>
+                <input class="fa-input" type="number" [(ngModel)]="vente[pos.ticker].frais" [name]="'vfrais_' + pos.ticker" step="0.01" />
+              </div>
+            </div>
+            <div class="field" style="margin-bottom:0.75rem">
+              <label class="ctrl-label">Notes</label>
+              <input class="fa-input" type="text" [(ngModel)]="vente[pos.ticker].notes" [name]="'vnotes_' + pos.ticker" placeholder="Optionnel" />
+            </div>
+            <!-- Estimation fiscale -->
+            @if ((vente[pos.ticker]?.prix ?? 0) > 0 && (vente[pos.ticker]?.qty ?? 0) > 0) {
+              <div class="fiscal-summary">
+                <div class="fiscal-row">
+                  <span>Plus-value brute</span>
+                  <span [class]="pnlClass((vente[pos.ticker].prix - pos.prix_moyen) * vente[pos.ticker].qty)">
+                    {{ ((vente[pos.ticker].prix - pos.prix_moyen) * vente[pos.ticker].qty - (vente[pos.ticker].frais || 0)) | number:'1.2-2' }} €
+                  </span>
+                </div>
+                <div class="fiscal-row">
+                  <span>Impôt estimé ({{ currentRegimeTaux }}% — {{ selectedRegime === 'pfu' ? 'Flat tax' : selectedRegime === 'pea' ? 'PEA' : 'Barème' }})</span>
+                  <span class="neg">−{{ impotEstime(pos.ticker, pos) | number:'1.2-2' }} €</span>
+                </div>
+                <div class="fiscal-row fiscal-net">
+                  <span>Net après impôt</span>
+                  <span [class]="pnlClass(netApresImpot(pos.ticker, pos))">
+                    {{ netApresImpot(pos.ticker, pos) | number:'1.2-2' }} €
+                  </span>
+                </div>
+              </div>
+            }
+            <button class="btn-primary btn-sm" (click)="submitVente(pos.ticker, pos)">Confirmer la vente</button>
+          </div>
+        }
+
+        <!-- Transactions -->
+        @if (expandedPos[pos.ticker] === 'transactions') {
+          <div class="transactions-panel">
+            @if (!posTransactions[pos.ticker]) {
+              <div class="loading-mini">Chargement…</div>
+            } @else if (posTransactions[pos.ticker].length === 0) {
+              <div class="loading-mini">Aucune transaction.</div>
+            } @else {
+              <table class="mini-table">
+                <thead><tr><th>Date</th><th>Type</th><th>Qté</th><th>Prix</th><th>Frais</th></tr></thead>
+                <tbody>
+                  @for (tx of posTransactions[pos.ticker]; track tx.id) {
+                    <tr>
+                      <td>{{ tx.date }}</td>
+                      <td [class]="tx.type === 'ACHAT' ? 'tx-buy' : 'tx-sell'">{{ tx.type }}</td>
+                      <td>{{ tx.quantite }}</td>
+                      <td>{{ tx.prix | number:'1.2-2' }} €</td>
+                      <td>{{ tx.frais ?? 0 }} €</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        }
+
+      </div>
+    }
+  </div>
+
+  <!-- Historique des ventes -->
+  @if (historique().length > 0) {
+    <div class="section-header" style="margin-top:2rem"><span>Historique des ventes</span></div>
+
+    <div class="histo-stats">
+      <div class="metric-card">
+        <div class="metric-label">Trades</div>
+        <div class="metric-value">{{ hTrades }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Win rate</div>
+        <div class="metric-value" [class]="pnlClass(+hWinRate - 50)">{{ hWinRate }}%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">P&L réalisé</div>
+        <div class="metric-value" [class]="pnlClass(hPnlTotal)">{{ hPnlTotal | number:'1.2-2' }} €</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Frais totaux</div>
+        <div class="metric-value neg">{{ hFraisTotal | number:'1.2-2' }} €</div>
+      </div>
+    </div>
+
+    <table class="data-table" style="margin-top:1rem">
+      <thead>
+        <tr>
+          <th>Date</th><th>Ticker</th><th>Qté</th>
+          <th>Px vente</th><th>P&L €</th><th>P&L %</th><th>Frais</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (h of historique(); track h.id) {
+          <tr>
+            <td>{{ h.date }}</td>
+            <td class="ticker-cell">{{ h.ticker }}</td>
+            <td>{{ h.quantite }}</td>
+            <td>{{ h.prix_vente | number:'1.2-2' }} €</td>
+            <td [class]="pnlClass(h.pnl_net ?? h.pnl_eur)">{{ (h.pnl_net ?? h.pnl_eur) | number:'1.2-2' }} €</td>
+            <td [class]="pnlClass(h.pnl_pct)">{{ h.pnl_pct | number:'1.2-2' }} %</td>
+            <td class="muted">{{ h.frais ?? 0 }} €</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  <!-- ── Modal historique des analyses ── -->
+  @if (histoModal.show) {
+    <div class="modal-overlay" (click)="closeHistoModal()">
+      <div class="modal-panel" (click)="$event.stopPropagation()">
+
+        <!-- Header -->
+        <div class="modal-header">
+          <div class="modal-title">
+            <span class="modal-ticker">{{ histoModal.ticker }}</span>
+            Historique des analyses
+          </div>
+          <div class="modal-actions">
+            <button class="btn-secondary btn-sm" (click)="goToAnalyse(histoModal.ticker)">
+              🔍 Relancer une analyse
+            </button>
+            <button class="modal-close" (click)="closeHistoModal()">✕</button>
+          </div>
+        </div>
+
+        @if (histoModal.loading) {
+          <div class="modal-loading"><div class="loader-bar"><div class="bar-inner"></div></div></div>
+        } @else if (histoModal.entries.length === 0) {
+          <div class="modal-empty">
+            Aucune analyse enregistrée pour {{ histoModal.ticker }}.<br>
+            Cliquez sur "Analyser mes positions" pour générer un historique.
+          </div>
+        } @else {
+          <div class="modal-body">
+
+            <!-- Liste des analyses (colonne gauche) -->
+            <div class="modal-list">
+              <div class="modal-list-title">{{ histoModal.entries.length }} analyse(s) enregistrée(s)</div>
+              @for (entry of histoModal.entries; track entry.ts) {
+                <div class="modal-list-item"
+                     [class.active]="histoModal.selected === entry"
+                     (click)="selectEntry(entry)">
+                  <div class="mli-date">{{ formatTs(entry.ts) }}</div>
+                  <div class="mli-row">
+                    <span class="mli-decision"
+                          [style.color]="decisionColor(entry.decision)"
+                          [style.borderColor]="decisionColor(entry.decision) + '55'">
+                      {{ entry.decision }}
+                    </span>
+                    <span class="mli-score" [class]="pnlClass(entry.score)">
+                      {{ entry.score | number:'1.3-3' }}
+                    </span>
+                  </div>
+                  @if (entry.prix) {
+                    <div class="mli-prix">{{ entry.prix | number:'1.2-2' }}</div>
+                  }
+                </div>
+              }
+            </div>
+
+            <!-- Détail de l'analyse sélectionnée -->
+            @if (histoModal.selected; as sel) {
+              <div class="modal-detail">
+                <div class="detail-header">
+                  <div class="detail-date">{{ formatTs(sel.ts) }}</div>
+                  <div class="detail-badges">
+                    <span class="detail-decision"
+                          [style.color]="decisionColor(sel.decision)"
+                          [style.background]="decisionColor(sel.decision) + '18'"
+                          [style.borderColor]="decisionColor(sel.decision) + '44'">
+                      {{ sel.decision }}
+                    </span>
+                    <span class="detail-score" [class]="pnlClass(sel.score)">
+                      Score : {{ sel.score | number:'1.4-4' }}
+                    </span>
+                    @if (sel.prix) {
+                      <span class="detail-prix">Prix au moment de l'analyse : {{ sel.prix | number:'1.2-2' }}</span>
+                    }
+                  </div>
+                </div>
+
+                @if (sel.scores_agents) {
+                  <div class="detail-agents-title">Signaux par agent</div>
+                  <div class="detail-agents">
+                    @for (ag of agentEntries(sel.scores_agents); track ag.key) {
+                      <div class="agent-row">
+                        <span class="ag-label">{{ ag.label }}</span>
+                        <div class="ag-bar-wrap">
+                          <div class="ag-zero"></div>
+                          <div class="ag-bar-fill"
+                               [style.width]="agentBarPct(ag.score)"
+                               [style.background]="agentBarColor(ag.score)"
+                               [style.left]="ag.score >= 0 ? '50%' : 'unset'"
+                               [style.right]="ag.score < 0 ? '50%' : 'unset'">
+                          </div>
+                        </div>
+                        <span class="ag-score" [class]="pnlClass(ag.score)">
+                          {{ ag.score > 0 ? '+' : '' }}{{ ag.score | number:'1.3-3' }}
+                        </span>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="modal-empty" style="padding:1rem 0">
+                    Détail par agent non disponible pour cette analyse.
+                  </div>
+                }
+              </div>
+            }
+
+          </div>
+        }
+
+      </div>
+    </div>
+  }
+
+</div>

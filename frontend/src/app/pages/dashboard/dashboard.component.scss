@@ -1,0 +1,144 @@
+:host { display: block; min-height: 100vh; }
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+.top-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1.5rem;
+  height: 62px;
+  background: rgba(8,13,28,0.82);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.header-logo {
+  height: 34px;
+  filter: drop-shadow(0 0 10px rgba(0,200,255,0.4));
+}
+
+.header-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #e0e8ff;
+  letter-spacing: 2px;
+  line-height: 1.2;
+}
+
+.header-sub {
+  font-size: 8px;
+  color: #2a4a6a;
+  letter-spacing: 2px;
+  font-family: monospace;
+}
+
+/* ── Tab nav ── */
+.tab-nav {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  flex: 1;
+  height: 100%;
+  overflow-x: auto;
+  &::-webkit-scrollbar { height: 0; }
+}
+
+.tab-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 18px;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
+
+  &:hover { color: var(--text-secondary); background: rgba(0,200,255,0.04); }
+
+  &.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    background: rgba(0,200,255,0.06);
+  }
+}
+
+.tab-badge {
+  background: rgba(255,60,80,0.2);
+  color: #ff7088;
+  border-radius: 8px;
+  font-size: 10px;
+  padding: 1px 6px;
+}
+
+/* ── User zone ── */
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.connected-dot {
+  width: 7px; height: 7px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--green);
+}
+
+.username {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-link {
+  color: #ffd740;
+  font-size: 11px;
+  text-decoration: none;
+  border: 1px solid rgba(255,215,64,0.25);
+  border-radius: 5px;
+  padding: 2px 8px;
+  &:hover { background: rgba(255,215,64,0.08); }
+}
+
+.btn-logout {
+  background: transparent;
+  border: 1px solid rgba(255,60,80,0.25);
+  border-radius: 6px;
+  color: #ff7088;
+  font-size: 11px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  &:hover { background: rgba(255,60,80,0.08); }
+}
+
+/* ── Content ── */
+.page-content {
+  flex: 1;
+  padding: 2rem 2.5rem;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}

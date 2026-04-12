@@ -1,0 +1,34 @@
+<div class="page">
+  <div class="page-header">
+    <h2 class="page-title">🔔 Alertes</h2>
+    @if (alerts().length > 0) {
+      <button class="btn-mark-all" (click)="markAll()">Tout marquer lu</button>
+    }
+  </div>
+
+  @if (loading()) { <div class="loader-bar"><div class="bar-inner"></div></div> }
+  @if (error())   { <div class="error-box">{{ error() }}</div> }
+
+  @if (!loading() && alerts().length === 0) {
+    <div class="empty">Aucune alerte.</div>
+  }
+
+  <div class="alerts-list">
+    @for (a of alerts(); track a.id) {
+      <div class="alert-row" [class.unread]="!a.lue">
+        <span class="badge" [class]="niveauClass(a.niveau)">{{ a.niveau }}</span>
+        <div class="alert-body">
+          <span class="alert-ticker">{{ a.ticker }}</span>
+          <span class="alert-msg">{{ a.message }}</span>
+        </div>
+        <span class="alert-date">{{ a.date }}</span>
+        <div class="alert-actions">
+          @if (!a.lue) {
+            <button class="btn-read" (click)="markRead(a.id)" title="Marquer lu">✓</button>
+          }
+          <button class="btn-del" (click)="delete(a.id)" title="Supprimer">✕</button>
+        </div>
+      </div>
+    }
+  </div>
+</div>

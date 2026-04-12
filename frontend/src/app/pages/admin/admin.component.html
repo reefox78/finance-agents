@@ -1,0 +1,153 @@
+<div class="admin-page">
+
+  <!-- Header -->
+  <div class="admin-header">
+    <div>
+      <h1>⚙️ Administration</h1>
+      <p class="subtitle">Gestion des utilisateurs</p>
+    </div>
+    <a routerLink="/dashboard" class="back-link">← Retour au dashboard</a>
+  </div>
+
+  <!-- Toast -->
+  @if (toast()) {
+    <div class="toast">{{ toast() }}</div>
+  }
+
+  <!-- Error -->
+  @if (error()) {
+    <div class="error-box">{{ error() }}</div>
+  }
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loader-bar"><div class="bar-inner"></div></div>
+  }
+
+  <!-- Stats row -->
+  @if (!loading() && users().length > 0) {
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-val">{{ users().length }}</div>
+        <div class="stat-label">Utilisateurs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">{{ countActive() }}</div>
+        <div class="stat-label">Actifs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">{{ countAdmins() }}</div>
+        <div class="stat-label">Admins</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">{{ sumPositions() }}</div>
+        <div class="stat-label">Positions ouvertes</div>
+      </div>
+    </div>
+  }
+
+  <!-- Users table -->
+  @if (!loading()) {
+    <div class="table-wrap">
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>Utilisateur</th>
+            <th>Email</th>
+            <th>Créé le</th>
+            <th>Positions</th>
+            <th>Transactions</th>
+            <th>Statut</th>
+            <th>Rôle</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of users(); track user.id) {
+            <tr [class.self-row]="isSelf(user)" [class.inactive]="!user.is_active">
+              <td class="user-cell">
+                <span class="avatar">{{ user.username[0].toUpperCase() }}</span>
+                <span class="username">{{ user.username }}</span>
+                @if (isSelf(user)) { <span class="you-badge">moi</span> }
+              </td>
+              <td class="email">{{ user.email }}</td>
+              <td class="date">{{ user.created_at | slice:0:10 }}</td>
+              <td class="num">{{ user.nb_positions }}</td>
+              <td class="num">{{ user.nb_transactions }}</td>
+              <td>
+                <span class="status-badge" [class.active]="user.is_active" [class.inactive]="!user.is_active">
+                  {{ user.is_active ? 'Actif' : 'Désactivé' }}
+                </span>
+              </td>
+              <td>
+                <span class="role-badge" [class.admin]="user.is_admin">
+                  {{ user.is_admin ? '👑 Admin' : 'User' }}
+                </span>
+              </td>
+              <td class="actions">
+                <button class="btn-action reset" (click)="openReset(user)" title="Réinitialiser mot de passe">
+                  🔑
+                </button>
+                @if (!isSelf(user)) {
+                  <button class="btn-action toggle" (click)="toggleActive(user)"
+                    [title]="user.is_active ? 'Désactiver' : 'Activer'">
+                    {{ user.is_active ? '🚫' : '✅' }}
+                  </button>
+                  <button class="btn-action admin-toggle" (click)="toggleAdmin(user)"
+                    [title]="user.is_admin ? 'Rétrograder' : 'Promouvoir admin'">
+                    {{ user.is_admin ? '⬇️' : '👑' }}
+                  </button>
+                  <button class="btn-action delete" (click)="confirmDel(user)" title="Supprimer">
+                    🗑️
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+</div>
+
+<!-- ── Reset password modal ── -->
+@if (resetModal(); as m) {
+  <div class="modal-backdrop" (click)="resetModal.set(null)">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <h2>🔑 Reset mot de passe</h2>
+      <p class="modal-subtitle">Utilisateur : <strong>{{ m.user.username }}</strong></p>
+
+      <div class="field">
+        <label>Nouveau mot de passe</label>
+        <input type="password" [(ngModel)]="m.password" placeholder="Min. 8 caractères" autocomplete="new-password" />
+      </div>
+      <div class="field">
+        <label>Confirmer</label>
+        <input type="password" [(ngModel)]="m.confirm" placeholder="Répéter le mot de passe" autocomplete="new-password" />
+      </div>
+
+      @if (m.error) { <div class="modal-error">{{ m.error }}</div> }
+
+      <div class="modal-actions">
+        <button class="btn-cancel" (click)="resetModal.set(null)">Annuler</button>
+        <button class="btn-confirm" (click)="submitReset()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Delete confirm modal ── -->
+@if (confirmDelete(); as user) {
+  <div class="modal-backdrop" (click)="confirmDelete.set(null)">
+    <div class="modal modal-danger" (click)="$event.stopPropagation()">
+      <h2>🗑️ Supprimer l'utilisateur</h2>
+      <p>Supprimer <strong>{{ user.username }}</strong> et toutes ses données (positions, transactions, alertes) ?</p>
+      <p class="warning-text">Cette action est irréversible.</p>
+      <div class="modal-actions">
+        <button class="btn-cancel" (click)="confirmDelete.set(null)">Annuler</button>
+        <button class="btn-danger" (click)="deleteUser()">Supprimer définitivement</button>
+      </div>
+    </div>
+  </div>
+}

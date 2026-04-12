@@ -115,24 +115,70 @@ def _new_id() -> str:
 # Mécanique CUMP
 # ---------------------------------------------------------------------------
 
+def calculer_cump(qty_avant: float, pm_avant: float,
+                  qty_achat: float, prix: float, frais: float = 0.0) -> tuple[float, float]:
+    """
+    Formule pure du CUMP (Coût Unitaire Moyen Pondéré).
+
+    Calcule le nouveau CUMP après un achat en partant de l'état COURANT
+    de la position (qty_avant, pm_avant) — sans relire l'historique des
+    transactions.  Cela garantit un résultat correct même après des
+    ventes partielles.
+
+    Args:
+        qty_avant : quantité détenue avant cet achat
+        pm_avant  : CUMP actuel avant cet achat
+        qty_achat : quantité du nouvel achat
+        prix      : prix unitaire du nouvel achat
+        frais     : frais d'achat (majorent le coût de revient)
+
+    Returns:
+        (nouveau_qty, nouveau_cump)
+
+    Exemples:
+        Premier achat 10 @ 100 frais=1 :
+            calculer_cump(0, 0, 10, 100, 1) → (10.0, 100.1)
+
+        Deuxième achat après vente partielle (5 restants @ CUMP 100, achat 5 @ 80) :
+            calculer_cump(5, 100, 5, 80) → (10.0, 90.0)
+    """
+    nouveau_qty = qty_avant + qty_achat
+    if nouveau_qty <= 0:
+        return 0.0, 0.0
+    nouveau_pm = (qty_avant * pm_avant + qty_achat * prix + frais) / nouveau_qty
+    return round(nouveau_qty, 6), round(nouveau_pm, 6)
+
+
+def calculer_pnl(prix_vente: float, prix_moyen: float,
+                 quantite: float, frais: float = 0.0) -> dict:
+    """
+    Calcule le P&L d'une vente.
+
+    P&L brut = (prix_vente − CUMP) × quantité
+    P&L net  = P&L brut − frais de vente
+    P&L %    = P&L net / (CUMP × quantité) × 100
+
+    Returns:
+        dict avec pnl_brut (€), pnl_net (€), pnl_pct (%)
+    """
+    pnl_brut = round((prix_vente - prix_moyen) * quantite, 2)
+    pnl_net  = round(pnl_brut - frais, 2)
+    pnl_pct  = round(pnl_net / (prix_moyen * quantite) * 100, 2) \
+               if prix_moyen > 0 and quantite > 0 else 0.0
+    return {"pnl_brut": pnl_brut, "pnl_net": pnl_net, "pnl_pct": pnl_pct}
+
+
 def _appliquer_achat(position: dict, tx: dict) -> None:
     """
     Met à jour le prix moyen pondéré après un achat.
-    CUMP avec frais = (qty_avant×pm_avant + qty_achat×prix + frais) / (qty_avant + qty_achat)
-    Les frais d'achat majorent le coût de revient — méthode standard AMF/Boursorama.
+    Délègue à calculer_cump() — formule standard AMF/Boursorama.
     """
-    q_avant  = position["quantite"]
-    pm_avant = position["prix_moyen"]
-    q_achat  = tx["quantite"]
-    p_achat  = tx["prix"]
-    frais    = tx.get("frais", 0.0)
-
-    nouveau_total = q_avant + q_achat
-    if nouveau_total > 0:
-        position["prix_moyen"] = round(
-            (q_avant * pm_avant + q_achat * p_achat + frais) / nouveau_total, 6
-        )
-    position["quantite"] = round(nouveau_total, 6)
+    nouveau_qty, nouveau_pm = calculer_cump(
+        position["quantite"], position["prix_moyen"],
+        tx["quantite"], tx["prix"], tx.get("frais", 0.0),
+    )
+    position["quantite"]    = nouveau_qty
+    position["prix_moyen"]  = nouveau_pm
     position["transactions"].append(tx)
 
 
@@ -201,10 +247,10 @@ def ajouter_vente(ticker: str, prix_vente: float, quantite: float,
 
     frais            = round(float(frais), 4)
     prix_moyen_achat = pos["prix_moyen"]
-    pnl_brut         = round((float(prix_vente) - prix_moyen_achat) * quantite, 2)
-    pnl_eur          = round(pnl_brut - frais, 2)   # net après frais de vente
-    pnl_pct          = round(pnl_eur / (prix_moyen_achat * quantite) * 100, 2) \
-                       if prix_moyen_achat else 0.0
+    pnl              = calculer_pnl(float(prix_vente), prix_moyen_achat, quantite, frais)
+    pnl_brut         = pnl["pnl_brut"]
+    pnl_eur          = pnl["pnl_net"]
+    pnl_pct          = pnl["pnl_pct"]
 
     tx_vente = {
         "id":               _new_id(),

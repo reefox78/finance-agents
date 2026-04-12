@@ -1,0 +1,39 @@
+<div class="app-shell">
+
+  <!-- ── TOP HEADER ── -->
+  <header class="top-header">
+    <div class="header-brand">
+      <img src="/logo.png" alt="logo" class="header-logo" />
+      <div>
+        <div class="header-title">FINANCE AGENTS</div>
+        <div class="header-sub">AIDE À LA DÉCISION · ANALYSE · PORTEFEUILLE</div>
+      </div>
+    </div>
+
+    <nav class="tab-nav">
+      @for (tab of tabs; track tab.path) {
+        <a [routerLink]="tab.path" routerLinkActive="active" class="tab-link">
+          {{ tab.icon }} {{ tab.label }}
+          @if (tab.path === 'portfolio' && alertCount() > 0) {
+            <span class="tab-badge">🔔 {{ alertCount() }}</span>
+          }
+        </a>
+      }
+    </nav>
+
+    <div class="header-user">
+      <span class="connected-dot"></span>
+      <span class="username">{{ auth.currentUser()?.username }}</span>
+      @if (auth.isAdmin) {
+        <a routerLink="/admin" class="admin-link">Admin</a>
+      }
+      <button class="btn-logout" (click)="auth.logout()">Déconnexion</button>
+    </div>
+  </header>
+
+  <!-- ── PAGE CONTENT ── -->
+  <main class="page-content">
+    <router-outlet />
+  </main>
+
+</div>
