@@ -5,8 +5,11 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { Chart, registerables } from 'chart.js';
 import 'chartjs-adapter-date-fns';
 import zoomPlugin from 'chartjs-plugin-zoom';
+import { catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import { TICKER_NAMES, WATCHLIST, WATCHLIST_CATEGORIES, tickerLabel } from '../../core/constants/watchlist';
+import { BROKER_CALC, BROKERS_INFO } from '../../core/constants/watchlist';
 
 Chart.register(...registerables, zoomPlugin);
 
@@ -56,11 +59,56 @@ export class AnalyseComponent implements OnInit, OnDestroy {
 
   label(t: string): string { return NAMES[t] ? `${t} (${NAMES[t]})` : t; }
 
-  acheter(): void {
+  // ── Modal achat ──────────────────────────────────────────────────────────
+  showAchatModal = false;
+  achatSubmitting = false;
+  achatToast = '';
+  achatError = '';
+  brokerList   = Object.keys(BROKERS_INFO);
+  selectedBroker = 'Trade Republic';
+  achatForm = { prix: 0, quantite: 1, frais: 0, notes: '' };
+
+  ouvrirAchat(): void {
     const r = this.result();
-    const prix = r?.tech?.prix_actuel ?? '';
-    this.router.navigate(['/portfolio'], {
-      queryParams: { achat: '1', ticker: this.ticker, prix }
+    const prix = r?.tech?.prix_actuel ?? 0;
+    this.achatForm = { prix: Number(prix) || 0, quantite: 1, frais: 0, notes: '' };
+    this._recalcFrais();
+    this.achatError = '';
+    this.showAchatModal = true;
+  }
+
+  fermerAchat(): void { this.showAchatModal = false; }
+
+  onAchatFormChange(): void { this._recalcFrais(); }
+
+  private _recalcFrais(): void {
+    const calc = BROKER_CALC[this.selectedBroker];
+    if (calc && this.selectedBroker !== 'Autre / Manuel') {
+      this.achatForm.frais = calc(this.achatForm.prix * this.achatForm.quantite);
+    }
+  }
+
+  confirmerAchat(): void {
+    if (!this.ticker || !this.achatForm.prix || !this.achatForm.quantite) return;
+    this.achatSubmitting = true;
+    this.achatError = '';
+    this.api.addAchat({
+      ticker: this.ticker,
+      prix: this.achatForm.prix,
+      quantite: this.achatForm.quantite,
+      frais: this.achatForm.frais,
+      notes: this.achatForm.notes,
+      broker_key: this.selectedBroker,
+    }).pipe(catchError(e => {
+      this.achatError = e.error?.detail ?? 'Erreur lors de l\'enregistrement';
+      this.achatSubmitting = false;
+      return of(null);
+    })).subscribe(res => {
+      if (!res) return;
+      this.achatSubmitting = false;
+      this.showAchatModal = false;
+      this.achatToast = `✅ Achat ${this.ticker} enregistré !`;
+      setTimeout(() => this.achatToast = '', 3500);
     });
   }
   onCustomInput(): void { this.ticker = this.customTicker.trim().toUpperCase(); }

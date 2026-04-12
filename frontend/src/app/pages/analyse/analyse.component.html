@@ -106,11 +106,76 @@
 
     <!-- Buy shortcut -->
     <div class="buy-bar">
-      <button class="btn-buy" (click)="acheter()">
-        ➕ Acheter {{ ticker }} au prix actuel
+      <button class="btn-buy" (click)="ouvrirAchat()">
+        ➕ Acheter {{ ticker }}
       </button>
-      <span class="buy-hint">Ouvre le formulaire d'achat dans Portefeuille avec le ticker et le prix pré-remplis.</span>
     </div>
+
+    <!-- Toast achat -->
+    @if (achatToast) {
+      <div class="achat-toast">{{ achatToast }}</div>
+    }
+
+    <!-- Modal achat inline -->
+    @if (showAchatModal) {
+      <div class="achat-modal-backdrop" (click)="fermerAchat()"></div>
+      <div class="achat-modal">
+        <div class="achat-modal-header">
+          <span>Enregistrer un achat — <strong>{{ ticker }}</strong></span>
+          <button class="modal-close" (click)="fermerAchat()">✕</button>
+        </div>
+
+        <div class="achat-modal-body">
+          @if (achatError) { <div class="achat-modal-error">{{ achatError }}</div> }
+
+          <div class="modal-field">
+            <label>Broker</label>
+            <select [(ngModel)]="selectedBroker" (ngModelChange)="onAchatFormChange()">
+              @for (b of brokerList; track b) { <option [value]="b">{{ b }}</option> }
+            </select>
+          </div>
+
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Prix unitaire (€)</label>
+              <input type="number" [(ngModel)]="achatForm.prix" step="0.01" min="0"
+                     (ngModelChange)="onAchatFormChange()" />
+            </div>
+            <div class="modal-field">
+              <label>Quantité</label>
+              <input type="number" [(ngModel)]="achatForm.quantite" step="0.0001" min="0.0001"
+                     (ngModelChange)="onAchatFormChange()" />
+            </div>
+          </div>
+
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>Frais (€) <span class="auto-hint">auto</span></label>
+              <input type="number" [(ngModel)]="achatForm.frais" step="0.01" min="0" />
+            </div>
+            <div class="modal-field">
+              <label>Notes</label>
+              <input type="text" [(ngModel)]="achatForm.notes" placeholder="Optionnel" />
+            </div>
+          </div>
+
+          @if (achatForm.prix > 0 && achatForm.quantite > 0) {
+            <div class="modal-summary">
+              <span>Montant : <strong>{{ achatForm.prix * achatForm.quantite | number:'1.2-2' }} €</strong></span>
+              <span>+ Frais : <strong>{{ achatForm.frais | number:'1.2-2' }} €</strong></span>
+              <span>= <strong>{{ (achatForm.prix * achatForm.quantite + achatForm.frais) | number:'1.2-2' }} €</strong></span>
+            </div>
+          }
+        </div>
+
+        <div class="achat-modal-footer">
+          <button class="btn-secondary" (click)="fermerAchat()">Annuler</button>
+          <button class="btn-primary" (click)="confirmerAchat()" [disabled]="achatSubmitting || !achatForm.prix || !achatForm.quantite">
+            {{ achatSubmitting ? 'Enregistrement…' : 'Confirmer l\'achat' }}
+          </button>
+        </div>
+      </div>
+    }
 
     <!-- Agent signals grid -->
     <div class="section-header"><span>Signaux des agents</span></div>
