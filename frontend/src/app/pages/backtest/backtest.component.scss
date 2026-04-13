@@ -126,7 +126,14 @@
 
 @media (max-width: 600px) {
   .metrics-row { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
-  .bt-form .form-row { flex-direction: column; }
+
+  .bt-form {
+    padding: 1rem;
+    .form-row { flex-direction: column; gap: 0.75rem; }
+    .field, .field select, .field input, .mode-btns, .btn-primary { width: 100%; }
+    .field-action { margin-top: 0.25rem; }
+  }
+
   .chart-wrap.tall   { height: 200px; }
   .chart-wrap.medium { height: 140px; }
 }

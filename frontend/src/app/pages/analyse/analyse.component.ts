@@ -156,9 +156,10 @@ export class AnalyseComponent implements OnInit, OnDestroy {
     const clamped = Math.max(-1, Math.min(1, score));
     const angleDeg = 180 - ((clamped + 1) / 2) * 180;
     const angleRad = (angleDeg * Math.PI) / 180;
+    // Centre SVG : (120, 115), rayon aiguille : 88
     return {
-      x2: Math.round((100 + 70 * Math.cos(angleRad)) * 100) / 100,
-      y2: Math.round((100 - 70 * Math.sin(angleRad)) * 100) / 100,
+      x2: Math.round((120 + 88 * Math.cos(angleRad)) * 100) / 100,
+      y2: Math.round((115 - 88 * Math.sin(angleRad)) * 100) / 100,
     };
   }
   decisionColor(d: string): string {
