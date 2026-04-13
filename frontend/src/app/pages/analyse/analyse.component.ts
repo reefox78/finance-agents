@@ -8,6 +8,7 @@ import zoomPlugin from 'chartjs-plugin-zoom';
 import { catchError } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
+import { AnalyseStateService } from '../../core/services/analyse-state.service';
 import { TICKER_NAMES, WATCHLIST, WATCHLIST_CATEGORIES, tickerLabel } from '../../core/constants/watchlist';
 import { BROKER_CALC, BROKERS_INFO } from '../../core/constants/watchlist';
 
@@ -43,9 +44,26 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   private _charts: Chart<any, any, any>[] = [];
   private _syncing = false;
 
-  constructor(private api: ApiService, private router: Router, private route: ActivatedRoute) {}
+  constructor(
+    private api: ApiService,
+    private router: Router,
+    private route: ActivatedRoute,
+    private state: AnalyseStateService,
+  ) {}
 
   ngOnInit(): void {
+    // Restaure l'état précédent s'il existe
+    if (this.state.result) {
+      this.ticker       = this.state.ticker;
+      this.customTicker = this.state.customTicker;
+      this.period       = this.state.period;
+      this.withLlm      = this.state.withLlm;
+      this.result.set(this.state.result);
+      this.error.set(this.state.error);
+      // Redessine les graphiques après restauration
+      setTimeout(() => this._buildCharts(this.state.result?.chart), 50);
+    }
+
     this.route.queryParams.subscribe(params => {
       if (params['ticker']) {
         this.ticker = params['ticker'];
@@ -55,7 +73,16 @@ export class AnalyseComponent implements OnInit, OnDestroy {
     });
   }
 
-  ngOnDestroy(): void { this._destroyCharts(); }
+  ngOnDestroy(): void {
+    // Sauvegarde l'état avant de quitter
+    this.state.ticker       = this.ticker;
+    this.state.customTicker = this.customTicker;
+    this.state.period       = this.period;
+    this.state.withLlm      = this.withLlm;
+    this.state.result       = this.result();
+    this.state.error        = this.error();
+    this._destroyCharts();
+  }
 
   label(t: string): string { return NAMES[t] ? `${t} (${NAMES[t]})` : t; }
 
@@ -156,10 +183,10 @@ export class AnalyseComponent implements OnInit, OnDestroy {
     const clamped = Math.max(-1, Math.min(1, score));
     const angleDeg = 180 - ((clamped + 1) / 2) * 180;
     const angleRad = (angleDeg * Math.PI) / 180;
-    // Centre SVG : (120, 115), rayon aiguille : 88
+    // Centre SVG : (120, 110), rayon aiguille : 78
     return {
-      x2: Math.round((120 + 88 * Math.cos(angleRad)) * 100) / 100,
-      y2: Math.round((115 - 88 * Math.sin(angleRad)) * 100) / 100,
+      x2: Math.round((120 + 78 * Math.cos(angleRad)) * 10) / 10,
+      y2: Math.round((110 - 78 * Math.sin(angleRad)) * 10) / 10,
     };
   }
   decisionColor(d: string): string {

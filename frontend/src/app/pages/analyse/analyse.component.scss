@@ -327,9 +327,10 @@
 }
 
 .gauge-svg {
-  width: 260px;
+  width: 280px;
   height: auto;
-  filter: drop-shadow(0 0 12px rgba(0,0,0,0.6));
+  filter: drop-shadow(0 0 14px rgba(0,0,0,0.7));
+  overflow: visible;
 }
 
 .gauge-decision {

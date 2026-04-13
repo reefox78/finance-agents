@@ -177,46 +177,55 @@
       </div>
     }
 
-    <!-- Score Gauge -->
-    <!-- Centre : (120,115) · Rayon : 100 · Aiguille : 88 -->
-    <!-- θ=180° → (20,115) | θ=120° → (70,28.8) | θ=60° → (170,28.8) | θ=0° → (220,115) -->
+    <!-- Score Gauge — demi-cercle (n) -->
+    <!-- Centre : (120,110) · Rayon arcs : 90 · stroke-width : 22 -->
+    <!-- θ=180° → (30,110) | θ=120° → (75,32.1) | θ=60° → (165,32.1) | θ=0° → (210,110) -->
     <div class="gauge-wrapper">
-      <svg viewBox="0 0 240 138" class="gauge-svg" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 240 135" class="gauge-svg" xmlns="http://www.w3.org/2000/svg">
 
-        <!-- Fond gris de l'arc -->
-        <path d="M 20 115 A 100 100 0 0 0 220 115"
-              fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="24" stroke-linecap="butt"/>
+        <!-- Piste de fond -->
+        <path d="M 30 110 A 90 90 0 0 0 210 110"
+              fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="22" stroke-linecap="butt"/>
 
-        <!-- Zone VENDRE (rouge) : θ 180°→120° -->
-        <path d="M 20 115 A 100 100 0 0 0 70 28.8"
-              fill="none" stroke="#e74c3c" stroke-width="24" stroke-linecap="butt"/>
-        <!-- Zone NEUTRE (jaune) : θ 120°→60° -->
-        <path d="M 70 28.8 A 100 100 0 0 0 170 28.8"
-              fill="none" stroke="#f1c40f" stroke-width="24" stroke-linecap="butt"/>
-        <!-- Zone ACHETER (vert) : θ 60°→0° -->
-        <path d="M 170 28.8 A 100 100 0 0 0 220 115"
-              fill="none" stroke="#2ecc71" stroke-width="24" stroke-linecap="butt"/>
+        <!-- VENDRE (rouge) : 180° → 120° -->
+        <path d="M 30 110 A 90 90 0 0 0 75 32.1"
+              fill="none" stroke="#c0392b" stroke-width="22" stroke-linecap="butt"/>
+        <!-- Séparateur -->
+        <line x1="75" y1="32.1" x2="75" y2="32.1" stroke="transparent" stroke-width="0"/>
+        <!-- NEUTRE (jaune) : 120° → 60° -->
+        <path d="M 75 32.1 A 90 90 0 0 0 165 32.1"
+              fill="none" stroke="#f39c12" stroke-width="22" stroke-linecap="butt"/>
+        <!-- ACHETER (vert) : 60° → 0° -->
+        <path d="M 165 32.1 A 90 90 0 0 0 210 110"
+              fill="none" stroke="#27ae60" stroke-width="22" stroke-linecap="butt"/>
+
+        <!-- Petits séparateurs blancs aux jonctions -->
+        <line x1="120" y1="20" [attr.x2]="120 + 11 * -0.5" [attr.y2]="20 + 11 * 0.866"
+              stroke="rgba(8,13,28,0.9)" stroke-width="3"/>
+        <line x1="120" y1="20" [attr.x2]="120 + 11 * 0.5"  [attr.y2]="20 + 11 * 0.866"
+              stroke="rgba(8,13,28,0.9)" stroke-width="3"/>
 
         <!-- Aiguille -->
-        <line x1="120" y1="115"
+        <line x1="120" y1="110"
               [attr.x2]="gaugeNeedle(r.scoring.score_final).x2"
               [attr.y2]="gaugeNeedle(r.scoring.score_final).y2"
-              stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-        <!-- Pivot central -->
-        <circle cx="120" cy="115" r="7" fill="rgba(8,13,28,0.9)" stroke="white" stroke-width="2"/>
+              stroke="white" stroke-width="3" stroke-linecap="round"/>
 
-        <!-- Labels zones -->
-        <text x="14"  y="134" fill="#e74c3c" font-size="9" font-weight="700" text-anchor="start">VENDRE</text>
-        <text x="120" y="18"  fill="#f1c40f" font-size="9" font-weight="700" text-anchor="middle">NEUTRE</text>
-        <text x="226" y="134" fill="#2ecc71" font-size="9" font-weight="700" text-anchor="end">ACHETER</text>
+        <!-- Pivot -->
+        <circle cx="120" cy="110" r="8" fill="#0d1b2e" stroke="white" stroke-width="2.5"/>
 
-        <!-- Score au centre -->
-        <text x="120" y="102"
+        <!-- Score -->
+        <text x="120" y="96"
               [attr.fill]="scoreColor(r.scoring.score_final)"
-              font-size="15" font-weight="800" text-anchor="middle" font-family="monospace">
-          {{ r.scoring.score_final | number:'1.4-4' }}
-        </text>
+              font-size="16" font-weight="800" text-anchor="middle"
+              font-family="'Courier New', monospace">{{ r.scoring.score_final | number:'1.4-4' }}</text>
+
+        <!-- Labels -->
+        <text x="16"  y="128" fill="#c0392b" font-size="9" font-weight="700" text-anchor="start"  letter-spacing="0.5">VENDRE</text>
+        <text x="120" y="16"  fill="#f39c12" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="0.5">NEUTRE</text>
+        <text x="224" y="128" fill="#27ae60" font-size="9" font-weight="700" text-anchor="end"    letter-spacing="0.5">ACHETER</text>
       </svg>
+
       <div class="gauge-decision" [style.color]="decisionColor(r.scoring.decision)">
         {{ r.scoring.decision }}
       </div>
