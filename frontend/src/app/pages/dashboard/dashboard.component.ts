@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
@@ -11,8 +11,12 @@ import { ApiService } from '../../core/services/api.service';
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
-export class DashboardComponent implements OnInit {
-  alertCount = signal(0);
+export class DashboardComponent implements OnInit, AfterViewInit {
+  @ViewChild('bottomNav') bottomNavRef!: ElementRef<HTMLElement>;
+
+  alertCount  = signal(0);
+  canScrollL  = signal(false);
+  canScrollR  = signal(false);
 
   tabs = [
     { label: 'Analyse',      path: 'analyse',     icon: '🔍' },
@@ -30,5 +34,27 @@ export class DashboardComponent implements OnInit {
       next: r => this.alertCount.set(r.count),
       error: () => {},
     });
+  }
+
+  ngAfterViewInit(): void {
+    this.updateArrows();
+  }
+
+  onNavScroll(): void {
+    this.updateArrows();
+  }
+
+  private updateArrows(): void {
+    const el = this.bottomNavRef?.nativeElement;
+    if (!el) return;
+    this.canScrollL.set(el.scrollLeft > 4);
+    this.canScrollR.set(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }
+
+  scrollNav(dir: 'left' | 'right'): void {
+    const el = this.bottomNavRef?.nativeElement;
+    if (!el) return;
+    el.scrollBy({ left: dir === 'left' ? -120 : 120, behavior: 'smooth' });
+    setTimeout(() => this.updateArrows(), 300);
   }
 }

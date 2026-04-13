@@ -2,15 +2,17 @@
 
   <!-- ── TOP HEADER ── -->
   <header class="top-header">
+    <!-- Logo (desktop only) -->
     <div class="header-brand">
       <img src="/logo.png" alt="logo" class="header-logo" />
-      <div>
+      <div class="header-titles">
         <div class="header-title">FINANCE AGENTS</div>
         <div class="header-sub">AIDE À LA DÉCISION · ANALYSE · PORTEFEUILLE</div>
       </div>
     </div>
 
-    <nav class="tab-nav">
+    <!-- Tab nav (desktop only) -->
+    <nav class="tab-nav desktop-nav">
       @for (tab of tabs; track tab.path) {
         <a [routerLink]="tab.path" routerLinkActive="active" class="tab-link">
           {{ tab.icon }} {{ tab.label }}
@@ -21,6 +23,7 @@
       }
     </nav>
 
+    <!-- User zone -->
     <div class="header-user">
       <span class="connected-dot"></span>
       <span class="username">{{ auth.currentUser()?.username }}</span>
@@ -35,5 +38,30 @@
   <main class="page-content">
     <router-outlet />
   </main>
+
+  <!-- ── BOTTOM NAV (mobile only) ── -->
+  <nav class="bottom-nav-wrapper">
+    @if (canScrollL()) {
+      <button class="nav-arrow nav-arrow-left" (click)="scrollNav('left')">‹</button>
+    }
+
+    <div class="bottom-nav-tabs" #bottomNav (scroll)="onNavScroll()">
+      @for (tab of tabs; track tab.path) {
+        <a [routerLink]="tab.path" routerLinkActive="active" class="bottom-tab">
+          <span class="bottom-tab-icon">{{ tab.icon }}</span>
+          <span class="bottom-tab-label">
+            {{ tab.label }}
+            @if (tab.path === 'portfolio' && alertCount() > 0) {
+              <span class="tab-badge-dot"></span>
+            }
+          </span>
+        </a>
+      }
+    </div>
+
+    @if (canScrollR()) {
+      <button class="nav-arrow nav-arrow-right" (click)="scrollNav('right')">›</button>
+    }
+  </nav>
 
 </div>
