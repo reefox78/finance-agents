@@ -177,53 +177,61 @@
       </div>
     }
 
-    <!-- Score Gauge — demi-cercle (n) -->
-    <!-- Centre : (120,110) · Rayon arcs : 90 · stroke-width : 22 -->
-    <!-- θ=180° → (30,110) | θ=120° → (75,32.1) | θ=60° → (165,32.1) | θ=0° → (210,110) -->
+    <!-- Score Gauge — anneau rempli (donut demi-cercle) -->
+    <!--
+      Centre : (130,130) · R_ext=105 · R_int=62
+      θ=180° → ext(25,130)   int(68,130)
+      θ=120° → ext(77.5,39.1) int(99,76.3)
+      θ= 60° → ext(182.5,39.1) int(161,76.3)
+      θ=  0° → ext(235,130)  int(192,130)
+    -->
     <div class="gauge-wrapper">
-      <svg viewBox="0 0 240 135" class="gauge-svg" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 260 148" class="gauge-svg" xmlns="http://www.w3.org/2000/svg">
 
-        <!-- Piste de fond -->
-        <path d="M 30 110 A 90 90 0 0 0 210 110"
-              fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="22" stroke-linecap="butt"/>
+        <!-- VENDRE : secteur annulaire 180°→120° -->
+        <path d="M 25 130
+                 A 105 105 0 0 0 77.5 39.1
+                 L 99 76.3
+                 A 62 62 0 0 1 68 130 Z"
+              fill="#e74c3c"/>
 
-        <!-- VENDRE (rouge) : 180° → 120° -->
-        <path d="M 30 110 A 90 90 0 0 0 75 32.1"
-              fill="none" stroke="#c0392b" stroke-width="22" stroke-linecap="butt"/>
-        <!-- Séparateur -->
-        <line x1="75" y1="32.1" x2="75" y2="32.1" stroke="transparent" stroke-width="0"/>
-        <!-- NEUTRE (jaune) : 120° → 60° -->
-        <path d="M 75 32.1 A 90 90 0 0 0 165 32.1"
-              fill="none" stroke="#f39c12" stroke-width="22" stroke-linecap="butt"/>
-        <!-- ACHETER (vert) : 60° → 0° -->
-        <path d="M 165 32.1 A 90 90 0 0 0 210 110"
-              fill="none" stroke="#27ae60" stroke-width="22" stroke-linecap="butt"/>
+        <!-- NEUTRE : secteur annulaire 120°→60° -->
+        <path d="M 77.5 39.1
+                 A 105 105 0 0 0 182.5 39.1
+                 L 161 76.3
+                 A 62 62 0 0 1 99 76.3 Z"
+              fill="#f1c40f"/>
 
-        <!-- Petits séparateurs blancs aux jonctions -->
-        <line x1="120" y1="20" [attr.x2]="120 + 11 * -0.5" [attr.y2]="20 + 11 * 0.866"
-              stroke="rgba(8,13,28,0.9)" stroke-width="3"/>
-        <line x1="120" y1="20" [attr.x2]="120 + 11 * 0.5"  [attr.y2]="20 + 11 * 0.866"
-              stroke="rgba(8,13,28,0.9)" stroke-width="3"/>
+        <!-- ACHETER : secteur annulaire 60°→0° -->
+        <path d="M 182.5 39.1
+                 A 105 105 0 0 0 235 130
+                 L 192 130
+                 A 62 62 0 0 1 161 76.3 Z"
+              fill="#2ecc71"/>
+
+        <!-- Séparateurs sombres entre zones -->
+        <line x1="99"  y1="76.3" x2="77.5"  y2="39.1" stroke="rgba(8,13,28,0.7)" stroke-width="2.5"/>
+        <line x1="161" y1="76.3" x2="182.5" y2="39.1" stroke="rgba(8,13,28,0.7)" stroke-width="2.5"/>
 
         <!-- Aiguille -->
-        <line x1="120" y1="110"
+        <line x1="130" y1="130"
               [attr.x2]="gaugeNeedle(r.scoring.score_final).x2"
               [attr.y2]="gaugeNeedle(r.scoring.score_final).y2"
-              stroke="white" stroke-width="3" stroke-linecap="round"/>
+              stroke="white" stroke-width="3.5" stroke-linecap="round"/>
 
         <!-- Pivot -->
-        <circle cx="120" cy="110" r="8" fill="#0d1b2e" stroke="white" stroke-width="2.5"/>
+        <circle cx="130" cy="130" r="9" fill="#0d1b2e" stroke="white" stroke-width="2.5"/>
 
-        <!-- Score -->
-        <text x="120" y="96"
+        <!-- Score (dans l'espace intérieur) -->
+        <text x="130" y="112"
               [attr.fill]="scoreColor(r.scoring.score_final)"
-              font-size="16" font-weight="800" text-anchor="middle"
+              font-size="17" font-weight="800" text-anchor="middle"
               font-family="'Courier New', monospace">{{ r.scoring.score_final | number:'1.4-4' }}</text>
 
         <!-- Labels -->
-        <text x="16"  y="128" fill="#c0392b" font-size="9" font-weight="700" text-anchor="start"  letter-spacing="0.5">VENDRE</text>
-        <text x="120" y="16"  fill="#f39c12" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="0.5">NEUTRE</text>
-        <text x="224" y="128" fill="#27ae60" font-size="9" font-weight="700" text-anchor="end"    letter-spacing="0.5">ACHETER</text>
+        <text x="18"  y="145" fill="#e74c3c" font-size="10" font-weight="700" text-anchor="start">VENDRE</text>
+        <text x="130" y="22"  fill="#f1c40f" font-size="10" font-weight="700" text-anchor="middle">NEUTRE</text>
+        <text x="242" y="145" fill="#2ecc71" font-size="10" font-weight="700" text-anchor="end">ACHETER</text>
       </svg>
 
       <div class="gauge-decision" [style.color]="decisionColor(r.scoring.decision)">
