@@ -48,12 +48,10 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:4200",       # Angular dev
         "http://localhost:80",         # Docker local
-        "https://*.vercel.app",                    # Vercel preview
-        "https://finance-agents-one.vercel.app",   # frontend Vercel
-        "https://*.netlify.app",       # Netlify preview
-        "https://*.onrender.com",      # Render
+        "https://finance-agents-one.vercel.app",   # frontend Vercel prod
         "https://finance-agents-api.onrender.com",  # backend Render
     ],
+    allow_origin_regex=r"https://(.*\.)?(vercel\.app|netlify\.app|onrender\.com)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
