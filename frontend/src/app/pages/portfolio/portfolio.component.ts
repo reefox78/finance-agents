@@ -46,6 +46,7 @@ export class PortfolioComponent implements OnInit {
   watchlist  = WATCHLIST;
   categories = WATCHLIST_CATEGORIES;
   tickerLabel = tickerLabel;
+  tickerNames = TICKER_NAMES;
 
   // ── UI toggles ────────────────────────────────────────────────────────────
   showBroker  = false;

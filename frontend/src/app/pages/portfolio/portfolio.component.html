@@ -205,6 +205,9 @@
           <div class="pos-ticker clickable" (click)="openHistoModal(pos.ticker)"
                title="Voir l'historique des analyses">
             {{ pos.ticker }}
+            @if (tickerNames[pos.ticker]) {
+              <span class="ticker-fullname">{{ tickerNames[pos.ticker] }}</span>
+            }
             <span class="ticker-hist-icon">📊</span>
           </div>
           <div class="pos-signal" [class]="pos.signal_sortie === 'VENDRE' ? 'sig-badge-sell' : pos.signal_sortie === 'SURVEILLER' ? 'sig-badge-watch' : 'sig-badge-hold'">
