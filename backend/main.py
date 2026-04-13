@@ -46,9 +46,11 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:4200",   # Angular dev
-        "https://*.vercel.app",    # Vercel preview
-        "https://*.netlify.app",   # Netlify preview
+        "http://localhost:4200",       # Angular dev
+        "http://localhost:80",         # Docker local
+        "https://*.vercel.app",        # Vercel preview
+        "https://*.netlify.app",       # Netlify preview
+        "https://*.onrender.com",      # Render preview
     ],
     allow_credentials=True,
     allow_methods=["*"],
