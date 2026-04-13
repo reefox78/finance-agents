@@ -50,7 +50,8 @@ app.add_middleware(
         "http://localhost:80",         # Docker local
         "https://*.vercel.app",        # Vercel preview
         "https://*.netlify.app",       # Netlify preview
-        "https://*.onrender.com",      # Render preview
+        "https://*.onrender.com",      # Render
+        "https://finance-agents-api.onrender.com",  # backend Render
     ],
     allow_credentials=True,
     allow_methods=["*"],
