@@ -151,6 +151,16 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   scoreColor(s: number): string {
     return s >= 0.1 ? '#2ecc71' : s <= -0.1 ? '#e74c3c' : '#f1c40f';
   }
+
+  gaugeNeedle(score: number): { x2: number; y2: number } {
+    const clamped = Math.max(-1, Math.min(1, score));
+    const angleDeg = 180 - ((clamped + 1) / 2) * 180;
+    const angleRad = (angleDeg * Math.PI) / 180;
+    return {
+      x2: Math.round((100 + 70 * Math.cos(angleRad)) * 100) / 100,
+      y2: Math.round((100 - 70 * Math.sin(angleRad)) * 100) / 100,
+    };
+  }
   decisionColor(d: string): string {
     if (d === 'ACHETER') return '#2ecc71';
     if (d === 'VENDRE')  return '#e74c3c';
