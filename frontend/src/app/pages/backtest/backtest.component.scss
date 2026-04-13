@@ -123,3 +123,10 @@
   .chart-wrap.tall   { height: 260px; }
   .chart-wrap.medium { height: 180px; }
 }
+
+@media (max-width: 600px) {
+  .metrics-row { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+  .bt-form .form-row { flex-direction: column; }
+  .chart-wrap.tall   { height: 200px; }
+  .chart-wrap.medium { height: 140px; }
+}

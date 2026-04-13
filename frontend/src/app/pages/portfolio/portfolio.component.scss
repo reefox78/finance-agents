@@ -453,13 +453,28 @@
   text-align: right; font-family: monospace;
 }
 
+@media (max-width: 900px) {
+  .settings-grid   { grid-template-columns: 1fr; }
+  .histo-stats     { grid-template-columns: repeat(2, 1fr); }
+  .positions-grid  { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 640px) {
   .modal-body { grid-template-columns: 1fr; }
   .modal-list { max-height: 200px; border-right: none; border-bottom: 1px solid rgba(0,200,255,0.08); }
 }
 
-@media (max-width: 900px) {
-  .settings-grid   { grid-template-columns: 1fr; }
-  .histo-stats     { grid-template-columns: repeat(2, 1fr); }
-  .positions-grid  { grid-template-columns: 1fr; }
+@media (max-width: 600px) {
+  .settings-row   { flex-direction: column; }
+  .histo-stats    { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+  .form-grid      { grid-template-columns: 1fr 1fr; }
+  .positions-grid { gap: 0.6rem; }
+
+  .pos-card       { padding: 12px; }
+  .pos-metrics    { grid-template-columns: repeat(2, 1fr); }
+
+  .modal-overlay  { padding: 0.5rem; }
+  .modal-dialog   { width: 100%; max-height: 95vh; border-radius: 12px; }
+  .modal-body     { grid-template-columns: 1fr; }
+  .modal-list     { max-height: 180px; border-right: none; border-bottom: 1px solid rgba(0,200,255,0.08); }
 }

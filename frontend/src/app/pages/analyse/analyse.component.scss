@@ -350,3 +350,33 @@
     &.rsi-panel { height: 100px; }
   }
 }
+
+@media (max-width: 600px) {
+  .controls-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .control-group { width: 100%; }
+  .ticker-sel, .custom-input, .period-sel { min-width: 0; width: 100%; }
+  .ctrl-btn { margin-left: 0; }
+
+  .metrics-row { grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+  .agents-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+
+  .agent-card { padding: 10px; }
+  .ac-name    { font-size: 9px; }
+  .ac-signal  { font-size: 14px; }
+  .ac-detail  { font-size: 10px; }
+
+  .chart-panel {
+    &.tall   { height: 200px; }
+    &.medium { height: 110px; }
+    &.small  { height: 80px; }
+  }
+
+  .modal-row { grid-template-columns: 1fr; }
+  .achat-modal { width: 95vw; max-height: 90vh; }
+
+  .gauge-svg { width: 180px; }
+}

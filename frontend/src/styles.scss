@@ -137,3 +137,14 @@ html, body {
   background: rgba(231,76,60,0.1); border: 1px solid rgba(231,76,60,0.3);
   border-radius: 8px; color: #e74c3c; padding: 0.75rem 1rem; margin-bottom: 1rem;
 }
+
+/* ── Global responsive ── */
+@media (max-width: 600px) {
+  .metric-card {
+    padding: 10px 12px;
+    .metric-value { font-size: 18px; }
+    .metric-label { font-size: 9px; }
+  }
+  .btn-primary  { padding: 0.55rem 1rem; font-size: 0.85rem; }
+  .fa-input, .fa-select { font-size: 0.85rem; padding: 0.5rem 0.7rem; }
+}

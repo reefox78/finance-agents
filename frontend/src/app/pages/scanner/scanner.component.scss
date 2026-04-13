@@ -101,3 +101,14 @@
   .score    { font-weight: 700; font-family: monospace; }
   .decision { color: #ffd740; font-weight: 600; }
 }
+
+@media (max-width: 600px) {
+  .controls { flex-direction: column; align-items: stretch; }
+  .controls select,
+  .controls input[type="number"] { width: 100%; }
+
+  .results-table {
+    font-size: 12px;
+    th, td { padding: 0.4rem 0.5rem; }
+  }
+}

@@ -137,3 +137,7 @@
     cursor: not-allowed;
   }
 }
+
+@media (max-width: 600px) {
+  :host { padding: 1rem; }
+}
