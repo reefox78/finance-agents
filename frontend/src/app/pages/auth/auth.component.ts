@@ -38,7 +38,9 @@ export class AuthComponent {
     obs.subscribe({
       next: () => this.router.navigate(['/dashboard']),
       error: (err) => {
-        this.error.set(err.error?.detail ?? 'Erreur réseau');
+        const detail = err.error?.detail;
+        const status = err.status ? ` (${err.status})` : '';
+        this.error.set(detail ?? `Erreur réseau${status}`);
         this.loading.set(false);
       },
     });
