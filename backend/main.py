@@ -47,7 +47,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.info("=== Finance Agents API démarrée — log : %s ===", _log_filename.name)
 
 import re as _re
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -115,6 +115,19 @@ def _cors_headers(request: Request) -> dict:
             "Access-Control-Allow-Credentials": "true",
         }
     return {}
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Garantit les headers CORS sur toutes les réponses HTTP (4xx/5xx inclus).
+    Sans ce handler, CORSMiddleware peut être court-circuité par le proxy Render
+    sur les réponses d'erreur, laissant le frontend sans Access-Control-Allow-Origin."""
+    _api_logger.warning("HTTP %d sur %s: %s", exc.status_code, request.url.path, exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=_cors_headers(request),
+    )
 
 
 @app.exception_handler(Exception)
