@@ -54,6 +54,11 @@
 
   @if (loading()) {
     <div class="analyse-overlay">
+
+      @if (showCloseBtn()) {
+        <button class="overlay-close" (click)="cancelLoading()">✕</button>
+      }
+
       <div class="overlay-content">
 
         <!-- Spinner circulaire à tirets -->
@@ -78,6 +83,10 @@
           <div class="overlay-timer">
             ⏱ {{ elapsedSeconds() }}s — les agents travaillent, encore un peu…
           </div>
+        }
+
+        @if (overlayError()) {
+          <div class="overlay-error">{{ overlayError() }}</div>
         }
 
       </div>
