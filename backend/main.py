@@ -142,6 +142,12 @@ if _calibration_ok and _calibration_mod:
     app.include_router(_calibration_mod.router, prefix="/api/calibration", tags=["calibration"])
 
 
+@app.get("/")
+@app.head("/")
+def root():
+    return {"status": "ok", "service": "Finance Agents API"}
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
