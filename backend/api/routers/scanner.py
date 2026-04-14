@@ -2,15 +2,20 @@
 Scanner router — scan watchlist or custom tickers (Server-Sent Events for progress).
 """
 import json
+import re
 import numpy as np
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
 from orchestrator.orchestrator import run as orchestrer
 from api.deps import CurrentUser, decode_token
+
+# ── CORS for SSE (StreamingResponse bypasses the global CORSMiddleware) ─────
+_ALLOWED_ORIGINS = {"http://localhost:4200", "http://localhost:80"}
+_ALLOWED_RE = re.compile(r"https://(.*\.)?(vercel\.app|netlify\.app|onrender\.com)")
 
 router = APIRouter()
 
@@ -92,6 +97,7 @@ async def _scan_stream(
 
 @router.get("/stream")
 async def scanner_stream(
+    request: Request,
     categorie: str | None = Query(None),
     tickers: str | None = Query(None, description="Comma-separated tickers"),
     min_score: float = Query(0.0),
@@ -110,10 +116,21 @@ async def scanner_stream(
     else:
         ticker_list = _load_watchlist(categorie)
 
+    # CORS headers must be set explicitly on StreamingResponse
+    # (the global CORSMiddleware does not apply to streaming responses)
+    origin = request.headers.get("origin", "")
+    cors_headers: dict[str, str] = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    }
+    if origin in _ALLOWED_ORIGINS or (origin and _ALLOWED_RE.fullmatch(origin)):
+        cors_headers["Access-Control-Allow-Origin"] = origin
+        cors_headers["Access-Control-Allow-Credentials"] = "true"
+
     return StreamingResponse(
         _scan_stream(ticker_list, current_user["sub"], min_score),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers=cors_headers,
     )
 
 
