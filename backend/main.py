@@ -3,6 +3,8 @@ FastAPI backend — Finance Agents
 Exposes all analysis, scanner, portfolio and auth capabilities as REST endpoints.
 """
 import sys
+import logging
+from datetime import datetime
 from pathlib import Path
 
 _root    = Path(__file__).parent.parent  # finance-agents/
@@ -19,6 +21,25 @@ except ImportError:
 sys.path.insert(0, str(_root))
 # backend dir → api/ importable
 sys.path.insert(0, str(_backend))
+
+# ---------------------------------------------------------------------------
+# Logging — stdout + fichier dans logs/ (lu par la page Logs admin)
+# ---------------------------------------------------------------------------
+_LOGS_DIR = _root / "logs"
+_LOGS_DIR.mkdir(exist_ok=True)
+
+_log_filename = _LOGS_DIR / f"api_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),                      # Render dashboard
+        logging.FileHandler(_log_filename, encoding="utf-8"),   # page Logs admin
+    ],
+)
+
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)  # moins de bruit HTTP
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
