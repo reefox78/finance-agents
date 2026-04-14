@@ -45,13 +45,27 @@ def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
 class _ConnCtx:
     """Context manager : emprunte une connexion, la remet dans le pool à la fin."""
     def __enter__(self):
-        self._conn = _get_pool().getconn()
+        # Sauvegarder la référence exacte du pool utilisé pour getconn(),
+        # sinon si le pool est recréé entre __enter__ et __exit__ (Python 3.14 /
+        # Starlette threadpool), putconn() lèverait PoolError "unkeyed connection".
+        self._pool = _get_pool()
+        self._conn = self._pool.getconn()
         return self._conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
-            self._conn.rollback()
-        _get_pool().putconn(self._conn)
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
+        try:
+            self._pool.putconn(self._conn)
+        except Exception:
+            # Connexion déjà fermée ou pool recréé — on ferme proprement
+            try:
+                self._conn.close()
+            except Exception:
+                pass
         return False   # ne supprime pas l'exception
 
 
