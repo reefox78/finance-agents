@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { LoadingOverlayComponent } from '../../shared/components/loading-overlay/loading-overlay.component';
 
 interface ScanResult {
   ticker: string;
@@ -13,7 +14,7 @@ interface ScanResult {
 @Component({
   selector: 'app-scanner',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoadingOverlayComponent],
   templateUrl: './scanner.component.html',
   styleUrl: './scanner.component.scss',
 })
@@ -21,10 +22,11 @@ export class ScannerComponent implements OnDestroy {
   categorie = '';
   minScore  = 0;
 
-  loading   = signal(false);
-  progress  = signal<{ current: number; total: number; ticker: string } | null>(null);
-  results   = signal<ScanResult[]>([]);
-  error     = signal('');
+  loading      = signal(false);
+  progress     = signal<{ current: number; total: number; ticker: string } | null>(null);
+  results      = signal<ScanResult[]>([]);
+  error        = signal('');
+  overlayError = signal('');
 
   private es: EventSource | null = null;
 
@@ -32,6 +34,7 @@ export class ScannerComponent implements OnDestroy {
 
   startScan(): void {
     this.error.set('');
+    this.overlayError.set('');
     this.results.set([]);
     this.loading.set(true);
     this.progress.set(null);
@@ -59,10 +62,16 @@ export class ScannerComponent implements OnDestroy {
     };
 
     this.es.onerror = () => {
-      this.error.set('Erreur de connexion SSE');
-      this.loading.set(false);
+      this.overlayError.set('Erreur de connexion SSE');
       this.es?.close();
     };
+  }
+
+  cancelScan(): void {
+    this.es?.close();
+    this.es = null;
+    this.loading.set(false);
+    this.overlayError.set('');
   }
 
   scoreColor(score: number): string {

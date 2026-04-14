@@ -1,5 +1,12 @@
 <div class="page">
 
+  <app-loading-overlay
+    [active]="analyzing()"
+    label="ANALYSE EN COURS…"
+    [errorMsg]="analyzingError()"
+    (cancelled)="cancelAnalysis()">
+  </app-loading-overlay>
+
   <!-- Toast -->
   @if (toast()) { <div class="toast">{{ toast() }}</div> }
 

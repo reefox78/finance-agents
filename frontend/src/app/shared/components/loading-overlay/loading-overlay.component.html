@@ -1,0 +1,43 @@
+@if (active) {
+  <div class="loading-overlay">
+
+    @if (showCloseBtn()) {
+      <button class="overlay-close" (click)="cancel()">✕</button>
+    }
+
+    <div class="overlay-content">
+
+      <!-- Spinner circulaire à tirets -->
+      <div class="spinner-wrap">
+        <svg class="spinner-svg" viewBox="0 0 120 120">
+          <circle class="spinner-track" cx="60" cy="60" r="48"/>
+          <circle class="spinner-ring"  cx="60" cy="60" r="48"/>
+        </svg>
+        <div class="spinner-center">AI</div>
+      </div>
+
+      <!-- Barre segmentée -->
+      <div class="overlay-progress">
+        @for (seg of segs; track seg) {
+          <div class="prog-seg" [style.animation-delay]="((seg-1)*0.13) + 's'"></div>
+        }
+      </div>
+
+      <div class="overlay-label">{{ label }}</div>
+
+      @if (elapsedSeconds() >= 60) {
+        <div class="overlay-timer">
+          ⏱ {{ elapsedSeconds() }}s — les agents travaillent, encore un peu…
+        </div>
+      }
+
+      <!-- Contenu additionnel (ex : barre de progression SSE du scanner) -->
+      <ng-content></ng-content>
+
+      @if (errorMsg) {
+        <div class="overlay-error">{{ errorMsg }}</div>
+      }
+
+    </div>
+  </div>
+}

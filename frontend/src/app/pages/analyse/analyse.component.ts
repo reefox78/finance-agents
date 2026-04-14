@@ -1,4 +1,4 @@
-import { Component, signal, computed, ViewChild, ElementRef, OnDestroy, OnInit } from '@angular/core';
+import { Component, signal, ViewChild, ElementRef, OnDestroy, OnInit } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -10,6 +10,7 @@ import { catchError } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import { AnalyseStateService } from '../../core/services/analyse-state.service';
+import { LoadingOverlayComponent } from '../../shared/components/loading-overlay/loading-overlay.component';
 import { TICKER_NAMES, WATCHLIST, WATCHLIST_CATEGORIES, tickerLabel } from '../../core/constants/watchlist';
 import { BROKER_CALC, BROKERS_INFO } from '../../core/constants/watchlist';
 
@@ -20,7 +21,7 @@ const NAMES = TICKER_NAMES;
 @Component({
   selector: 'app-analyse',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoadingOverlayComponent],
   templateUrl: './analyse.component.html',
   styleUrl: './analyse.component.scss',
 })
@@ -38,14 +39,11 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   customTicker = '';
   period       = '3mo';
   withLlm      = true;
-  loading        = signal(false);
-  result         = signal<any>(null);
-  error          = signal('');
-  elapsedSeconds = signal(0);
-  overlayError   = signal('');
-  showCloseBtn   = computed(() => this.elapsedSeconds() >= 60 || this.overlayError() !== '');
+  loading      = signal(false);
+  result       = signal<any>(null);
+  error        = signal('');
+  overlayError = signal('');
 
-  private _timer: any = null;
   private _sub: Subscription | null = null;
 
   private _charts: Chart<any, any, any>[] = [];
@@ -81,7 +79,6 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this._stopTimer();
     // Sauvegarde l'état avant de quitter
     this.state.ticker       = this.ticker;
     this.state.customTicker = this.customTicker;
@@ -162,11 +159,8 @@ export class AnalyseComponent implements OnInit, OnDestroy {
     this.result.set(null);
     this._destroyCharts();
     this.loading.set(true);
-    this.elapsedSeconds.set(0);
-    this._startTimer();
     this._sub = this.api.analyse(t, this.withLlm, false, this.period).subscribe({
       next: r => {
-        this._stopTimer();
         this.result.set(r);
         this.loading.set(false);
         if (r.chart?.dates?.length > 1) {
@@ -174,7 +168,6 @@ export class AnalyseComponent implements OnInit, OnDestroy {
         }
       },
       error: e => {
-        this._stopTimer();
         const status = e.status ? ` (${e.status})` : '';
         const detail = e.error?.detail ?? 'Erreur serveur';
         this.overlayError.set(`${detail}${status}`);
@@ -185,18 +178,8 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   cancelLoading(): void {
     this._sub?.unsubscribe();
     this._sub = null;
-    this._stopTimer();
     this.loading.set(false);
     this.overlayError.set('');
-  }
-
-  private _startTimer(): void {
-    this._stopTimer();
-    this._timer = setInterval(() => this.elapsedSeconds.update(s => s + 1), 1000);
-  }
-
-  private _stopTimer(): void {
-    if (this._timer) { clearInterval(this._timer); this._timer = null; }
   }
 
   resetZoom(): void {

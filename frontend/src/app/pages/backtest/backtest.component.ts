@@ -1,6 +1,7 @@
 import { Component, signal, ViewChild, ElementRef, OnDestroy } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import {
   Chart, registerables,
   TimeScale, LinearScale, PointElement, LineElement,
@@ -10,6 +11,7 @@ import {
 import 'chartjs-adapter-date-fns';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { ApiService } from '../../core/services/api.service';
+import { LoadingOverlayComponent } from '../../shared/components/loading-overlay/loading-overlay.component';
 
 Chart.register(...registerables, zoomPlugin);
 
@@ -37,7 +39,7 @@ const WATCHLIST: Record<string, string[]> = {
 @Component({
   selector: 'app-backtest',
   standalone: true,
-  imports: [CommonModule, FormsModule, DecimalPipe],
+  imports: [CommonModule, FormsModule, DecimalPipe, LoadingOverlayComponent],
   templateUrl: './backtest.component.html',
   styleUrls: ['./backtest.component.scss'],
 })
@@ -55,26 +57,39 @@ export class BacktestComponent implements OnDestroy {
   capital = 10000;
   mode    = 'multi';
 
-  loading = signal(false);
-  result  = signal<any>(null);
-  error   = signal('');
+  loading      = signal(false);
+  result       = signal<any>(null);
+  error        = signal('');
+  overlayError = signal('');
 
   private _charts: Chart[] = [];
+  private _sub: Subscription | null = null;
 
   constructor(private api: ApiService) {}
-  ngOnDestroy(): void { this._destroyCharts(); }
+  ngOnDestroy(): void { this._sub?.unsubscribe(); this._destroyCharts(); }
 
   label(t: string): string { return NAMES[t] ? `${t} — ${NAMES[t]}` : t; }
 
   run(): void {
     this.error.set('');
+    this.overlayError.set('');
     this.result.set(null);
     this._destroyCharts();
     this.loading.set(true);
-    this.api.runBacktest({ ticker: this.ticker, debut: this.debut, fin: this.fin, capital: this.capital, mode: this.mode }).subscribe({
+    this._sub = this.api.runBacktest({ ticker: this.ticker, debut: this.debut, fin: this.fin, capital: this.capital, mode: this.mode }).subscribe({
       next: r => { this.result.set(r); this.loading.set(false); setTimeout(() => this._buildCharts(r), 0); },
-      error: e => { this.error.set(e.error?.detail ?? 'Erreur serveur'); this.loading.set(false); },
+      error: e => {
+        const status = e.status ? ` (${e.status})` : '';
+        this.overlayError.set((e.error?.detail ?? 'Erreur serveur') + status);
+      },
     });
+  }
+
+  cancelBacktest(): void {
+    this._sub?.unsubscribe();
+    this._sub = null;
+    this.loading.set(false);
+    this.overlayError.set('');
   }
 
   resetZoom(): void { this._charts.forEach(c => (c as any).resetZoom?.()); }

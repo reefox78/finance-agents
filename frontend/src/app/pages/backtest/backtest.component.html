@@ -1,4 +1,11 @@
 <div class="page">
+  <app-loading-overlay
+    [active]="loading()"
+    label="BACKTEST EN COURS…"
+    [errorMsg]="overlayError()"
+    (cancelled)="cancelBacktest()">
+  </app-loading-overlay>
+
   <div class="section-header"><span>📊 Backtest</span></div>
 
   <!-- ── Form ── -->

@@ -1,10 +1,11 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { finalize, timeout, catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
-import { of, Subject } from 'rxjs';
+import { of, Subject, Subscription } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
+import { LoadingOverlayComponent } from '../../shared/components/loading-overlay/loading-overlay.component';
 import {
   WATCHLIST, WATCHLIST_CATEGORIES, TICKER_NAMES, tickerLabel,
   BROKER_CALC, BROKERS_INFO,
@@ -19,19 +20,22 @@ const REGIMES = [
 @Component({
   selector: 'app-portfolio',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoadingOverlayComponent],
   templateUrl: './portfolio.component.html',
   styleUrl: './portfolio.component.scss',
 })
-export class PortfolioComponent implements OnInit {
+export class PortfolioComponent implements OnInit, OnDestroy {
 
   // ── State ──────────────────────────────────────────────────────────────────
   positions  = signal<any[]>([]);
   historique = signal<any[]>([]);
-  loading    = signal(false);
-  analyzing  = signal(false);
-  error      = signal('');
-  toast      = signal('');
+  loading        = signal(false);
+  analyzing      = signal(false);
+  analyzingError = signal('');
+  error          = signal('');
+  toast          = signal('');
+
+  private _analysisSub: Subscription | null = null;
 
   // ── Broker / Fiscal settings ───────────────────────────────────────────────
   brokerList    = Object.keys(BROKERS_INFO);
@@ -78,6 +82,8 @@ export class PortfolioComponent implements OnInit {
   };
 
   constructor(private api: ApiService, private route: ActivatedRoute, private router: Router) {}
+
+  ngOnDestroy(): void { this._analysisSub?.unsubscribe(); }
 
   ngOnInit(): void {
     this.loadPositions();
@@ -132,11 +138,22 @@ export class PortfolioComponent implements OnInit {
 
   analyserPositions(): void {
     this.analyzing.set(true);
+    this.analyzingError.set('');
     this.error.set('');
-    this.api.evaluatePositions(!this.modeRapide).subscribe({
+    this._analysisSub = this.api.evaluatePositions(!this.modeRapide).subscribe({
       next: p => { this.positions.set(p); this.analyzing.set(false); this._toast('Positions mises à jour.'); },
-      error: e => { this.error.set(e.error?.detail ?? 'Erreur'); this.analyzing.set(false); },
+      error: e => {
+        const status = e.status ? ` (${e.status})` : '';
+        this.analyzingError.set((e.error?.detail ?? 'Erreur serveur') + status);
+      },
     });
+  }
+
+  cancelAnalysis(): void {
+    this._analysisSub?.unsubscribe();
+    this._analysisSub = null;
+    this.analyzing.set(false);
+    this.analyzingError.set('');
   }
 
   // ── Frais broker auto ─────────────────────────────────────────────────────
