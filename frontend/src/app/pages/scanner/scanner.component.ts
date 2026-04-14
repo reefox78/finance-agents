@@ -20,7 +20,7 @@ interface ScanResult {
   styleUrl: './scanner.component.scss',
 })
 export class ScannerComponent implements OnDestroy {
-  categorie = '';
+  categorie = 'us_stocks';
   minScore  = 0;
 
   loading      = signal(false);
