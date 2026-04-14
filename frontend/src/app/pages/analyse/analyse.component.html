@@ -52,7 +52,37 @@
     </div>
   }
 
-  @if (loading()) { <div class="loader-bar"><div class="bar-inner"></div></div> }
+  @if (loading()) {
+    <div class="analyse-overlay">
+      <div class="overlay-content">
+
+        <!-- Spinner circulaire à tirets -->
+        <div class="spinner-wrap">
+          <svg class="spinner-svg" viewBox="0 0 120 120">
+            <circle class="spinner-track" cx="60" cy="60" r="48"/>
+            <circle class="spinner-ring"  cx="60" cy="60" r="48"/>
+          </svg>
+          <div class="spinner-center">AI</div>
+        </div>
+
+        <!-- Barre segmentée -->
+        <div class="overlay-progress">
+          @for (seg of [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]; track seg) {
+            <div class="prog-seg" [style.animation-delay]="((seg-1)*0.13) + 's'"></div>
+          }
+        </div>
+
+        <div class="overlay-label">ANALYSE EN COURS…</div>
+
+        @if (elapsedSeconds() >= 60) {
+          <div class="overlay-timer">
+            ⏱ {{ elapsedSeconds() }}s — les agents travaillent, encore un peu…
+          </div>
+        }
+
+      </div>
+    </div>
+  }
   @if (error())   { <div class="error-box">{{ error() }}</div> }
 
   <!-- ── Graphique technique — canvases toujours dans le DOM ── -->

@@ -1,5 +1,108 @@
 .page { max-width: 1300px; }
 
+/* ── Loading Overlay ───────────────────────────────────────────────────── */
+.analyse-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 8, 20, 0.92);
+  backdrop-filter: blur(6px);
+  z-index: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+/* Spinner */
+.spinner-wrap {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.spinner-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: spin 1.6s linear infinite;
+  transform-origin: center;
+}
+.spinner-track {
+  fill: none;
+  stroke: rgba(0,200,255,0.1);
+  stroke-width: 5;
+}
+.spinner-ring {
+  fill: none;
+  stroke: #00c8ff;
+  stroke-width: 5;
+  stroke-dasharray: 10 6;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgba(0,200,255,0.8));
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spinner-center {
+  font-size: 22px;
+  font-weight: 900;
+  color: #00c8ff;
+  letter-spacing: 2px;
+  text-shadow: 0 0 14px rgba(0,200,255,0.9);
+  z-index: 1;
+}
+
+/* Barre segmentée */
+.overlay-progress {
+  display: flex;
+  gap: 5px;
+}
+.prog-seg {
+  width: 18px;
+  height: 22px;
+  border: 1.5px solid #00c8ff;
+  border-radius: 3px;
+  background: rgba(0,200,255,0.08);
+  animation: pulse-seg 2s ease-in-out infinite;
+  box-shadow: 0 0 4px rgba(0,200,255,0.2);
+}
+@keyframes pulse-seg {
+  0%, 100% { background: rgba(0,200,255,0.08); box-shadow: 0 0 4px rgba(0,200,255,0.2); }
+  50%       { background: #00c8ff;              box-shadow: 0 0 12px rgba(0,200,255,0.9); }
+}
+
+/* Label */
+.overlay-label {
+  color: #00c8ff;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 5px;
+  text-shadow: 0 0 20px rgba(0,200,255,0.6);
+  animation: pulse-text 2s ease-in-out infinite;
+}
+@keyframes pulse-text {
+  0%, 100% { opacity: 0.7; }
+  50%       { opacity: 1; }
+}
+
+/* Timer (>60s) */
+.overlay-timer {
+  color: rgba(0,200,255,0.65);
+  font-size: 0.85rem;
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+
 /* ── Modal Achat ───────────────────────────────────────────────────────── */
 .achat-modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.55);

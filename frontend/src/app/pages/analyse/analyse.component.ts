@@ -37,9 +37,11 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   customTicker = '';
   period       = '3mo';
   withLlm      = true;
-  loading  = signal(false);
-  result   = signal<any>(null);
-  error    = signal('');
+  loading        = signal(false);
+  result         = signal<any>(null);
+  error          = signal('');
+  elapsedSeconds = signal(0);
+  private _timer: any = null;
 
   private _charts: Chart<any, any, any>[] = [];
   private _syncing = false;
@@ -74,6 +76,7 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this._stopTimer();
     // Sauvegarde l'état avant de quitter
     this.state.ticker       = this.ticker;
     this.state.customTicker = this.customTicker;
@@ -153,16 +156,32 @@ export class AnalyseComponent implements OnInit, OnDestroy {
     this.result.set(null);
     this._destroyCharts();
     this.loading.set(true);
+    this.elapsedSeconds.set(0);
+    this._startTimer();
     this.api.analyse(t, this.withLlm, false, this.period).subscribe({
       next: r => {
+        this._stopTimer();
         this.result.set(r);
         this.loading.set(false);
         if (r.chart?.dates?.length > 1) {
           setTimeout(() => this._buildCharts(r.chart), 0);
         }
       },
-      error: e => { this.error.set(e.error?.detail ?? 'Erreur serveur'); this.loading.set(false); },
+      error: e => {
+        this._stopTimer();
+        this.error.set(e.error?.detail ?? 'Erreur serveur');
+        this.loading.set(false);
+      },
     });
+  }
+
+  private _startTimer(): void {
+    this._stopTimer();
+    this._timer = setInterval(() => this.elapsedSeconds.update(s => s + 1), 1000);
+  }
+
+  private _stopTimer(): void {
+    if (this._timer) { clearInterval(this._timer); this._timer = null; }
   }
 
   resetZoom(): void {
