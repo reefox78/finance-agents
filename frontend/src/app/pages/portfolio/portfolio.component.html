@@ -418,29 +418,29 @@
   }
 
   <!-- ── Modal historique des analyses ── -->
-  @if (histoModal.show) {
+  @if (histoModal().show) {
     <div class="modal-overlay" (click)="closeHistoModal()">
       <div class="modal-panel" (click)="$event.stopPropagation()">
 
         <!-- Header -->
         <div class="modal-header">
           <div class="modal-title">
-            <span class="modal-ticker">{{ histoModal.ticker }}</span>
+            <span class="modal-ticker">{{ histoModal().ticker }}</span>
             Historique des analyses
           </div>
           <div class="modal-actions">
-            <button class="btn-secondary btn-sm" (click)="goToAnalyse(histoModal.ticker)">
+            <button class="btn-secondary btn-sm" (click)="goToAnalyse(histoModal().ticker)">
               🔍 Relancer une analyse
             </button>
             <button class="modal-close" (click)="closeHistoModal()">✕</button>
           </div>
         </div>
 
-        @if (histoModal.loading) {
+        @if (histoModal().loading) {
           <div class="modal-loading"><div class="loader-bar"><div class="bar-inner"></div></div></div>
-        } @else if (histoModal.entries.length === 0) {
+        } @else if (histoModal().entries.length === 0) {
           <div class="modal-empty">
-            Aucune analyse enregistrée pour {{ histoModal.ticker }}.<br>
+            Aucune analyse enregistrée pour {{ histoModal().ticker }}.<br>
             Cliquez sur "Analyser mes positions" pour générer un historique.
           </div>
         } @else {
@@ -448,10 +448,10 @@
 
             <!-- Liste des analyses (colonne gauche) -->
             <div class="modal-list">
-              <div class="modal-list-title">{{ histoModal.entries.length }} analyse(s) enregistrée(s)</div>
-              @for (entry of histoModal.entries; track entry.ts) {
+              <div class="modal-list-title">{{ histoModal().entries.length }} analyse(s) enregistrée(s)</div>
+              @for (entry of histoModal().entries; track entry.ts) {
                 <div class="modal-list-item"
-                     [class.active]="histoModal.selected === entry"
+                     [class.active]="histoModal().selected === entry"
                      (click)="selectEntry(entry)">
                   <div class="mli-date">{{ formatTs(entry.ts) }}</div>
                   <div class="mli-row">
@@ -472,7 +472,7 @@
             </div>
 
             <!-- Détail de l'analyse sélectionnée -->
-            @if (histoModal.selected; as sel) {
+            @if (histoModal().selected; as sel) {
               <div class="modal-detail">
                 <div class="detail-header">
                   <div class="detail-date">{{ formatTs(sel.ts) }}</div>

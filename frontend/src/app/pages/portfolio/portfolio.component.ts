@@ -68,10 +68,10 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   objectifs: Record<string, { stop: number; cible: number }> = {};
 
   // ── Modal historique analyses ─────────────────────────────────────────────
-  histoModal = {
+  histoModal = signal({
     show: false, ticker: '', loading: false,
     entries: [] as any[], selected: null as any,
-  };
+  });
 
   readonly AGENT_LABELS: Record<string, string> = {
     technique: 'Technique', fondamental: 'Fondamental', sentiment: 'Sentiment',
@@ -302,21 +302,20 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   // ── Modal ─────────────────────────────────────────────────────────────────
 
   openHistoModal(ticker: string): void {
-    this.histoModal = { show: true, ticker, loading: true, entries: [], selected: null };
+    this.histoModal.set({ show: true, ticker, loading: true, entries: [], selected: null });
     this.api.getAnalyseHistory(ticker).pipe(
       timeout(12000),
       catchError(() => of([])),
-      finalize(() => { this.histoModal.loading = false; }),
+      finalize(() => this.histoModal.update(m => ({ ...m, loading: false }))),
     ).subscribe(entries => {
       const list = Array.isArray(entries) ? entries : [];
-      this.histoModal.entries = list;
-      if (list.length > 0) this.histoModal.selected = list[0];
+      this.histoModal.update(m => ({ ...m, entries: list, selected: list[0] ?? null }));
     });
   }
 
-  closeHistoModal(): void { this.histoModal.show = false; }
+  closeHistoModal(): void { this.histoModal.update(m => ({ ...m, show: false })); }
 
-  selectEntry(entry: any): void { this.histoModal.selected = entry; }
+  selectEntry(entry: any): void { this.histoModal.update(m => ({ ...m, selected: entry })); }
 
   goToAnalyse(ticker: string): void {
     this.closeHistoModal();
