@@ -108,9 +108,34 @@
     border-bottom: 1px solid rgba(255,255,255,0.04);
   }
 
-  tr:hover td { background: rgba(0,200,255,0.04); }
+  .result-row {
+    cursor: pointer;
+    transition: background 0.15s;
+    &:hover td {
+      background: rgba(0,200,255,0.07);
+    }
+    &:hover .detail-hint {
+      opacity: 1;
+    }
+  }
 
-  .ticker   { color: #cde; font-weight: 600; }
+  .ticker {
+    color: #cde;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .detail-hint {
+    font-size: 0.7rem;
+    color: #00c8ff;
+    opacity: 0;
+    transition: opacity 0.2s;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+  }
+
   .score    { font-weight: 700; font-family: monospace; }
   .decision { color: #ffd740; font-weight: 600; }
 }

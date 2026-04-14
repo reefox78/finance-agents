@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { Router } from '@angular/router';
 import { LoadingOverlayComponent } from '../../shared/components/loading-overlay/loading-overlay.component';
 
 interface ScanResult {
@@ -30,7 +31,11 @@ export class ScannerComponent implements OnDestroy {
 
   private es: EventSource | null = null;
 
-  constructor(private api: ApiService, private auth: AuthService) {}
+  constructor(private api: ApiService, private auth: AuthService, private router: Router) {}
+
+  goToAnalyse(ticker: string): void {
+    this.router.navigate(['/analyse'], { queryParams: { ticker } });
+  }
 
   startScan(): void {
     this.error.set('');

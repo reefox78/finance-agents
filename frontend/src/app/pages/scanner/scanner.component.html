@@ -49,8 +49,11 @@
       </thead>
       <tbody>
         @for (r of results(); track r.ticker) {
-          <tr>
-            <td class="ticker">{{ r.ticker }}</td>
+          <tr class="result-row" (click)="goToAnalyse(r.ticker)" title="Voir l'analyse détaillée de {{ r.ticker }}">
+            <td class="ticker">
+              {{ r.ticker }}
+              <span class="detail-hint">→ détail</span>
+            </td>
             <td class="score" [style.color]="scoreColor(r.score)">{{ r.score | number:'1.4-4' }}</td>
             <td class="decision">{{ r.decision }}</td>
           </tr>
