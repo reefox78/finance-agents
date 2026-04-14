@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from groq import Groq
+from groq import Groq, RateLimitError as GroqRateLimitError
 
 from data.asset_type import detect_asset_type, AGENTS_PAR_TYPE
 from agents.technical import analyze_technical
@@ -257,12 +257,18 @@ def run(ticker: str, with_llm: bool = True, user_id: str = None) -> dict:
                                risk, trends, insider, macro,
                                options_flow, sec_filings, short_interest,
                                earnings_surprise, volume_delta, scoring)
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-        )
-        rapport = response.choices[0].message.content or ""
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+            )
+            rapport = response.choices[0].message.content or ""
+        except GroqRateLimitError as e:
+            # Extraire le délai de réinitialisation depuis les headers Groq
+            headers = getattr(e, "response", None) and e.response.headers or {}
+            reset = headers.get("x-ratelimit-reset-tokens") or headers.get("x-ratelimit-reset-requests") or "quelques minutes"
+            raise Exception(f"Too Many Requests. Rate limited. Try after a while. Réinitialisation dans : {reset}")
 
     # --- Sauvegarde historique du score (avec scores par agent + prix) ---
     try:
