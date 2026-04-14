@@ -24,22 +24,27 @@ sys.path.insert(0, str(_backend))
 
 # ---------------------------------------------------------------------------
 # Logging — stdout + fichier dans logs/ (lu par la page Logs admin)
+# basicConfig est un no-op si uvicorn a déjà configuré le logging →
+# on ajoute le FileHandler directement sur le root logger.
 # ---------------------------------------------------------------------------
 _LOGS_DIR = _root / "logs"
 _LOGS_DIR.mkdir(exist_ok=True)
 
 _log_filename = _LOGS_DIR / f"api_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
+_formatter    = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout),                      # Render dashboard
-        logging.FileHandler(_log_filename, encoding="utf-8"),   # page Logs admin
-    ],
-)
+_file_handler = logging.FileHandler(_log_filename, encoding="utf-8")
+_file_handler.setFormatter(_formatter)
+_file_handler.setLevel(logging.INFO)
 
-logging.getLogger("uvicorn.access").setLevel(logging.WARNING)  # moins de bruit HTTP
+_root_logger = logging.getLogger()
+_root_logger.setLevel(logging.INFO)
+_root_logger.addHandler(_file_handler)          # toujours ajouté, même après uvicorn
+
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)   # moins de bruit HTTP
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+logging.info("=== Finance Agents API démarrée — log : %s ===", _log_filename.name)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
