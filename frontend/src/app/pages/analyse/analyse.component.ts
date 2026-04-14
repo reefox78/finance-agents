@@ -1,4 +1,5 @@
-import { Component, signal, ViewChild, ElementRef, OnDestroy, OnInit } from '@angular/core';
+import { Component, signal, computed, ViewChild, ElementRef, OnDestroy, OnInit } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
@@ -41,7 +42,11 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   result         = signal<any>(null);
   error          = signal('');
   elapsedSeconds = signal(0);
+  overlayError   = signal('');
+  showCloseBtn   = computed(() => this.elapsedSeconds() >= 60 || this.overlayError() !== '');
+
   private _timer: any = null;
+  private _sub: Subscription | null = null;
 
   private _charts: Chart<any, any, any>[] = [];
   private _syncing = false;
@@ -153,12 +158,13 @@ export class AnalyseComponent implements OnInit, OnDestroy {
     const t = this.ticker.trim().toUpperCase();
     if (!t) return;
     this.error.set('');
+    this.overlayError.set('');
     this.result.set(null);
     this._destroyCharts();
     this.loading.set(true);
     this.elapsedSeconds.set(0);
     this._startTimer();
-    this.api.analyse(t, this.withLlm, false, this.period).subscribe({
+    this._sub = this.api.analyse(t, this.withLlm, false, this.period).subscribe({
       next: r => {
         this._stopTimer();
         this.result.set(r);
@@ -169,10 +175,19 @@ export class AnalyseComponent implements OnInit, OnDestroy {
       },
       error: e => {
         this._stopTimer();
-        this.error.set(e.error?.detail ?? 'Erreur serveur');
-        this.loading.set(false);
+        const status = e.status ? ` (${e.status})` : '';
+        const detail = e.error?.detail ?? 'Erreur serveur';
+        this.overlayError.set(`${detail}${status}`);
       },
     });
+  }
+
+  cancelLoading(): void {
+    this._sub?.unsubscribe();
+    this._sub = null;
+    this._stopTimer();
+    this.loading.set(false);
+    this.overlayError.set('');
   }
 
   private _startTimer(): void {
