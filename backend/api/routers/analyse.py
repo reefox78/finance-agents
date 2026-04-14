@@ -115,22 +115,18 @@ def analyse(
             user_id=current_user["sub"],
         )
     except Exception as e:
-        # Groq rate-limit → extraire le délai de réinitialisation depuis les headers
-        try:
-            from groq import RateLimitError as GroqRateLimitError
-            if isinstance(e, GroqRateLimitError):
-                headers = getattr(e, "response", None) and e.response.headers or {}
-                reset_tokens   = headers.get("x-ratelimit-reset-tokens", "")
-                reset_requests = headers.get("x-ratelimit-reset-requests", "")
-                wait = reset_tokens or reset_requests or "quelques minutes"
-                raise HTTPException(
-                    status_code=429,
-                    detail=f"Too Many Requests. Rate limited. Try after a while. Réinitialisation dans : {wait}",
-                )
-        except HTTPException:
-            raise
-        except Exception:
-            pass
+        # Groq rate-limit → laisser le GroqRateLimitError remonter naturellement
+        # et l'attraper ici pour extraire le délai exact depuis les headers HTTP
+        from groq import RateLimitError as GroqRateLimitError
+        if isinstance(e, GroqRateLimitError):
+            headers = getattr(getattr(e, "response", None), "headers", {}) or {}
+            reset = (headers.get("x-ratelimit-reset-tokens")
+                     or headers.get("x-ratelimit-reset-requests")
+                     or "quelques minutes")
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too Many Requests — Groq rate limit. Réinitialisation dans : {reset}",
+            )
         raise HTTPException(status_code=500, detail=str(e))
 
     if with_chart:
