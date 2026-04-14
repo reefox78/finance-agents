@@ -18,13 +18,38 @@
     </button>
   </div>
 
-  @if (loading() && progress(); as p) {
-    <div class="progress-overlay">
-      <div class="progress-inner">
-        <div class="progress-label">Analyse {{ p.ticker }} ({{ p.current }}/{{ p.total }})</div>
-        <div class="progress-bar">
-          <div class="progress-fill" [style.width.%]="(p.current / p.total) * 100"></div>
+  @if (loading()) {
+    <div class="scan-overlay">
+      <div class="overlay-content">
+
+        <!-- Spinner -->
+        <div class="spinner-wrap">
+          <svg class="spinner-svg" viewBox="0 0 120 120">
+            <circle class="spinner-track" cx="60" cy="60" r="48"/>
+            <circle class="spinner-ring"  cx="60" cy="60" r="48"/>
+          </svg>
+          <div class="spinner-center">AI</div>
         </div>
+
+        <!-- Barre segmentée -->
+        <div class="overlay-progress">
+          @for (seg of [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]; track seg) {
+            <div class="prog-seg" [style.animation-delay]="((seg-1)*0.13) + 's'"></div>
+          }
+        </div>
+
+        <div class="overlay-label">SCAN EN COURS…</div>
+
+        @if (progress(); as p) {
+          <div class="scan-progress-info">
+            <div class="scan-ticker">{{ p.ticker }}</div>
+            <div class="scan-counter">{{ p.current }} / {{ p.total }}</div>
+            <div class="scan-bar">
+              <div class="scan-bar-fill" [style.width.%]="(p.current / p.total) * 100"></div>
+            </div>
+          </div>
+        }
+
       </div>
     </div>
   }
