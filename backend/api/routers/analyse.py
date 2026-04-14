@@ -6,11 +6,16 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+import logging
+import traceback
+
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from orchestrator.orchestrator import run as orchestrer
 from api.deps import CurrentUser
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -115,8 +120,13 @@ def analyse(
             user_id=current_user["sub"],
         )
     except Exception as e:
-        # Groq rate-limit → laisser le GroqRateLimitError remonter naturellement
-        # et l'attraper ici pour extraire le délai exact depuis les headers HTTP
+        # Log complet pour identifier la vraie source de l'erreur
+        logger.error(
+            "Erreur analyse %s: %s\n%s",
+            ticker, str(e), traceback.format_exc()
+        )
+
+        # Groq rate-limit → extraire le délai exact depuis les headers HTTP
         from groq import RateLimitError as GroqRateLimitError
         if isinstance(e, GroqRateLimitError):
             headers = getattr(getattr(e, "response", None), "headers", {}) or {}
@@ -127,6 +137,8 @@ def analyse(
                 status_code=429,
                 detail=f"Too Many Requests — Groq rate limit. Réinitialisation dans : {reset}",
             )
+
+        # Autres erreurs : retourner le message brut (visible dans l'overlay)
         raise HTTPException(status_code=500, detail=str(e))
 
     if with_chart:
