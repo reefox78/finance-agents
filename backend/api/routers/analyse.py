@@ -144,8 +144,8 @@ def analyse(
     if with_chart:
         try:
             result["chart"] = _build_chart(ticker, period)
-        except Exception as e:
-            import traceback; traceback.print_exc()
+        except Exception as chart_err:
+            logger.warning("Chart build failed for %s: %s", ticker, chart_err, exc_info=True)
             result["chart"] = {}
 
     return _jsonify(result)
