@@ -280,11 +280,11 @@
   gap: 0.6rem 1.2rem;
   margin-bottom: 0.6rem;
   padding: 0.4rem 0.75rem;
-  background: rgba(0,200,255,0.03);
-  border: 1px solid rgba(0,200,255,0.08);
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 8px;
   font-size: 10px;
-  color: var(--text-muted);
+  color: rgba(255,255,255,0.85);
 }
 .leg-item {
   display: flex; align-items: center; gap: 5px;
