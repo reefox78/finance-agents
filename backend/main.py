@@ -46,10 +46,21 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logging.info("=== Finance Agents API démarrée — log : %s ===", _log_filename.name)
 
-from fastapi import FastAPI
+import re as _re
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api.routers import auth, analyse, scanner, portfolio, alerts, admin, logs, backtest
+
+# ── CORS helpers (partagés avec le handler global) ────────────────────────────
+_CORS_ORIGINS = {
+    "http://localhost:4200",
+    "http://localhost:80",
+    "https://finance-agents-one.vercel.app",
+    "https://finance-agents-api.onrender.com",
+}
+_CORS_RE = _re.compile(r"https://(.*\.)?(vercel\.app|netlify\.app|onrender\.com)")
 
 try:
     from api.routers import calibration as _calibration_mod
@@ -82,6 +93,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_api_logger = logging.getLogger("api")
+
+# ---------------------------------------------------------------------------
+# Middleware — log toutes les requêtes + CORS headers sur erreurs non catchées
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def request_logger(request: Request, call_next):
+    response = await call_next(request)
+    _api_logger.info("%s %s → %d", request.method, request.url.path, response.status_code)
+    return response
+
+
+def _cors_headers(request: Request) -> dict:
+    """Retourne les headers CORS appropriés selon l'origin de la requête."""
+    origin = request.headers.get("origin", "")
+    if origin in _CORS_ORIGINS or (origin and _CORS_RE.fullmatch(origin)):
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    return {}
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch-all : garantit les headers CORS même sur erreurs non catchées."""
+    _api_logger.error("Exception non gérée sur %s: %s", request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)},
+        headers=_cors_headers(request),
+    )
 
 # ---------------------------------------------------------------------------
 # Routers
