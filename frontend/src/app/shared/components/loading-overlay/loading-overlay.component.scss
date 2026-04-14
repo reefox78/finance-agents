@@ -14,19 +14,32 @@
   position: absolute;
   top: 1.25rem;
   right: 1.25rem;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(0, 200, 255, 0.12);
+  border: 1.5px solid rgba(0, 200, 255, 0.5);
   border-radius: 50%;
-  color: rgba(255,255,255,0.7);
-  font-size: 1rem;
-  width: 36px;
-  height: 36px;
+  color: #00c8ff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-  &:hover { background: rgba(255,60,80,0.25); color: #ff7088; border-color: rgba(255,60,80,0.4); }
+  transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 0 10px rgba(0, 200, 255, 0.3);
+  animation: pulse-close 2s ease-in-out infinite;
+  &:hover {
+    background: rgba(255, 60, 80, 0.2);
+    color: #ff7088;
+    border-color: rgba(255, 60, 80, 0.6);
+    box-shadow: 0 0 14px rgba(255, 60, 80, 0.4);
+    animation: none;
+  }
+}
+@keyframes pulse-close {
+  0%, 100% { box-shadow: 0 0 8px rgba(0,200,255,0.3); }
+  50%       { box-shadow: 0 0 18px rgba(0,200,255,0.7); }
 }
 
 .overlay-content {
