@@ -126,6 +126,24 @@ def analyse(
             ticker, str(e), traceback.format_exc()
         )
 
+        # Yahoo Finance rate-limit (yfinance)
+        try:
+            from yfinance.exceptions import YFRateLimitError
+            if isinstance(e, YFRateLimitError):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Yahoo Finance rate limit atteint — veuillez patienter 15-60 minutes avant de relancer une analyse.",
+                )
+        except ImportError:
+            pass
+        if "YFRateLimitError" in type(e).__name__ or (
+            "rate" in str(e).lower() and "limited" in str(e).lower()
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="Yahoo Finance rate limit atteint — veuillez patienter 15-60 minutes avant de relancer une analyse.",
+            )
+
         # Groq rate-limit → extraire le délai exact depuis les headers HTTP
         from groq import RateLimitError as GroqRateLimitError
         if isinstance(e, GroqRateLimitError):
