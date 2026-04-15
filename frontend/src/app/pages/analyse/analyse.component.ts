@@ -71,8 +71,10 @@ export class AnalyseComponent implements OnInit, OnDestroy {
 
     this.route.queryParams.subscribe(params => {
       if (params['ticker']) {
-        this.ticker = params['ticker'];
-        this.customTicker = '';
+        // Mettre le ticker dans customTicker pour l'afficher dans le champ texte
+        // (il peut ne pas être dans le dropdown watchlist)
+        this.customTicker = params['ticker'].trim().toUpperCase();
+        this.ticker = this.customTicker;   // synchronise pour run()
         this.run();
       }
     });
