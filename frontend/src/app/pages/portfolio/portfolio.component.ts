@@ -319,7 +319,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   goToAnalyse(ticker: string): void {
     this.closeHistoModal();
-    this.router.navigate(['/analyse'], { queryParams: { ticker } });
+    this.router.navigate(['/dashboard/analyse'], { queryParams: { ticker } });
   }
 
   agentEntries(scores: Record<string, number>): { key: string; label: string; score: number }[] {

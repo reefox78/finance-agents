@@ -34,7 +34,7 @@ export class ScannerComponent implements OnDestroy {
   constructor(private api: ApiService, private auth: AuthService, private router: Router) {}
 
   goToAnalyse(ticker: string): void {
-    this.router.navigate(['/analyse'], { queryParams: { ticker } });
+    this.router.navigate(['/dashboard/analyse'], { queryParams: { ticker } });
   }
 
   startScan(): void {
