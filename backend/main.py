@@ -101,9 +101,20 @@ _api_logger = logging.getLogger("api")
 # ---------------------------------------------------------------------------
 @app.middleware("http")
 async def request_logger(request: Request, call_next):
-    response = await call_next(request)
-    _api_logger.info("%s %s → %d", request.method, request.url.path, response.status_code)
-    return response
+    try:
+        response = await call_next(request)
+        _api_logger.info("%s %s → %d", request.method, request.url.path, response.status_code)
+        return response
+    except Exception as exc:
+        # L'exception a traversé tous les handlers (ex: PoolError, crash ASGI).
+        # On renvoie une réponse JSON avec CORS headers pour éviter l'erreur CORS
+        # opaque côté browser (sinon le browser voit status 0 sans CORS headers).
+        _api_logger.error("Exception non rattrapée dans %s: %s", request.url.path, exc, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(exc)},
+            headers=_cors_headers(request),
+        )
 
 
 def _cors_headers(request: Request) -> dict:

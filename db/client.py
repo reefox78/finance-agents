@@ -34,12 +34,24 @@ def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
         # postgresql://postgres.PROJECT_REF:PWD@aws-0-REGION.pooler.supabase.com:5432/postgres
         # La connexion directe (db.PROJECT.supabase.co) utilise IPv6 → inaccessible sous Docker.
         _pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=1, maxconn=5,
+            minconn=1, maxconn=10,   # augmenté pour absorber les requêtes concurrentes
             dsn=db_url,
             sslmode="require",
             connect_timeout=10,
         )
     return _pool
+
+
+def _reset_pool() -> psycopg2.pool.ThreadedConnectionPool:
+    """Force la recréation du pool (utile si pool épuisé par des connexions leakées)."""
+    global _pool
+    if _pool and not _pool.closed:
+        try:
+            _pool.closeall()
+        except Exception:
+            pass
+    _pool = None
+    return _get_pool()
 
 
 class _ConnCtx:
@@ -48,8 +60,18 @@ class _ConnCtx:
         # Sauvegarder la référence exacte du pool utilisé pour getconn(),
         # sinon si le pool est recréé entre __enter__ et __exit__ (Python 3.14 /
         # Starlette threadpool), putconn() lèverait PoolError "unkeyed connection".
-        self._pool = _get_pool()
-        self._conn = self._pool.getconn()
+        try:
+            self._pool = _get_pool()
+            self._conn = self._pool.getconn()
+        except psycopg2.pool.PoolError as e:
+            if "exhausted" in str(e):
+                # Pool épuisé (connexions leakées) → reset forcé et réessai unique
+                import logging as _log
+                _log.getLogger(__name__).warning("Pool épuisé, reset forcé du pool DB")
+                self._pool = _reset_pool()
+                self._conn = self._pool.getconn()
+            else:
+                raise
         return self._conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
