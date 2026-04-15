@@ -1,10 +1,14 @@
+"""
+Backtest pur pandas/numpy — remplace l'implémentation backtrader.
+
+Même interface publique : run_backtest(ticker, debut, fin, capital, mode) → dict
+Même logique de scoring technique + macro (FRED) + risque (rolling).
+"""
+
 import os
-import backtrader as bt
 import yfinance as yf
 import pandas as pd
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+import numpy as np
 from dotenv import load_dotenv
 
 try:
@@ -19,19 +23,18 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 _FOREX_RATE_SERIES = {
-    "USD": "FEDFUNDS",           # Fed Funds Rate
-    "EUR": "ECBDFR",             # BCE taux dépôt
-    "GBP": "IUDSOIA",            # SONIA overnight (proxy BoE)
-    "JPY": "IRSTCB01JPM156N",    # BoJ Policy Rate (OCDE mensuel)
-    "CHF": "IR3TIB01CHM156N",    # Taux interbancaire 3M CHF (proxy SNB)
-    "CAD": "IRSTCB01CAM156N",    # BoC Policy Rate (OCDE mensuel)
-    "AUD": "IRSTCB01AUM156N",    # RBA Policy Rate
-    "NZD": "IRSTCB01NZM156N",    # RBNZ Policy Rate
+    "USD": "FEDFUNDS",
+    "EUR": "ECBDFR",
+    "GBP": "IUDSOIA",
+    "JPY": "IRSTCB01JPM156N",
+    "CHF": "IR3TIB01CHM156N",
+    "CAD": "IRSTCB01CAM156N",
+    "AUD": "IRSTCB01AUM156N",
+    "NZD": "IRSTCB01NZM156N",
 }
 
 
 def _parse_forex_pair(ticker: str):
-    """'EURUSD=X' → ('EUR', 'USD') — None si format non reconnu."""
     code = ticker.replace("=X", "")
     if len(code) == 6:
         return code[:3].upper(), code[3:].upper()
@@ -39,47 +42,34 @@ def _parse_forex_pair(ticker: str):
 
 
 # ---------------------------------------------------------------------------
-# Scoring helpers (réplique la logique des agents sans les dépendances réseau)
+# Scoring helpers
 # ---------------------------------------------------------------------------
 
 def _macro_score_from_values(taux, cpi_var, chomage, spread, confiance):
-    """Réplique get_macro_score() sur des valeurs ponctuelles historiques."""
     score = 0.0
     n = 0
-
     if taux is not None and not pd.isna(taux):
         score += 1.0 if taux < 2.0 else (0.0 if taux < 4.0 else -1.0)
         n += 1
-
     if cpi_var is not None and not pd.isna(cpi_var):
         score += 0.5 if cpi_var < 0 else (0.0 if cpi_var < 0.3 else -0.5)
         n += 1
-
     if chomage is not None and not pd.isna(chomage):
         score += 1.0 if chomage < 4.0 else (0.0 if chomage < 6.0 else -1.0)
         n += 1
-
     if spread is not None and not pd.isna(spread):
         if spread > 0.5:    score += 1.0
         elif spread > 0:    score += 0.3
         elif spread > -0.5: score -= 0.3
         else:               score -= 1.0
         n += 1
-
     if confiance is not None and not pd.isna(confiance):
         score += 1.0 if confiance > 80 else (0.0 if confiance > 60 else -1.0)
         n += 1
-
     return round(score / n, 4) if n > 0 else 0.0
 
 
 def _macro_mult_from_score(score):
-    """
-    Multiplicateur macro adouci : amplitude réduite pour ne pas bloquer
-    des signaux techniques forts dans un environnement macro défavorable.
-    Avant : 0.75 / 0.90 / 1.0 / 1.10  → amplitude ×1.47
-    Après : 0.85 / 0.95 / 1.0 / 1.05  → amplitude ×1.24
-    """
     if score >= 0.3:    return 1.05
     elif score >= 0:    return 1.00
     elif score >= -0.3: return 0.95
@@ -87,14 +77,14 @@ def _macro_mult_from_score(score):
 
 
 def _score_volatilite(vol):
-    if vol < 15:  return 1.0
+    if vol < 15:   return 1.0
     elif vol < 25: return 0.5
     elif vol < 40: return 0.0
     else:          return -1.0
 
 
 def _score_drawdown(dd):
-    if dd > -5:   return 1.0
+    if dd > -5:    return 1.0
     elif dd > -10: return 0.5
     elif dd > -20: return 0.0
     elif dd > -30: return -0.5
@@ -102,9 +92,10 @@ def _score_drawdown(dd):
 
 
 def _score_sharpe(returns):
-    if returns.std() == 0:
+    std = returns.std()
+    if std == 0:
         return 0.0
-    sharpe = (returns.mean() / returns.std()) * (252 ** 0.5)
+    sharpe = (returns.mean() / std) * (252 ** 0.5)
     if sharpe > 1.5:    return 1.0
     elif sharpe > 0.5:  return 0.5
     elif sharpe > 0:    return 0.0
@@ -113,45 +104,125 @@ def _score_sharpe(returns):
 
 
 def _risk_mult_from_score(score):
-    if score >= 0.25:   return 1.10   # FAIBLE
-    elif score >= -0.25: return 1.00  # MODERE
-    else:               return 0.75   # ELEVE
+    if score >= 0.25:    return 1.10
+    elif score >= -0.25: return 1.00
+    else:                return 0.75
 
 
 # ---------------------------------------------------------------------------
-# Pré-calcul des scores historiques
+# Indicateurs techniques — pure pandas
+# ---------------------------------------------------------------------------
+
+def _compute_indicators(close: pd.Series) -> pd.DataFrame:
+    """Calcule SMA, RSI, MACD, Bollinger Bands sur la série de clôtures."""
+    out = pd.DataFrame(index=close.index)
+    out["close"] = close
+
+    # SMA
+    out["sma20"] = close.rolling(20).mean()
+    out["sma50"] = close.rolling(50).mean()
+
+    # RSI (méthode EWM, compatible avec Wilder's smoothing)
+    delta     = close.diff()
+    gain      = delta.clip(lower=0)
+    loss      = (-delta).clip(lower=0)
+    avg_gain  = gain.ewm(com=13, min_periods=14).mean()
+    avg_loss  = loss.ewm(com=13, min_periods=14).mean()
+    rs        = avg_gain / avg_loss.replace(0, np.nan)
+    out["rsi"] = 100 - (100 / (1 + rs))
+
+    # MACD
+    ema12            = close.ewm(span=12, adjust=False).mean()
+    ema26            = close.ewm(span=26, adjust=False).mean()
+    out["macd"]      = ema12 - ema26
+    out["macd_sig"]  = out["macd"].ewm(span=9, adjust=False).mean()
+
+    # Bollinger Bands
+    bb_mid         = close.rolling(20).mean()
+    bb_std         = close.rolling(20).std()
+    out["bb_top"]  = bb_mid + 2 * bb_std
+    out["bb_bot"]  = bb_mid - 2 * bb_std
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Scoring technique (réplique _TechniqueMixin)
+# ---------------------------------------------------------------------------
+
+def _score_rsi(rsi):
+    if rsi <= 30:   return 1.0
+    elif rsi <= 50: return (50 - rsi) / 20 * 0.5
+    elif rsi <= 70: return -(rsi - 50) / 40 * 0.5
+    else:           return -0.5
+
+
+def _score_macd(macd, signal):
+    return max(-1.0, min(1.0, (macd - signal) / 2.0))
+
+
+def _score_bb(prix, top, bot):
+    largeur = top - bot
+    if largeur == 0:
+        return 0.0
+    if prix > top:  return 0.2
+    if prix < bot:  return -0.2
+    return round((50 - (prix - bot) / largeur * 100) / 50, 4)
+
+
+def _score_sma(prix, sma20, sma50):
+    if prix > sma20 and sma20 > sma50: return 1.0
+    elif prix > sma20:                 return 0.3
+    elif prix > sma50:                 return -0.3
+    else:                              return -1.0
+
+
+def _score_technique(row) -> float:
+    prix = row["close"]
+    return (
+        _score_macd(row["macd"], row["macd_sig"]) * 0.30 +
+        _score_rsi(row["rsi"])                    * 0.25 +
+        _score_bb(prix, row["bb_top"], row["bb_bot"]) * 0.25 +
+        _score_sma(prix, row["sma20"], row["sma50"])  * 0.20
+    )
+
+
+def _compute_score(row, mode, macro_lookup, risk_lookup, date_str) -> float:
+    s_tech = _score_technique(row)
+
+    if mode == "multi":
+        s_macro, mult_macro = macro_lookup.get(date_str, (0.0, 1.0))
+        _s_risk, mult_risk  = risk_lookup.get(date_str, (0.0, 1.0))
+        total      = 0.25 + 0.10
+        score_brut = (s_tech * 0.25 + s_macro * 0.10) / total
+        return max(-1.0, min(1.0, score_brut * mult_risk * mult_macro))
+    else:
+        return s_tech
+
+
+# ---------------------------------------------------------------------------
+# Pré-calcul des lookups macro / risque (identique à l'implémentation originale)
 # ---------------------------------------------------------------------------
 
 def _build_macro_lookup(debut: str, fin: str) -> dict:
-    """
-    Télécharge l'historique FRED et retourne un dict date_str → (score, mult).
-    Forward-fill des données mensuelles/hebdo vers une fréquence journalière.
-    Retourne {} si FRED n'est pas disponible ou si la clé est absente.
-    """
     if not _FRED_AVAILABLE:
         return {}
-
     load_dotenv("config/.env")
     api_key = os.getenv("FRED_API_KEY")
     if not api_key:
         return {}
-
     try:
         fred = Fred(api_key=api_key)
-
-        # Buffer de 3 mois avant le début pour avoir des valeurs dès le premier jour
         start_buffer = (pd.Timestamp(debut) - pd.DateOffset(months=3)).strftime("%Y-%m-%d")
 
-        fedfunds = fred.get_series("FEDFUNDS",  observation_start=start_buffer, observation_end=fin).dropna()
-        cpi      = fred.get_series("CPIAUCSL",  observation_start=start_buffer, observation_end=fin).dropna()
-        unrate   = fred.get_series("UNRATE",    observation_start=start_buffer, observation_end=fin).dropna()
-        t10y2y   = fred.get_series("T10Y2Y",    observation_start=start_buffer, observation_end=fin).dropna()
-        umcsent  = fred.get_series("UMCSENT",   observation_start=start_buffer, observation_end=fin).dropna()
+        fedfunds = fred.get_series("FEDFUNDS", observation_start=start_buffer, observation_end=fin).dropna()
+        cpi      = fred.get_series("CPIAUCSL", observation_start=start_buffer, observation_end=fin).dropna()
+        unrate   = fred.get_series("UNRATE",   observation_start=start_buffer, observation_end=fin).dropna()
+        t10y2y   = fred.get_series("T10Y2Y",   observation_start=start_buffer, observation_end=fin).dropna()
+        umcsent  = fred.get_series("UMCSENT",  observation_start=start_buffer, observation_end=fin).dropna()
+        cpi_var  = cpi.diff()
 
-        cpi_var = cpi.diff()  # variation mensuelle CPI (proxy inflation)
-
-        dates = pd.date_range(start=debut, end=fin, freq="B")
-
+        dates      = pd.date_range(start=debut, end=fin, freq="B")
         fedfunds_d = fedfunds.reindex(dates, method="ffill")
         cpi_var_d  = cpi_var.reindex(dates,  method="ffill")
         unrate_d   = unrate.reindex(dates,   method="ffill")
@@ -161,55 +232,38 @@ def _build_macro_lookup(debut: str, fin: str) -> dict:
         lookup = {}
         for date in dates:
             score = _macro_score_from_values(
-                fedfunds_d.get(date),
-                cpi_var_d.get(date),
-                unrate_d.get(date),
-                t10y2y_d.get(date),
+                fedfunds_d.get(date), cpi_var_d.get(date),
+                unrate_d.get(date),   t10y2y_d.get(date),
                 umcsent_d.get(date),
             )
             lookup[date.strftime("%Y-%m-%d")] = (score, _macro_mult_from_score(score))
-
         return lookup
-
     except Exception:
         return {}
 
 
 def _build_forex_macro_lookup(ticker: str, debut: str, fin: str) -> dict:
-    """
-    Différentiel de taux directeurs entre la devise de base et la devise de cotation.
-    Score = clamp((taux_base − taux_quote) / 3.0, −1, +1)
-    Score positif → favorise la hausse de la paire (achat).
-    Ne touche PAS à _build_macro_lookup() — pas d'effet sur stocks/crypto.
-    """
     if not _FRED_AVAILABLE:
         return {}
-
     load_dotenv("config/.env")
     api_key = os.getenv("FRED_API_KEY")
     if not api_key:
         return {}
-
     base, quote = _parse_forex_pair(ticker)
     if not base or not quote:
         return {}
-
     base_series  = _FOREX_RATE_SERIES.get(base)
     quote_series = _FOREX_RATE_SERIES.get(quote)
     if not base_series or not quote_series:
         return {}
-
     try:
         fred = Fred(api_key=api_key)
         start_buffer = (pd.Timestamp(debut) - pd.DateOffset(months=3)).strftime("%Y-%m-%d")
-
         base_rate  = fred.get_series(base_series,  observation_start=start_buffer, observation_end=fin).dropna()
         quote_rate = fred.get_series(quote_series, observation_start=start_buffer, observation_end=fin).dropna()
-
-        dates   = pd.date_range(start=debut, end=fin, freq="B")
-        base_d  = base_rate.reindex(dates,  method="ffill")
+        dates  = pd.date_range(start=debut, end=fin, freq="B")
+        base_d = base_rate.reindex(dates,  method="ffill")
         quote_d = quote_rate.reindex(dates, method="ffill")
-
         lookup = {}
         for date in dates:
             b = base_d.get(date)
@@ -220,236 +274,127 @@ def _build_forex_macro_lookup(ticker: str, debut: str, fin: str) -> dict:
             diff  = float(b) - float(q)
             score = round(max(-1.0, min(1.0, diff / 3.0)), 4)
             lookup[date.strftime("%Y-%m-%d")] = (score, _macro_mult_from_score(score))
-
         return lookup
-
     except Exception:
         return {}
 
 
 def _build_risk_lookup(df: pd.DataFrame, window: int = 63) -> dict:
-    """
-    Calcule les scores de risque sur fenêtre glissante (≈3 mois).
-    Retourne un dict date_str → (risk_score, risk_mult).
-    Pas de données secteur disponibles en backtest → scoring absolu.
-    """
-    close   = df["Close"]
+    close   = df["Close"].squeeze()
     returns = close.pct_change()
     lookup  = {}
-
     for i, date in enumerate(close.index):
         date_str = pd.Timestamp(date).strftime("%Y-%m-%d")
-
         if i < window:
             lookup[date_str] = (0.0, 1.0)
             continue
-
         win_ret   = returns.iloc[i - window:i].dropna()
         win_close = close.iloc[i - window:i]
-
         vol = win_ret.std() * (252 ** 0.5) * 100
         dd  = ((win_close - win_close.cummax()) / win_close.cummax() * 100).min()
-
-        s_vol    = _score_volatilite(vol)
-        s_dd     = _score_drawdown(dd)
-        s_sharpe = _score_sharpe(win_ret)
-
-        score = round(s_vol * 0.40 + s_dd * 0.35 + s_sharpe * 0.25, 4)
+        score = round(
+            _score_volatilite(vol) * 0.40 +
+            _score_drawdown(dd)    * 0.35 +
+            _score_sharpe(win_ret) * 0.25,
+            4
+        )
         lookup[date_str] = (score, _risk_mult_from_score(score))
-
     return lookup
 
 
 # ---------------------------------------------------------------------------
-# Stratégies Backtrader
+# Simulateur de portefeuille (remplace Cerebro + broker + PercentSizer)
 # ---------------------------------------------------------------------------
 
-class _TechniqueMixin:
-    """Indicateurs et scores techniques partagés entre les deux stratégies."""
-
-    def _init_indicators(self):
-        self.sma20 = bt.indicators.SMA(self.data.close, period=20)
-        self.sma50 = bt.indicators.SMA(self.data.close, period=50)
-        self.rsi   = bt.indicators.RSI(self.data.close, period=14)
-        self.macd  = bt.indicators.MACD(self.data.close)
-        self.bb    = bt.indicators.BollingerBands(self.data.close, period=20)
-
-    def _score_rsi(self, rsi):
-        """
-        Scoring RSI compatible tendance.
-        RSI élevé = momentum haussier, pas nécessairement surachat à vendre.
-        RSI 50-70 : légèrement négatif (×0.5 vs original)
-        RSI > 70  : pénalité plafonnée à -0.5 (vs -1.0 original)
-        """
-        if rsi <= 30:   return 1.0
-        elif rsi <= 50: return (50 - rsi) / 20 * 0.5
-        elif rsi <= 70: return -(rsi - 50) / 40 * 0.5   # pente moitié
-        else:           return -0.5                       # cap à -0.5
-
-    def _score_macd(self, macd, signal):
-        return max(-1.0, min(1.0, (macd - signal) / 2.0))
-
-    def _score_bb(self, prix, top, bot):
-        """
-        Scoring BB avec gestion des breakouts.
-        Prix au-dessus des BB = signal de breakout haussier (+0.2).
-        Prix en dessous = breakout baissier (-0.2).
-        Évite les scores extrêmes non clampés du code original.
-        """
-        largeur = top - bot
-        if largeur == 0:
-            return 0.0
-        if prix > top:
-            return 0.2    # breakout haussier
-        if prix < bot:
-            return -0.2   # breakout baissier
-        return round((50 - (prix - bot) / largeur * 100) / 50, 4)
-
-    def _score_sma(self, prix, sma20, sma50):
-        if prix > sma20 and sma20 > sma50: return 1.0
-        elif prix > sma20:                 return 0.3
-        elif prix > sma50:                 return -0.3
-        else:                              return -1.0
-
-    def _score_technique(self):
-        prix = self.data.close[0]
-        return (
-            self._score_macd(self.macd.macd[0], self.macd.signal[0]) * 0.30 +
-            self._score_rsi(self.rsi[0])                              * 0.25 +
-            self._score_bb(prix, self.bb.top[0], self.bb.bot[0])     * 0.25 +
-            self._score_sma(prix, self.sma20[0], self.sma50[0])      * 0.20
-        )
-
-
-class StrategieScoreContinue(_TechniqueMixin, bt.Strategy):
-    """Stratégie technique seule (mode 'technique')."""
-
-    params = (
-        ("seuil_achat",  0.15),
-        ("seuil_vente", -0.15),
-    )
-
-    def __init__(self):
-        self._init_indicators()
-        self.order = None
-
-    def next(self):
-        if self.order:
-            return
-        score = self._score_technique()
-        if not self.position:
-            if score >= self.params.seuil_achat:
-                self.order = self.buy()
-        else:
-            if score <= self.params.seuil_vente:
-                self.order = self.sell()
-
-    def notify_order(self, order):
-        if order.status in [order.Completed, order.Canceled, order.Margin]:
-            self.order = None
-
-
-class StrategieMultiAgent(_TechniqueMixin, bt.Strategy):
+def _simulate(
+    indics:       pd.DataFrame,
+    macro_lookup: dict,
+    risk_lookup:  dict,
+    mode:         str,
+    seuil_achat:  float,
+    seuil_vente:  float,
+    capital:      float,
+    commission:   float = 0.001,
+    pct_size:     float = 0.95,
+) -> tuple[list, float]:
     """
-    Stratégie combinant technique + macro + risque.
+    Boucle event-driven mimant le comportement de Backtrader :
+    - signal émis sur la barre N → ordre exécuté à l'ouverture de la barre N+1
+      (ici simplifié : exécution au close de N+1, comme BrokerFill par défaut)
+    - PercentSizer 95 % du cash disponible
+    - Commission 0.1 % aller et retour
 
-    Score brut  = (s_tech × 0.25 + s_macro × 0.10) / 0.35
-    Score final = score_brut × mult_risque × mult_macro
-
-    Seuil calé sur SEUIL_ACHAT de l'orchestrateur (0.10),
-    plus bas que le mode technique seul (0.15) car les
-    multiplicateurs macro/risque compriment naturellement le score.
+    Retourne (trades, valeur_finale).
     """
+    cash        = float(capital)
+    shares      = 0.0
+    open_trade  = None
+    pending     = None          # "buy" | "sell" | None
+    trades      = []
 
-    params = (
-        ("seuil_achat",   0.10),
-        ("seuil_vente",  -0.10),
-        ("macro_lookup",  None),   # dict date_str → (score, mult)
-        ("risk_lookup",   None),   # dict date_str → (score, mult)
-    )
+    rows = indics.reset_index()   # garantit un index entier
 
-    POIDS_TECH  = 0.25
-    POIDS_MACRO = 0.10
+    for i, row in rows.iterrows():
+        # Sauter les barres sans indicateurs complets
+        if pd.isna(row.get("sma50")) or pd.isna(row.get("rsi")):
+            pending = None
+            continue
 
-    def __init__(self):
-        self._init_indicators()
-        self.order = None
+        date_str = pd.Timestamp(row["Date"] if "Date" in row else row.name).strftime("%Y-%m-%d")
+        price    = float(row["close"])
 
-    def _calculer_score(self):
-        s_tech = self._score_technique()
-
-        date_str = self.data.datetime.date().strftime("%Y-%m-%d")
-
-        if self.params.macro_lookup:
-            s_macro, mult_macro = self.params.macro_lookup.get(date_str, (0.0, 1.0))
-        else:
-            s_macro, mult_macro = 0.0, 1.0
-
-        if self.params.risk_lookup:
-            _s_risk, mult_risk = self.params.risk_lookup.get(date_str, (0.0, 1.0))
-        else:
-            mult_risk = 1.0
-
-        total      = self.POIDS_TECH + self.POIDS_MACRO
-        score_brut = (s_tech * self.POIDS_TECH + s_macro * self.POIDS_MACRO) / total
-        score_final = max(-1.0, min(1.0, score_brut * mult_risk * mult_macro))
-        return score_final
-
-    def next(self):
-        if self.order:
-            return
-        score = self._calculer_score()
-        if not self.position:
-            if score >= self.params.seuil_achat:
-                self.order = self.buy()
-        else:
-            if score <= self.params.seuil_vente:
-                self.order = self.sell()
-
-    def notify_order(self, order):
-        if order.status in [order.Completed, order.Canceled, order.Margin]:
-            self.order = None
-
-
-# ---------------------------------------------------------------------------
-# Analyser de trades
-# ---------------------------------------------------------------------------
-
-class TradeLogger(bt.Analyzer):
-    """
-    Enregistre chaque trade terminé avec le vrai P&L Backtrader.
-    Utilise notify_trade() pour obtenir pnl et pnlcomm (net de commission)
-    directement depuis l'objet Trade — plus de calcul manuel.
-    """
-
-    def start(self):
-        self.trades     = []
-        self._open_info = {}   # date + prix d'entrée enregistrés à l'ouverture
-
-    def notify_trade(self, trade):
-        if trade.justopened:
-            self._open_info = {
-                "date_achat": self.strategy.datetime.date().strftime("%Y-%m-%d"),
-                "prix_achat": round(trade.price, 4),
+        # ── Exécution de l'ordre en attente ──────────────────────────────────
+        if pending == "buy" and shares == 0:
+            target_value = cash * pct_size
+            n_shares     = target_value / price
+            cost         = n_shares * price
+            comm         = cost * commission
+            cash        -= cost + comm
+            shares       = n_shares
+            open_trade   = {
+                "date_achat": date_str,
+                "prix_achat": round(price, 4),
+                "_total_cost": cost + comm,
             }
-        elif trade.isclosed:
-            exit_price = self.strategy.data.close[0]
-            self.trades.append({
-                "date_achat": self._open_info.get("date_achat", ""),
-                "prix_achat": self._open_info.get("prix_achat", 0.0),
-                "date":       self.strategy.datetime.date().strftime("%Y-%m-%d"),
-                "prix_vente": round(exit_price, 4),
-                "pnl":        round(float(trade.pnl), 2),
-                "pnlnet":     round(float(trade.pnlcomm), 2),
-            })
-            self._open_info = {}
+            pending = None
 
-    def get_analysis(self):
-        return self.trades
+        elif pending == "sell" and shares > 0:
+            gross = shares * price
+            comm  = gross * commission
+            net   = gross - comm
+            cash += net
+            pnl    = round(gross - open_trade["prix_achat"] * shares, 2)
+            pnlnet = round(net   - open_trade["_total_cost"],         2)
+            trades.append({
+                "date_achat": open_trade["date_achat"],
+                "prix_achat": open_trade["prix_achat"],
+                "date":       date_str,
+                "prix_vente": round(price, 4),
+                "pnl":        pnl,
+                "pnlnet":     pnlnet,
+            })
+            shares     = 0.0
+            open_trade = None
+            pending    = None
+
+        # ── Génération du signal ──────────────────────────────────────────────
+        if pending is None:
+            score = _compute_score(row, mode, macro_lookup, risk_lookup, date_str)
+            if shares == 0:
+                if score >= seuil_achat:
+                    pending = "buy"
+            else:
+                if score <= seuil_vente:
+                    pending = "sell"
+
+    # Valorisation finale (position éventuellement encore ouverte)
+    last_price = float(indics["close"].iloc[-1])
+    valeur_fin = round(cash + shares * last_price, 2)
+    return trades, valeur_fin
 
 
 # ---------------------------------------------------------------------------
-# Point d'entrée principal
+# Point d'entrée principal (interface publique inchangée)
 # ---------------------------------------------------------------------------
 
 def run_backtest(
@@ -457,85 +402,66 @@ def run_backtest(
     debut:   str   = "2023-01-01",
     fin:     str   = "2024-12-31",
     capital: float = 10000.0,
-    mode:    str   = "multi",       # "multi" | "technique"
+    mode:    str   = "multi",
 ) -> dict:
     """
     Lance le backtest.
 
     mode="multi"      : score combiné technique + macro (FRED) + risque (rolling)
-    mode="technique"  : score technique seul (comportement original)
+    mode="technique"  : score technique seul
     """
-
     df = yf.download(ticker, start=debut, end=fin,
                      auto_adjust=True, multi_level_index=False)
     if df.empty:
         raise ValueError(f"Aucune donnée pour {ticker}")
 
-    cerebro = bt.Cerebro()
-    cerebro.addanalyzer(TradeLogger, _name="trades")
+    close  = df["Close"].squeeze()
+    indics = _compute_indicators(close)
 
     is_forex = ticker.endswith("=X")
 
     if mode == "multi":
         if is_forex:
-            print("Calcul du differentiel de taux (forex)...")
             macro_lookup = _build_forex_macro_lookup(ticker, debut, fin)
-            print(f"  -> {len(macro_lookup)} jours charges" if macro_lookup else "  -> FRED non disponible, macro ignoree")
         else:
-            print("Calcul des scores macro (FRED)...")
             macro_lookup = _build_macro_lookup(debut, fin)
-            print(f"  -> {len(macro_lookup)} jours charges" if macro_lookup else "  -> FRED non disponible, macro ignoree")
-
-        print("Calcul des scores risque (rolling 63j)...")
-        risk_lookup = _build_risk_lookup(df)
-
-        # Seuils plus bas pour le forex : scores naturellement comprimes
-        seuil_achat = 0.05 if is_forex else 0.10
-        seuil_vente = -0.05 if is_forex else -0.10
-
-        cerebro.addstrategy(
-            StrategieMultiAgent,
-            seuil_achat=seuil_achat,
-            seuil_vente=seuil_vente,
-            macro_lookup=macro_lookup,
-            risk_lookup=risk_lookup,
-        )
+        risk_lookup  = _build_risk_lookup(df)
+        seuil_achat  = 0.05 if is_forex else 0.10
+        seuil_vente  = -0.05 if is_forex else -0.10
     else:
-        cerebro.addstrategy(StrategieScoreContinue)
+        macro_lookup = {}
+        risk_lookup  = {}
+        seuil_achat  = 0.15
+        seuil_vente  = -0.15
 
-    data = bt.feeds.PandasData(dataname=df)
-    cerebro.adddata(data)
-    cerebro.broker.setcash(capital)
-    cerebro.broker.setcommission(commission=0.001)
-    cerebro.addsizer(bt.sizers.PercentSizer, percents=95)
+    trades, valeur_fin = _simulate(
+        indics       = indics,
+        macro_lookup = macro_lookup,
+        risk_lookup  = risk_lookup,
+        mode         = mode,
+        seuil_achat  = seuil_achat,
+        seuil_vente  = seuil_vente,
+        capital      = capital,
+    )
 
-    valeur_debut = cerebro.broker.getvalue()
-    results      = cerebro.run()
-    valeur_fin   = cerebro.broker.getvalue()
-    rendement    = round((valeur_fin - valeur_debut) / valeur_debut * 100, 2)
-    trades       = results[0].analyzers.trades.get_analysis()
-
-    # Pas de cerebro.plot() — le graphique est construit en Plotly dans le dashboard
+    rendement = round((valeur_fin - capital) / capital * 100, 2)
 
     equity          = [{"date": debut, "valeur": capital}]
     valeur_courante = capital
     for trade in trades:
         valeur_courante += trade["pnlnet"]
-        equity.append({
-            "date":   trade["date"],
-            "valeur": round(valeur_courante, 2)
-        })
+        equity.append({"date": trade["date"], "valeur": round(valeur_courante, 2)})
 
     return {
         "ticker":     ticker,
         "debut":      debut,
         "fin":        fin,
         "capital":    capital,
-        "valeur_fin": round(valeur_fin, 2),
+        "valeur_fin": valeur_fin,
         "rendement":  rendement,
         "trades":     trades,
         "equity":     equity,
-        "df":         df,       # données OHLCV pour graphique Plotly
+        "df":         df,
         "mode":       mode,
     }
 
@@ -550,12 +476,12 @@ if __name__ == "__main__":
     resultat = run_backtest(ticker, mode=mode)
 
     print(f"\n--- Résultats ---")
-    print(f"Periode       : {resultat['debut']} -> {resultat['fin']}")
-    print(f"Capital départ: {resultat['capital']:,} $")
-    print(f"Capital final : {resultat['valeur_fin']:,} $")
+    print(f"Période       : {resultat['debut']} -> {resultat['fin']}")
+    print(f"Capital départ: {resultat['capital']:,.2f} $")
+    print(f"Capital final : {resultat['valeur_fin']:,.2f} $")
     print(f"Rendement     : {resultat['rendement']} %")
     print(f"Nb trades     : {len(resultat['trades'])}")
     print(f"\nDétail trades :")
     for t in resultat["trades"]:
         signe = "[+]" if t["pnl"] > 0 else "[-]"
-        print(f"  {signe} {t['date']} -> PnL : {t['pnlnet']} $")
+        print(f"  {signe} {t['date']} -> PnL net : {t['pnlnet']} $")

@@ -1,7 +1,6 @@
 annotated-types==0.7.0
 anyio==4.13.0
 attrs==26.1.0
-backtrader==1.9.78.123
 bcrypt==5.0.0
 beautifulsoup4==4.14.3
 blinker==1.9.0
