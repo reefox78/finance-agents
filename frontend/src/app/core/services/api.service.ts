@@ -102,6 +102,26 @@ export class ApiService {
     return this.http.delete(`${this.base}/alerts/${id}`);
   }
 
+  getRules(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/alerts/rules`);
+  }
+
+  addRule(body: { ticker: string; condition: string; valeur: number; notif_email: boolean }): Observable<any> {
+    return this.http.post(`${this.base}/alerts/rules`, body);
+  }
+
+  deleteRule(id: string): Observable<any> {
+    return this.http.delete(`${this.base}/alerts/rules/${id}`);
+  }
+
+  toggleRule(id: string): Observable<any> {
+    return this.http.put(`${this.base}/alerts/rules/${id}/toggle`, {});
+  }
+
+  checkRules(): Observable<{ triggered: any[]; count: number }> {
+    return this.http.post<{ triggered: any[]; count: number }>(`${this.base}/alerts/check`, {});
+  }
+
   // ── Calibration ───────────────────────────────────────────────────────────
 
   getCalibrationStatus(): Observable<any> {

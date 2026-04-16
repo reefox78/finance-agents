@@ -1,34 +1,174 @@
 <div class="page">
   <div class="page-header">
-    <h2 class="page-title">🔔 Alertes</h2>
-    @if (alerts().length > 0) {
-      <button class="btn-mark-all" (click)="markAll()">Tout marquer lu</button>
-    }
+    <h2 class="page-title">Alertes</h2>
   </div>
 
-  @if (loading()) { <div class="loader-bar"><div class="bar-inner"></div></div> }
-  @if (error())   { <div class="error-box">{{ error() }}</div> }
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn" [class.active]="activeTab() === 'received'" (click)="setTab('received')">
+      Alertes reçues
+      @if (alerts().length > 0) {
+        <span class="tab-badge">{{ alerts().length }}</span>
+      }
+    </button>
+    <button class="tab-btn" [class.active]="activeTab() === 'rules'" (click)="setTab('rules')">
+      Mes règles
+      @if (rules().length > 0) {
+        <span class="tab-badge">{{ rules().length }}</span>
+      }
+    </button>
+  </div>
 
-  @if (!loading() && alerts().length === 0) {
-    <div class="empty">Aucune alerte.</div>
+  <!-- ── Onglet 1 : Alertes reçues ─────────────────────────────────────── -->
+  @if (activeTab() === 'received') {
+    <div class="tab-content">
+      <div class="tab-toolbar">
+        @if (alerts().length > 0) {
+          <button class="btn-secondary" (click)="markAll()">Tout marquer lu</button>
+        }
+      </div>
+
+      @if (loading()) { <div class="loader-bar"><div class="bar-inner"></div></div> }
+      @if (error())   { <div class="error-box">{{ error() }}</div> }
+
+      @if (!loading() && alerts().length === 0) {
+        <div class="empty">Aucune alerte reçue.</div>
+      }
+
+      <div class="alerts-list">
+        @for (a of alerts(); track a.id) {
+          <div class="alert-row" [class.unread]="!a.lue">
+            <span class="badge" [class]="niveauClass(a.niveau)">{{ a.niveau }}</span>
+            <div class="alert-body">
+              <span class="alert-ticker">{{ a.ticker }}</span>
+              <span class="alert-msg">{{ a.message }}</span>
+            </div>
+            <span class="alert-date">{{ a.date }}</span>
+            <div class="alert-actions">
+              @if (!a.lue) {
+                <button class="btn-icon btn-read" (click)="markRead(a.id)" title="Marquer lu">✓</button>
+              }
+              <button class="btn-icon btn-del" (click)="deleteAlert(a.id)" title="Supprimer">✕</button>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
   }
 
-  <div class="alerts-list">
-    @for (a of alerts(); track a.id) {
-      <div class="alert-row" [class.unread]="!a.lue">
-        <span class="badge" [class]="niveauClass(a.niveau)">{{ a.niveau }}</span>
-        <div class="alert-body">
-          <span class="alert-ticker">{{ a.ticker }}</span>
-          <span class="alert-msg">{{ a.message }}</span>
+  <!-- ── Onglet 2 : Mes règles ─────────────────────────────────────────── -->
+  @if (activeTab() === 'rules') {
+    <div class="tab-content">
+
+      <!-- Formulaire de création -->
+      <div class="rules-form-card">
+        <h3 class="card-title">Nouvelle règle</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label class="field-label">Ticker</label>
+            <input
+              class="field-input"
+              type="text"
+              placeholder="ex : AAPL"
+              [(ngModel)]="form.ticker"
+              (keyup.enter)="addRule()"
+            />
+          </div>
+          <div class="field">
+            <label class="field-label">Condition</label>
+            <select class="field-select" [(ngModel)]="form.condition">
+              @for (c of CONDITIONS; track c.value) {
+                <option [value]="c.value">{{ c.label }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label">Valeur</label>
+            <input
+              class="field-input"
+              type="number"
+              placeholder="0.00"
+              [(ngModel)]="form.valeur"
+              (keyup.enter)="addRule()"
+            />
+          </div>
+          <div class="field field-toggle">
+            <label class="field-label">Email</label>
+            <label class="toggle-switch">
+              <input type="checkbox" [(ngModel)]="form.notif_email" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
         </div>
-        <span class="alert-date">{{ a.date }}</span>
-        <div class="alert-actions">
-          @if (!a.lue) {
-            <button class="btn-read" (click)="markRead(a.id)" title="Marquer lu">✓</button>
-          }
-          <button class="btn-del" (click)="delete(a.id)" title="Supprimer">✕</button>
-        </div>
+        @if (formError()) {
+          <div class="error-box">{{ formError() }}</div>
+        }
+        <button class="btn-primary" (click)="addRule()" [disabled]="formSaving()">
+          @if (formSaving()) { Enregistrement... } @else { Ajouter la règle }
+        </button>
       </div>
-    }
-  </div>
+
+      <!-- Bouton vérification immédiate -->
+      <div class="check-section">
+        <button class="btn-check" (click)="checkNow()" [disabled]="checking()">
+          @if (checking()) {
+            <span class="spinner-inline"></span> Vérification en cours…
+          } @else {
+            Vérifier maintenant
+          }
+        </button>
+        @if (checkError()) {
+          <div class="error-box">{{ checkError() }}</div>
+        }
+        @if (checkResult() !== null) {
+          @if (checkResult()!.length === 0) {
+            <div class="check-info">Aucune règle déclenchée.</div>
+          } @else {
+            <div class="check-triggered">
+              <span class="check-count">{{ checkResult()!.length }} alerte(s) déclenchée(s)</span>
+              <ul class="triggered-list">
+                @for (a of checkResult()!; track a.id) {
+                  <li>{{ a.ticker }} — {{ a.message }}</li>
+                }
+              </ul>
+            </div>
+          }
+        }
+      </div>
+
+      <!-- Liste des règles -->
+      @if (rulesLoading()) { <div class="loader-bar"><div class="bar-inner"></div></div> }
+      @if (rulesError())   { <div class="error-box">{{ rulesError() }}</div> }
+
+      @if (!rulesLoading() && rules().length === 0) {
+        <div class="empty">Aucune règle configurée.</div>
+      }
+
+      <div class="rules-list">
+        @for (r of rules(); track r.id) {
+          <div class="rule-row" [class.inactive]="!r.actif">
+            <div class="rule-info">
+              <span class="rule-ticker">{{ r.ticker }}</span>
+              <span class="rule-cond">{{ conditionLabel(r.condition) }}</span>
+              <span class="rule-val">{{ r.valeur }}</span>
+              @if (r.notif_email) {
+                <span class="rule-email-badge">Email</span>
+              }
+            </div>
+            @if (r.derniere_alerte) {
+              <span class="rule-last">Dernière : {{ r.derniere_alerte | date:'dd/MM HH:mm' }}</span>
+            }
+            <div class="rule-actions">
+              <label class="toggle-switch small" title="{{ r.actif ? 'Désactiver' : 'Activer' }}">
+                <input type="checkbox" [checked]="r.actif" (change)="toggleRule(r.id)" />
+                <span class="toggle-slider"></span>
+              </label>
+              <button class="btn-icon btn-del" (click)="deleteRule(r.id)" title="Supprimer">✕</button>
+            </div>
+          </div>
+        }
+      </div>
+
+    </div>
+  }
 </div>

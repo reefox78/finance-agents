@@ -52,6 +52,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api.routers import auth, analyse, scanner, portfolio, alerts, admin, logs, backtest, calendar
+from db.alert_rules import init_table as _init_alert_rules
+_init_alert_rules()
 
 # ── CORS helpers (partagés avec le handler global) ────────────────────────────
 _CORS_ORIGINS = {
