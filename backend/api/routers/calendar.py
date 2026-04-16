@@ -13,7 +13,7 @@ Endpoints :
 import logging
 from datetime import datetime, date, timedelta
 
-import httpx
+import requests as _requests
 import pytz
 from fastapi import APIRouter, Query, HTTPException
 
@@ -38,7 +38,11 @@ _FLAGS: dict[str, str] = {
 def _fetch_ff(url: str) -> list[dict]:
     """Télécharge et parse le feed Forex Factory."""
     try:
-        resp = httpx.get(url, timeout=_TIMEOUT, follow_redirects=True)
+        resp = _requests.get(
+            url, timeout=_TIMEOUT,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; FinanceAgents/1.0)"},
+            allow_redirects=True,
+        )
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
