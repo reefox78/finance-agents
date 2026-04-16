@@ -146,7 +146,7 @@ def get_today(current_user: CurrentUser):
 
 
 @router.get("/status")
-def get_status(current_user: CurrentUser):
+def get_status():
     """Debug — état du cache et test Forex Factory."""
     age = int(time.monotonic() - _CACHE["ts"]) if _CACHE["ts"] else None
     cached = len(_CACHE["data"])
