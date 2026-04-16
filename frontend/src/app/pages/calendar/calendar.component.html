@@ -25,6 +25,55 @@
     }
   </div>
 
+  <!-- ── Barre d'outils ── -->
+  <div class="toolbar">
+    <button class="btn-tool" (click)="forceRefresh()" [disabled]="refreshing()">
+      @if (refreshing()) { <span class="spin">⟳</span> Chargement… }
+      @else { ⟳ Rafraîchir }
+    </button>
+    <button class="btn-tool btn-tool-ghost" (click)="checkStatus()">
+      🔧 Diagnostiquer
+    </button>
+    @if (refreshResult()) {
+      <span class="refresh-result">{{ refreshResult() }}</span>
+    }
+  </div>
+
+  <!-- ── Panneau statut ── -->
+  @if (showStatus()) {
+    <div class="status-card card">
+      @if (statusLoading()) {
+        <span class="status-loading">⏳ Test des sources en cours…</span>
+      }
+      @if (status()) {
+        <div class="status-grid">
+          <div class="status-item">
+            <span class="status-label">Date serveur</span>
+            <span class="status-val">{{ status().today }}</span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">Cache</span>
+            <span class="status-val">{{ status().cache_events }} événements · {{ status().cache_age_sec ?? '—' }}s · <b>{{ status().cache_source }}</b></span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">ForexFactory</span>
+            <span class="status-val" [class.ok]="status().forexfactory.ok" [class.ko]="!status().forexfactory.ok">
+              {{ status().forexfactory.ok ? '✅ ' + status().forexfactory.count + ' events' : '❌ ' + status().forexfactory.error }}
+            </span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">FRED (fallback)</span>
+            <span class="status-val" [class.ok]="status().fred.ok" [class.ko]="!status().fred.ok && status().fred.key_set">
+              @if (!status().fred.key_set) { ⚠️ Clé API non définie }
+              @else if (status().fred.ok) { ✅ {{ status().fred.count }} releases }
+              @else { ❌ {{ status().fred.error }} }
+            </span>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
   <!-- ── Filtres ── -->
   <div class="filters card">
     <div class="filter-group">

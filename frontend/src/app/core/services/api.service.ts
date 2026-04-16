@@ -156,6 +156,14 @@ export class ApiService {
     return this.http.get<any[]>(`${this.base}/calendar/today`);
   }
 
+  getCalendarStatus(): Observable<any> {
+    return this.http.get<any>(`${this.base}/calendar/status`);
+  }
+
+  refreshCalendar(): Observable<any> {
+    return this.http.post<any>(`${this.base}/calendar/refresh`, {});
+  }
+
   getEarnings(ticker: string): Observable<{ ticker: string; date: string | null }> {
     return this.http.get<any>(`${this.base}/calendar/earnings`, {
       params: new HttpParams().set('ticker', ticker),

@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, computed } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
@@ -11,27 +11,56 @@ import { ApiService } from '../../core/services/api.service';
   styleUrls: ['./calendar.component.scss'],
 })
 export class CalendarComponent implements OnInit {
-  loading  = signal(true);
-  error    = signal('');
-  events   = signal<any[]>([]);
+  loading = signal(true);
+  error   = signal('');
+  events  = signal<any[]>([]);
 
-  // Filtres
-  filterImpact   = 'all';   // 'all' | 'High' | 'Medium'
-  filterCountry  = 'all';   // 'all' | 'USD' | 'EUR' | 'GBP' …
+  filterImpact  = 'all';
+  filterCountry = 'all';
+
+  // Statut / rafraîchissement
+  status        = signal<any>(null);
+  statusLoading = signal(false);
+  refreshing    = signal(false);
+  refreshResult = signal('');
+  showStatus    = signal(false);
 
   today = new Date().toISOString().slice(0, 10);
 
   constructor(private api: ApiService) {}
 
-  ngOnInit(): void {
+  ngOnInit(): void { this.load(); }
+
+  load(): void {
+    this.loading.set(true);
     this.api.getCalendarWeek().subscribe({
-      next: data => {
-        this.events.set(data);
-        this.loading.set(false);
+      next: data => { this.events.set(data); this.loading.set(false); },
+      error: e   => { this.error.set(e.error?.detail ?? 'Impossible de charger le calendrier.'); this.loading.set(false); },
+    });
+  }
+
+  checkStatus(): void {
+    this.statusLoading.set(true);
+    this.showStatus.set(true);
+    this.status.set(null);
+    this.api.getCalendarStatus().subscribe({
+      next: s  => { this.status.set(s); this.statusLoading.set(false); },
+      error: () => this.statusLoading.set(false),
+    });
+  }
+
+  forceRefresh(): void {
+    this.refreshing.set(true);
+    this.refreshResult.set('');
+    this.api.refreshCalendar().subscribe({
+      next: r => {
+        this.refreshing.set(false);
+        this.refreshResult.set(`✅ ${r.events} événements depuis ${r.source}`);
+        this.load();
       },
       error: e => {
-        this.error.set(e.error?.detail ?? 'Impossible de charger le calendrier.');
-        this.loading.set(false);
+        this.refreshing.set(false);
+        this.refreshResult.set('❌ ' + (e.error?.detail ?? 'Erreur'));
       },
     });
   }
@@ -67,8 +96,6 @@ export class CalendarComponent implements OnInit {
   get highCount(): number { return this.events().filter(e => e.impact === 'High'   && e.date === this.today).length; }
   get medCount():  number { return this.events().filter(e => e.impact === 'Medium' && e.date === this.today).length; }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
   impactClass(impact: string): string {
     return impact === 'High' ? 'imp-high' : impact === 'Medium' ? 'imp-med' : 'imp-low';
   }
@@ -91,7 +118,6 @@ export class CalendarComponent implements OnInit {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     if (dateStr === tomorrow.toISOString().slice(0, 10)) return 'Demain';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return new Date(dateStr).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   }
 }
