@@ -30,9 +30,9 @@ _FF_NEXT_WEEK = "https://nfs.faireconomy.media/ff_calendar_nextweek.json"
 _TIMEOUT      = 10.0
 _PARIS        = pytz.timezone("Europe/Paris")
 
-# Cache en mémoire 1h
+# Cache en mémoire 15 min (pour rafraîchir les valeurs réelles publiées dans la journée)
 _CACHE: dict = {"data": [], "ts": 0.0, "source": "none"}
-_CACHE_TTL   = 3600
+_CACHE_TTL   = 900
 
 _FLAGS: dict[str, str] = {
     "USD": "🇺🇸", "EUR": "🇪🇺", "GBP": "🇬🇧", "JPY": "🇯🇵",
