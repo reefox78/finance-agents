@@ -1,12 +1,11 @@
 FROM python:3.12-slim
 
-# Dépendances système pour psycopg2, lxml, curl_cffi, etc.
+# Dépendances système pour psycopg2, lxml, etc.
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     libxml2-dev \
     libxslt-dev \
-    libcurl4-openssl-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

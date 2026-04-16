@@ -17,7 +17,6 @@ fredapi==0.5.2
 pytrends==4.9.2
 praw==7.8.1
 requests==2.33.1
-curl_cffi==0.13.0
 beautifulsoup4==4.14.3
 pytz==2026.1.post1
 matplotlib==3.10.8

@@ -2,8 +2,8 @@
 Calendrier économique — événements macro de la semaine.
 
 Sources (par ordre de priorité) :
-  1. Forex Factory JSON (curl_cffi impersonne Chrome → bypass Cloudflare)
-  2. FRED release calendar (fallback, clé API déjà configurée)
+  1. FRED release calendar (clé API déjà configurée — fiable depuis serveur)
+  2. Forex Factory JSON (optionnel — souvent rate-limité depuis serveur cloud)
 
 Endpoints :
   GET /api/calendar/week    → 14 prochains jours
@@ -17,6 +17,7 @@ import time
 from datetime import datetime, date, timedelta
 
 import pytz
+import requests as _req
 from fastapi import APIRouter, Query
 
 from api.deps import CurrentUser
@@ -26,7 +27,7 @@ router  = APIRouter()
 
 _FF_THIS_WEEK = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
 _FF_NEXT_WEEK = "https://nfs.faireconomy.media/ff_calendar_nextweek.json"
-_TIMEOUT      = 12.0
+_TIMEOUT      = 10.0
 _PARIS        = pytz.timezone("Europe/Paris")
 
 # Cache en mémoire 1h
@@ -44,25 +45,101 @@ _FRED_HIGH = {
     "Employment Situation", "Consumer Price Index", "Gross Domestic Product",
     "FOMC", "Federal Open Market Committee", "Personal Income and Outlays",
     "Producer Price Index", "Retail Sales", "Industrial Production",
-    "Consumer Confidence Index", "ISM Manufacturing",
+    "Consumer Confidence Index", "ISM Manufacturing", "Trade Balance",
+    "Housing Starts", "Durable Goods Orders", "Unemployment Insurance",
+}
+_FRED_MEDIUM = {
+    "Business Inventories", "Factory Orders", "Wholesale Trade",
+    "New Residential Sales", "Existing Home Sales", "Construction Spending",
+    "Personal Consumption Expenditures", "Import and Export Price Indexes",
+    "Job Openings and Labor Turnover", "ADP Employment Report",
 }
 
 
 # ---------------------------------------------------------------------------
-# Source 1 : Forex Factory via curl_cffi (impersonne Chrome)
+# Source 1 : FRED release calendar (source principale)
 # ---------------------------------------------------------------------------
 
-def _fetch_ff_curl(url: str) -> list[dict]:
-    """Télécharge FF en impersonnant Chrome124 → bypass Cloudflare."""
+def _get_fred_events(days: int = 14) -> list[dict]:
+    """Charge les releases FRED des prochains jours."""
+    api_key = os.getenv("FRED_API_KEY")
+    if not api_key:
+        logger.warning("FRED_API_KEY non définie — source principale indisponible")
+        return []
     try:
-        from curl_cffi import requests as cfreq
-        resp = cfreq.get(url, impersonate="chrome124", timeout=_TIMEOUT)
+        today  = date.today()
+        cutoff = today + timedelta(days=days)
+        url = (
+            "https://api.stlouisfed.org/fred/releases/dates"
+            f"?api_key={api_key}"
+            f"&realtime_start={today}&realtime_end={cutoff}"
+            "&sort_order=asc&file_type=json&limit=500"
+        )
+        resp = _req.get(url, timeout=10)
+        resp.raise_for_status()
+        items = resp.json().get("release_dates", [])
+        logger.info("FRED OK: %d releases", len(items))
+
+        evts = []
+        for item in items:
+            name = item.get("release_name", "")
+            d    = item.get("date", "")
+            if not d or not name:
+                continue
+            if any(k in name for k in _FRED_HIGH):
+                impact = "High"
+            elif any(k in name for k in _FRED_MEDIUM):
+                impact = "Medium"
+            else:
+                impact = "Low"
+            evts.append({
+                "title":    name,
+                "country":  "USD",
+                "flag":     "🇺🇸",
+                "date":     d,
+                "time":     "",
+                "impact":   impact,
+                "forecast": "",
+                "previous": "",
+                "actual":   "",
+                "source":   "fred",
+            })
+        return evts
+    except Exception as e:
+        logger.warning("FRED failed: %s", e)
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Source 2 : Forex Factory (optionnel — peut être rate-limité depuis cloud)
+# ---------------------------------------------------------------------------
+
+_FF_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept":          "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer":         "https://www.forexfactory.com/",
+    "Origin":          "https://www.forexfactory.com",
+}
+
+
+def _fetch_ff(url: str) -> list[dict]:
+    """Tente de récupérer FF. Retourne [] si bloqué/rate-limité."""
+    try:
+        resp = _req.get(url, headers=_FF_HEADERS, timeout=_TIMEOUT)
+        if resp.status_code == 429:
+            logger.warning("FF rate-limited (429) pour %s — IP serveur bloquée", url.split("/")[-1])
+            return []
         resp.raise_for_status()
         data = resp.json()
-        logger.info("FF curl_cffi OK (%s): %d events", url.split("/")[-1], len(data))
+        logger.info("FF OK (%s): %d events", url.split("/")[-1], len(data))
         return data
     except Exception as e:
-        logger.warning("FF curl_cffi failed (%s): %s", url.split("/")[-1], e)
+        logger.warning("FF failed (%s): %s", url.split("/")[-1], e)
         return []
 
 
@@ -94,58 +171,10 @@ def _parse_ff_event(item: dict) -> dict | None:
 
 
 def _get_ff_events() -> list[dict]:
-    raw   = _fetch_ff_curl(_FF_THIS_WEEK) + _fetch_ff_curl(_FF_NEXT_WEEK)
-    evts  = [e for item in raw if (e := _parse_ff_event(item)) is not None]
+    raw  = _fetch_ff(_FF_THIS_WEEK) + _fetch_ff(_FF_NEXT_WEEK)
+    evts = [e for item in raw if (e := _parse_ff_event(item)) is not None]
     evts.sort(key=lambda e: (e["date"], e["time"]))
     return evts
-
-
-# ---------------------------------------------------------------------------
-# Source 2 : FRED release calendar (fallback)
-# ---------------------------------------------------------------------------
-
-def _get_fred_events() -> list[dict]:
-    """Charge les releases FRED des 14 prochains jours."""
-    api_key = os.getenv("FRED_API_KEY")
-    if not api_key:
-        logger.warning("FRED_API_KEY non définie — fallback indisponible")
-        return []
-    try:
-        import requests as _req
-        today  = date.today()
-        cutoff = today + timedelta(days=14)
-        url = (
-            "https://api.stlouisfed.org/fred/releases/dates"
-            f"?api_key={api_key}"
-            f"&realtime_start={today}&realtime_end={cutoff}"
-            "&sort_order=asc&file_type=json&limit=200"
-        )
-        resp = _req.get(url, timeout=10)
-        resp.raise_for_status()
-        items = resp.json().get("release_dates", [])
-        logger.info("FRED OK: %d releases", len(items))
-
-        evts = []
-        for item in items:
-            name   = item.get("release_name", "")
-            d      = item.get("date", "")
-            impact = "High" if any(k in name for k in _FRED_HIGH) else "Medium"
-            evts.append({
-                "title":    name,
-                "country":  "USD",
-                "flag":     "🇺🇸",
-                "date":     d,
-                "time":     "",
-                "impact":   impact,
-                "forecast": "",
-                "previous": "",
-                "actual":   "",
-                "source":   "fred",
-            })
-        return evts
-    except Exception as e:
-        logger.warning("FRED fallback failed: %s", e)
-        return []
 
 
 # ---------------------------------------------------------------------------
@@ -156,22 +185,21 @@ def _refresh_cache() -> str:
     """Rafraîchit le cache. Retourne la source utilisée."""
     global _CACHE
 
-    # Essai 1 : Forex Factory
-    evts = _get_ff_events()
-    if evts:
-        _CACHE = {"data": evts, "ts": time.monotonic(), "source": "forexfactory"}
-        logger.info("Cache mis à jour depuis ForexFactory (%d events)", len(evts))
+    # Essai 1 : Forex Factory (optionnel, souvent bloqué depuis cloud)
+    ff_evts = _get_ff_events()
+    if ff_evts:
+        _CACHE = {"data": ff_evts, "ts": time.monotonic(), "source": "forexfactory"}
+        logger.info("Cache mis à jour depuis ForexFactory (%d events)", len(ff_evts))
         return "forexfactory"
 
-    # Essai 2 : FRED
-    logger.warning("ForexFactory vide → bascule FRED")
-    evts = _get_fred_events()
-    if evts:
-        _CACHE = {"data": evts, "ts": time.monotonic(), "source": "fred"}
-        logger.info("Cache mis à jour depuis FRED (%d events)", len(evts))
+    # Essai 2 : FRED (source principale fiable)
+    logger.info("ForexFactory indisponible → FRED")
+    fred_evts = _get_fred_events()
+    if fred_evts:
+        _CACHE = {"data": fred_evts, "ts": time.monotonic(), "source": "fred"}
+        logger.info("Cache mis à jour depuis FRED (%d events)", len(fred_evts))
         return "fred"
 
-    # Rien
     logger.error("Toutes les sources ont échoué — cache inchangé")
     return "none"
 
@@ -208,19 +236,6 @@ def get_status():
     now = time.monotonic()
     age = int(now - _CACHE["ts"]) if _CACHE["ts"] else None
 
-    # Test live curl_cffi
-    ff_ok = False
-    ff_count = 0
-    ff_error = ""
-    try:
-        from curl_cffi import requests as cfreq
-        r = cfreq.get(_FF_THIS_WEEK, impersonate="chrome124", timeout=8)
-        ff_ok    = r.status_code == 200
-        ff_count = len(r.json()) if ff_ok else 0
-        ff_error = "" if ff_ok else f"HTTP {r.status_code}"
-    except Exception as e:
-        ff_error = str(e)
-
     # Test live FRED
     fred_ok    = False
     fred_count = 0
@@ -228,7 +243,6 @@ def get_status():
     fred_key   = bool(os.getenv("FRED_API_KEY"))
     if fred_key:
         try:
-            import requests as _req
             today  = date.today()
             cutoff = today + timedelta(days=14)
             r = _req.get(
@@ -243,6 +257,22 @@ def get_status():
             fred_error = "" if fred_ok else f"HTTP {r.status_code}"
         except Exception as e:
             fred_error = str(e)
+
+    # Test live ForexFactory
+    ff_ok    = False
+    ff_count = 0
+    ff_error = ""
+    try:
+        r = _req.get(_FF_THIS_WEEK, headers=_FF_HEADERS, timeout=8)
+        if r.status_code == 429:
+            ff_error = "429 Rate Limited (IP serveur bloquée)"
+        elif r.status_code == 200:
+            ff_ok    = True
+            ff_count = len(r.json())
+        else:
+            ff_error = f"HTTP {r.status_code}"
+    except Exception as e:
+        ff_error = str(e)
 
     return {
         "today":         date.today().isoformat(),
