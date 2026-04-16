@@ -1,0 +1,138 @@
+<div class="page">
+
+  <!-- ── Header ── -->
+  <div class="cal-header">
+    <div class="cal-header-left">
+      <div class="cal-icon">📅</div>
+      <div>
+        <div class="cal-title">Calendrier économique</div>
+        <div class="cal-subtitle">Événements macro des 14 prochains jours · Heure de Paris</div>
+      </div>
+    </div>
+
+    @if (!loading() && !error()) {
+      <div class="today-pills">
+        @if (highCount > 0) {
+          <span class="today-pill pill-high">🔴 {{ highCount }} HIGH aujourd'hui</span>
+        }
+        @if (medCount > 0) {
+          <span class="today-pill pill-med">🟡 {{ medCount }} MEDIUM aujourd'hui</span>
+        }
+        @if (highCount === 0 && medCount === 0) {
+          <span class="today-pill pill-ok">✅ Aucun événement majeur aujourd'hui</span>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- ── Filtres ── -->
+  <div class="filters card">
+    <div class="filter-group">
+      <label class="filter-label">Impact</label>
+      <div class="filter-btns">
+        <button [class.active]="filterImpact==='all'"    (click)="filterImpact='all'">Tous</button>
+        <button [class.active]="filterImpact==='High'"   (click)="filterImpact='High'"   class="f-high">🔴 Élevé</button>
+        <button [class.active]="filterImpact==='Medium'" (click)="filterImpact='Medium'" class="f-med">🟡 Moyen</button>
+        <button [class.active]="filterImpact==='Low'"    (click)="filterImpact='Low'"    class="f-low">⚪ Faible</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Devise</label>
+      <select class="fa-select filter-select" [(ngModel)]="filterCountry">
+        <option value="all">Toutes</option>
+        @for (c of availableCountries; track c) {
+          @if (c !== 'all') {
+            <option [value]="c">{{ c }}</option>
+          }
+        }
+      </select>
+    </div>
+  </div>
+
+  <!-- ── Loading ── -->
+  @if (loading()) {
+    <div class="loading-state card">
+      <div class="spinner"></div>
+      <span>Chargement du calendrier…</span>
+    </div>
+  }
+
+  @if (error()) {
+    <div class="error-box">⚠️ {{ error() }}</div>
+  }
+
+  <!-- ── Events ── -->
+  @if (!loading() && !error()) {
+    @if (groupedByDate.length === 0) {
+      <div class="empty-state card">
+        <div class="empty-icon">📭</div>
+        <div>Aucun événement correspondant aux filtres sélectionnés.</div>
+      </div>
+    }
+
+    @for (group of groupedByDate; track group.date) {
+      <div class="day-group">
+
+        <!-- Day header -->
+        <div class="day-header" [class.today]="isToday(group.date)">
+          <div class="day-label">
+            @if (isToday(group.date)) { <span class="today-badge">AUJOURD'HUI</span> }
+            {{ group.label }}
+          </div>
+          <div class="day-date">{{ group.date }}</div>
+        </div>
+
+        <!-- Events table -->
+        <div class="card events-card">
+          <table class="events-table">
+            <thead>
+              <tr>
+                <th class="col-time">Heure</th>
+                <th class="col-country">Pays</th>
+                <th class="col-impact">Impact</th>
+                <th class="col-title">Événement</th>
+                <th class="col-prev">Précédent</th>
+                <th class="col-fore">Prévision</th>
+                <th class="col-actual">Réel</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (evt of group.events; track evt.title + evt.time) {
+                <tr [class]="impactClass(evt.impact)" [class.past]="!isFuture(evt.time, evt.date)">
+                  <td class="col-time">
+                    @if (evt.time) {
+                      <span class="time-badge">{{ evt.time }}</span>
+                    } @else {
+                      <span class="time-allday">—</span>
+                    }
+                  </td>
+                  <td class="col-country">
+                    <span class="flag">{{ evt.flag }}</span>
+                    <span class="country-code">{{ evt.country }}</span>
+                  </td>
+                  <td class="col-impact">
+                    <span class="impact-dot" [class]="impactClass(evt.impact)">
+                      {{ impactIcon(evt.impact) }}
+                    </span>
+                  </td>
+                  <td class="col-title">{{ evt.title }}</td>
+                  <td class="col-prev">{{ evt.previous || '—' }}</td>
+                  <td class="col-fore">{{ evt.forecast || '—' }}</td>
+                  <td class="col-actual">
+                    @if (evt.actual) {
+                      <span class="actual-val">{{ evt.actual }}</span>
+                    } @else {
+                      <span class="actual-pending">En attente</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    }
+  }
+
+</div>

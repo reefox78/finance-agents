@@ -126,6 +126,22 @@ export class ApiService {
     return this.http.post<any>(`${this.base}/backtest/run`, body);
   }
 
+  // ── Calendar ─────────────────────────────────────────────────────────────
+
+  getCalendarWeek(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/calendar/week`);
+  }
+
+  getCalendarToday(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base}/calendar/today`);
+  }
+
+  getEarnings(ticker: string): Observable<{ ticker: string; date: string | null }> {
+    return this.http.get<any>(`${this.base}/calendar/earnings`, {
+      params: new HttpParams().set('ticker', ticker),
+    });
+  }
+
   // ── Logs ──────────────────────────────────────────────────────────────────
 
   getLogFiles(): Observable<any[]> {

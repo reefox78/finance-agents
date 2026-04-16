@@ -2,7 +2,7 @@ import { Component, signal, ViewChild, ElementRef, OnDestroy, OnInit } from '@an
 import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Router, ActivatedRoute, RouterModule } from '@angular/router';
 import { Chart, registerables } from 'chart.js';
 import 'chartjs-adapter-date-fns';
 import zoomPlugin from 'chartjs-plugin-zoom';
@@ -21,7 +21,7 @@ const NAMES = TICKER_NAMES;
 @Component({
   selector: 'app-analyse',
   standalone: true,
-  imports: [CommonModule, FormsModule, LoadingOverlayComponent],
+  imports: [CommonModule, FormsModule, RouterModule, LoadingOverlayComponent],
   templateUrl: './analyse.component.html',
   styleUrl: './analyse.component.scss',
 })
@@ -44,6 +44,9 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   error        = signal('');
   overlayError = signal('');
 
+  // Bannière calendrier économique
+  todayEvents  = signal<any[]>([]);
+
   private _sub: Subscription | null = null;
 
   private _charts: Chart<any, any, any>[] = [];
@@ -57,6 +60,12 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    // Charge les événements macro du jour pour la bannière d'alerte
+    this.api.getCalendarToday().subscribe({
+      next: data => this.todayEvents.set(data),
+      error: () => {},   // silencieux si indisponible
+    });
+
     // Restaure l'état précédent s'il existe
     if (this.state.result) {
       this.ticker       = this.state.ticker;

@@ -1,5 +1,26 @@
 <div class="page">
 
+  <!-- ── Bannière événements macro du jour ── -->
+  @if (todayEvents().length > 0) {
+    <div class="macro-banner" [class.banner-high]="todayEvents()[0]?.impact === 'High'">
+      <span class="banner-icon">⚠️</span>
+      <div class="banner-body">
+        <span class="banner-title">
+          {{ todayEvents()[0]?.impact === 'High' ? 'Événement HIGH IMPACT aujourd\'hui' : 'Événements macro aujourd\'hui' }}
+        </span>
+        <span class="banner-events">
+          @for (e of todayEvents().slice(0, 3); track e.title) {
+            <span class="banner-evt">{{ e.flag }} {{ e.time }} {{ e.title }}</span>
+          }
+          @if (todayEvents().length > 3) {
+            <span class="banner-more">+{{ todayEvents().length - 3 }} autres</span>
+          }
+        </span>
+      </div>
+      <a routerLink="/dashboard/calendar" class="banner-link">Voir le calendrier →</a>
+    </div>
+  }
+
   <!-- Controls row -->
   <div class="controls-row">
     <div class="control-group">
