@@ -7,9 +7,11 @@ import { Router } from '@angular/router';
 import { LoadingOverlayComponent } from '../../shared/components/loading-overlay/loading-overlay.component';
 
 interface ScanResult {
-  ticker: string;
-  score: number;
-  decision: string;
+  ticker:    string;
+  score:     number;
+  decision:  string;
+  technique?: number;
+  risque?:   number;
 }
 
 @Component({
@@ -26,10 +28,14 @@ export class ScannerComponent implements OnDestroy {
   loading      = signal(false);
   progress     = signal<{ current: number; total: number; ticker: string } | null>(null);
   results      = signal<ScanResult[]>([]);
+  allResults   = signal<ScanResult[]>([]);   // tous les résultats, y compris score < 0
   error        = signal('');
   overlayError = signal('');
+  scanDone     = signal(false);   // true une fois le scan terminé (même si 0 résultats)
+  scanTotal    = signal(0);
 
   private es: EventSource | null = null;
+  private _done = false;   // flag interne pour ignorer l'onerror post-done
 
   constructor(private api: ApiService, private auth: AuthService, private router: Router) {}
 
@@ -41,35 +47,56 @@ export class ScannerComponent implements OnDestroy {
     this.error.set('');
     this.overlayError.set('');
     this.results.set([]);
+    this.allResults.set([]);
     this.loading.set(true);
     this.progress.set(null);
+    this.scanDone.set(false);
+    this._done = false;
 
-    // SSE requires auth token in URL (EventSource doesn't support headers)
     const token = this.auth.token ?? '';
-    const base  = this.api.scannerStreamUrl(this.categorie || undefined, undefined, this.minScore);
+    const base  = this.api.scannerStreamUrl(this.categorie || undefined, undefined, -1); // on récupère tout
     const url   = `${base}&token=${encodeURIComponent(token)}`;
 
     this.es?.close();
     this.es = new EventSource(url);
 
     this.es.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'progress') {
-        this.progress.set({ current: msg.current, total: msg.total, ticker: msg.ticker });
-      } else if (msg.type === 'done') {
-        this.results.set(msg.resultats);
-        this.loading.set(false);
-        this.progress.set(null);
-        this.es?.close();
-      } else if (msg.type === 'result' && !msg.ok) {
-        // individual ticker error — continue
+      try {
+        const msg = JSON.parse(e.data);
+
+        if (msg.type === 'progress') {
+          this.progress.set({ current: msg.current, total: msg.total, ticker: msg.ticker });
+          this.scanTotal.set(msg.total);
+
+        } else if (msg.type === 'done') {
+          this._done = true;
+          const all: ScanResult[] = msg.resultats ?? [];
+          this.allResults.set(all);
+          // Filtre côté client selon minScore
+          this.results.set(all.filter(r => r.score >= this.minScore));
+          this.loading.set(false);
+          this.progress.set(null);
+          this.scanDone.set(true);
+          this.es?.close();
+          this.es = null;
+        }
+      } catch (err) {
+        console.error('SSE parse error', err);
       }
     };
 
     this.es.onerror = () => {
-      this.overlayError.set('Erreur de connexion SSE');
+      // Si on a déjà reçu 'done', la fermeture du stream est normale → ignorer
+      if (this._done) return;
+      this.overlayError.set('Connexion interrompue. Réessaie.');
+      this.loading.set(false);
       this.es?.close();
+      this.es = null;
     };
+  }
+
+  applyFilter(): void {
+    this.results.set(this.allResults().filter(r => r.score >= this.minScore));
   }
 
   cancelScan(): void {
@@ -77,6 +104,7 @@ export class ScannerComponent implements OnDestroy {
     this.es = null;
     this.loading.set(false);
     this.overlayError.set('');
+    this.scanDone.set(false);
   }
 
   scoreColor(score: number): string {

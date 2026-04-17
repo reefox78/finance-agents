@@ -10,7 +10,7 @@
     </select>
     <label class="score-filter">
       Score min :
-      <input type="number" [(ngModel)]="minScore" step="0.05" min="-1" max="1" />
+      <input type="number" [(ngModel)]="minScore" (ngModelChange)="applyFilter()" step="0.05" min="-1" max="1" />
     </label>
     <button (click)="startScan()" [disabled]="loading()">
       {{ loading() ? 'Scan en cours…' : 'Lancer le scan' }}
@@ -37,27 +37,62 @@
     <div class="error-box">{{ error() }}</div>
   }
 
-  @if (results().length > 0) {
-    <table class="results-table">
-      <thead>
-        <tr>
-          <th>Ticker</th>
-          <th>Score</th>
-          <th>Décision</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (r of results(); track r.ticker) {
-          <tr class="result-row" (click)="goToAnalyse(r.ticker)" title="Voir l'analyse détaillée de {{ r.ticker }}">
-            <td class="ticker">
-              {{ r.ticker }}
-              <span class="detail-hint">→ détail</span>
-            </td>
-            <td class="score" [style.color]="scoreColor(r.score)">{{ r.score | number:'1.4-4' }}</td>
-            <td class="decision">{{ r.decision }}</td>
+  @if (scanDone()) {
+    <!-- Résumé du scan -->
+    <div class="scan-summary">
+      <span class="summary-total">{{ scanTotal() }} actifs analysés</span>
+      <span class="summary-sep">·</span>
+      <span class="summary-match">{{ results().length }} correspondent au filtre (score ≥ {{ minScore }})</span>
+      @if (allResults().length > results().length) {
+        <span class="summary-hidden">· {{ allResults().length - results().length }} masqués</span>
+      }
+    </div>
+
+    @if (results().length > 0) {
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Score</th>
+            <th>Décision</th>
+            <th class="col-tech">Technique</th>
           </tr>
+        </thead>
+        <tbody>
+          @for (r of results(); track r.ticker) {
+            <tr class="result-row" (click)="goToAnalyse(r.ticker)" title="Voir l'analyse détaillée de {{ r.ticker }}">
+              <td class="ticker">
+                {{ r.ticker }}
+                <span class="detail-hint">→ détail</span>
+              </td>
+              <td class="score" [style.color]="scoreColor(r.score)">{{ r.score | number:'1.4-4' }}</td>
+              <td class="decision">{{ r.decision }}</td>
+              <td class="col-tech">
+                @if (r.technique !== undefined) {
+                  <span class="tech-val" [style.color]="scoreColor(r.technique)">{{ r.technique | number:'1.2-2' }}</span>
+                } @else {
+                  <span class="text-muted">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else {
+      <!-- Aucun résultat après filtre -->
+      <div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-title">Aucun actif ne correspond au filtre</div>
+        <div class="empty-sub">
+          {{ allResults().length }} actifs analysés · tous ont un score &lt; {{ minScore }}<br>
+          Baisse le score minimum pour voir plus de résultats.
+        </div>
+        @if (allResults().length > 0) {
+          <button class="btn-show-all" (click)="minScore = -1; applyFilter()">
+            Afficher tous les résultats
+          </button>
         }
-      </tbody>
-    </table>
+      </div>
+    }
   }
 </div>

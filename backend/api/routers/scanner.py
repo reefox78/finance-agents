@@ -68,14 +68,14 @@ async def _scan_stream(
         try:
             r = orchestrer(ticker, with_llm=False, user_id=user_id)
             score = r["scoring"]["score_final"]
-            if score >= min_score:
-                resultats.append({
-                    "ticker":    ticker,
-                    "score":     round(score, 4),
-                    "decision":  r["scoring"]["decision"],
-                    "technique": r["scoring"]["scores"].get("technique", 0),
-                    "risque":    r["scoring"]["scores"].get("multiplicateur", 1),
-                })
+            # On collecte tous les résultats — le filtrage se fait côté frontend
+            resultats.append({
+                "ticker":    ticker,
+                "score":     round(score, 4),
+                "decision":  r["scoring"]["decision"],
+                "technique": r["scoring"]["scores"].get("technique", 0),
+                "risque":    r["scoring"]["scores"].get("multiplicateur", 1),
+            })
             result_event = {
                 "type":   "result",
                 "ticker": ticker,
