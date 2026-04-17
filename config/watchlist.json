@@ -14,8 +14,8 @@
   "crypto": [
     "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD",
     "ADA-USD", "DOGE-USD", "DOT-USD", "AVAX-USD", "LINK-USD",
-    "MATIC-USD", "UNI-USD", "ATOM-USD", "LTC-USD", "TON-USD",
-    "NEAR-USD", "ICP-USD", "FIL-USD", "APT-USD", "ARB-USD"
+    "ATOM-USD", "LTC-USD", "NEAR-USD", "ICP-USD", "FIL-USD",
+    "ARB-USD", "POL-USD", "AAVE-USD", "SUI-USD", "OP-USD"
   ],
   "forex": [
     "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCHF=X", "AUDUSD=X",

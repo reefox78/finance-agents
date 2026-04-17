@@ -91,8 +91,29 @@
 }
 .summary-total  { font-weight: 700; color: rgba(255,255,255,0.7); }
 .summary-sep    { color: rgba(255,255,255,0.2); }
+.summary-ok     { color: #2ecc71; font-weight: 600; }
+.summary-err    { color: #ff7088; font-weight: 600; text-decoration: underline dashed; }
 .summary-match  { color: #00c8ff; }
-.summary-hidden { color: rgba(255,255,255,0.35); font-style: italic; }
+
+// ── Panneau erreurs ───────────────────────────────────────────────────────────
+.errors-panel {
+  margin-bottom: 1rem;
+  background: rgba(255,60,80,0.06);
+  border: 1px solid rgba(255,60,80,0.2);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+.err-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.2rem 0;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  &:last-child { border-bottom: none; }
+}
+.err-ticker { color: #ff7088; font-weight: 700; min-width: 90px; font-family: monospace; }
+.err-msg    { color: rgba(255,255,255,0.45); font-size: 11px; }
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 .empty-state {

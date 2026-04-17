@@ -2,6 +2,7 @@
 Scanner router — scan watchlist or custom tickers (Server-Sent Events for progress).
 """
 import json
+import logging
 import re
 import numpy as np
 from pathlib import Path
@@ -12,6 +13,8 @@ from fastapi.responses import StreamingResponse
 
 from orchestrator.orchestrator import run as orchestrer
 from api.deps import CurrentUser, decode_token
+
+logger = logging.getLogger(__name__)
 
 # ── CORS for SSE (StreamingResponse bypasses the global CORSMiddleware) ─────
 _ALLOWED_ORIGINS = {"http://localhost:4200", "http://localhost:80"}
@@ -49,26 +52,19 @@ def _load_watchlist(categorie: str | None = None) -> list[str]:
 async def _scan_stream(
     tickers: list[str],
     user_id: str,
-    min_score: float,
 ) -> AsyncGenerator[str, None]:
     """Génère des événements SSE — un par ticker analysé."""
-    total = len(tickers)
+    total     = len(tickers)
     resultats = []
+    erreurs   = []
 
     for i, ticker in enumerate(tickers):
         # Événement de progression
-        progress_event = {
-            "type":    "progress",
-            "current": i + 1,
-            "total":   total,
-            "ticker":  ticker,
-        }
-        yield f"data: {_dumps(progress_event)}\n\n"
+        yield f"data: {_dumps({'type': 'progress', 'current': i + 1, 'total': total, 'ticker': ticker})}\n\n"
 
         try:
-            r = orchestrer(ticker, with_llm=False, user_id=user_id)
+            r     = orchestrer(ticker, with_llm=False, user_id=user_id)
             score = r["scoring"]["score_final"]
-            # On collecte tous les résultats — le filtrage se fait côté frontend
             resultats.append({
                 "ticker":    ticker,
                 "score":     round(score, 4),
@@ -76,21 +72,22 @@ async def _scan_stream(
                 "technique": r["scoring"]["scores"].get("technique", 0),
                 "risque":    r["scoring"]["scores"].get("multiplicateur", 1),
             })
-            result_event = {
-                "type":   "result",
-                "ticker": ticker,
-                "score":  round(score, 4),
-                "ok":     True,
-            }
+            logger.info("Scanner OK: %s score=%.4f", ticker, score)
+            yield f"data: {_dumps({'type': 'result', 'ticker': ticker, 'score': round(score, 4), 'ok': True})}\n\n"
+
         except Exception as e:
-            result_event = {"type": "result", "ticker": ticker, "ok": False, "error": str(e)}
+            err_msg = str(e)
+            logger.warning("Scanner FAIL: %s → %s", ticker, err_msg)
+            erreurs.append({"ticker": ticker, "error": err_msg})
+            yield f"data: {_dumps({'type': 'result', 'ticker': ticker, 'ok': False, 'error': err_msg})}\n\n"
 
-        yield f"data: {_dumps(result_event)}\n\n"
-
-    # Événement final avec tous les résultats triés
+    # Événement final avec tous les résultats triés + erreurs
+    logger.info("Scanner done: %d OK, %d erreurs sur %d tickers", len(resultats), len(erreurs), total)
     done_event = {
         "type":      "done",
         "resultats": sorted(resultats, key=lambda x: x["score"], reverse=True),
+        "erreurs":   erreurs,
+        "total":     total,
     }
     yield f"data: {_dumps(done_event)}\n\n"
 
@@ -100,8 +97,7 @@ async def scanner_stream(
     request: Request,
     categorie: str | None = Query(None),
     tickers: str | None = Query(None, description="Comma-separated tickers"),
-    min_score: float = Query(0.0),
-    # EventSource doesn't support headers → token passed as query param
+    min_score: float = Query(0.0),   # conservé pour compatibilité (filtrage côté frontend)
     token: str = Query(..., description="JWT Bearer token"),
 ):
     """
@@ -116,19 +112,17 @@ async def scanner_stream(
     else:
         ticker_list = _load_watchlist(categorie)
 
-    # CORS headers must be set explicitly on StreamingResponse
-    # (the global CORSMiddleware does not apply to streaming responses)
     origin = request.headers.get("origin", "")
     cors_headers: dict[str, str] = {
-        "Cache-Control": "no-cache",
+        "Cache-Control":     "no-cache",
         "X-Accel-Buffering": "no",
     }
     if origin in _ALLOWED_ORIGINS or (origin and _ALLOWED_RE.fullmatch(origin)):
-        cors_headers["Access-Control-Allow-Origin"] = origin
+        cors_headers["Access-Control-Allow-Origin"]      = origin
         cors_headers["Access-Control-Allow-Credentials"] = "true"
 
     return StreamingResponse(
-        _scan_stream(ticker_list, current_user["sub"], min_score),
+        _scan_stream(ticker_list, current_user["sub"]),
         media_type="text/event-stream",
         headers=cors_headers,
     )

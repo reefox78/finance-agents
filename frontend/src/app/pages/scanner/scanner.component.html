@@ -40,13 +40,30 @@
   @if (scanDone()) {
     <!-- Résumé du scan -->
     <div class="scan-summary">
-      <span class="summary-total">{{ scanTotal() }} actifs analysés</span>
+      <span class="summary-total">{{ scanTotal() }} analysés</span>
       <span class="summary-sep">·</span>
-      <span class="summary-match">{{ results().length }} correspondent au filtre (score ≥ {{ minScore }})</span>
-      @if (allResults().length > results().length) {
-        <span class="summary-hidden">· {{ allResults().length - results().length }} masqués</span>
+      <span class="summary-ok">{{ allResults().length }} OK</span>
+      @if (scanErrors().length > 0) {
+        <span class="summary-sep">·</span>
+        <span class="summary-err" (click)="showErrors = !showErrors" style="cursor:pointer">
+          {{ scanErrors().length }} erreurs {{ showErrors ? '▲' : '▼' }}
+        </span>
       }
+      <span class="summary-sep">·</span>
+      <span class="summary-match">{{ results().length }} affichés (score ≥ {{ minScore }})</span>
     </div>
+
+    <!-- Détail des erreurs (masqué par défaut) -->
+    @if (showErrors && scanErrors().length > 0) {
+      <div class="errors-panel">
+        @for (e of scanErrors(); track e.ticker) {
+          <div class="err-row">
+            <span class="err-ticker">{{ e.ticker }}</span>
+            <span class="err-msg">{{ e.error }}</span>
+          </div>
+        }
+      </div>
+    }
 
     @if (results().length > 0) {
       <table class="results-table">
@@ -60,7 +77,7 @@
         </thead>
         <tbody>
           @for (r of results(); track r.ticker) {
-            <tr class="result-row" (click)="goToAnalyse(r.ticker)" title="Voir l'analyse détaillée de {{ r.ticker }}">
+            <tr class="result-row" (click)="goToAnalyse(r.ticker)" title="Voir l'analyse de {{ r.ticker }}">
               <td class="ticker">
                 {{ r.ticker }}
                 <span class="detail-hint">→ détail</span>
@@ -70,24 +87,30 @@
               <td class="col-tech">
                 @if (r.technique !== undefined) {
                   <span class="tech-val" [style.color]="scoreColor(r.technique)">{{ r.technique | number:'1.2-2' }}</span>
-                } @else {
-                  <span class="text-muted">—</span>
-                }
+                } @else { — }
               </td>
             </tr>
           }
         </tbody>
       </table>
     } @else {
-      <!-- Aucun résultat après filtre -->
       <div class="empty-state">
         <div class="empty-icon">🔍</div>
-        <div class="empty-title">Aucun actif ne correspond au filtre</div>
-        <div class="empty-sub">
-          {{ allResults().length }} actifs analysés · tous ont un score &lt; {{ minScore }}<br>
-          Baisse le score minimum pour voir plus de résultats.
-        </div>
-        @if (allResults().length > 0) {
+        @if (allResults().length === 0 && scanErrors().length > 0) {
+          <div class="empty-title">Tous les actifs ont échoué</div>
+          <div class="empty-sub">
+            {{ scanErrors().length }} erreurs sur {{ scanTotal() }} actifs.<br>
+            Clique sur "erreurs" ci-dessus pour voir le détail.
+          </div>
+        } @else if (allResults().length === 0) {
+          <div class="empty-title">Aucun résultat</div>
+          <div class="empty-sub">Le scan n'a retourné aucune donnée.</div>
+        } @else {
+          <div class="empty-title">Aucun actif ne correspond au filtre</div>
+          <div class="empty-sub">
+            {{ allResults().length }} actifs analysés · tous ont un score &lt; {{ minScore }}<br>
+            Baisse le score minimum pour voir plus de résultats.
+          </div>
           <button class="btn-show-all" (click)="minScore = -1; applyFilter()">
             Afficher tous les résultats
           </button>

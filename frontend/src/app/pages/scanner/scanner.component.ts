@@ -14,6 +14,11 @@ interface ScanResult {
   risque?:   number;
 }
 
+interface ScanError {
+  ticker: string;
+  error:  string;
+}
+
 @Component({
   selector: 'app-scanner',
   standalone: true,
@@ -28,14 +33,16 @@ export class ScannerComponent implements OnDestroy {
   loading      = signal(false);
   progress     = signal<{ current: number; total: number; ticker: string } | null>(null);
   results      = signal<ScanResult[]>([]);
-  allResults   = signal<ScanResult[]>([]);   // tous les résultats, y compris score < 0
+  allResults   = signal<ScanResult[]>([]);
+  scanErrors   = signal<ScanError[]>([]);
   error        = signal('');
   overlayError = signal('');
-  scanDone     = signal(false);   // true une fois le scan terminé (même si 0 résultats)
+  scanDone     = signal(false);
   scanTotal    = signal(0);
+  showErrors   = false;
 
   private es: EventSource | null = null;
-  private _done = false;   // flag interne pour ignorer l'onerror post-done
+  private _done = false;
 
   constructor(private api: ApiService, private auth: AuthService, private router: Router) {}
 
@@ -48,13 +55,16 @@ export class ScannerComponent implements OnDestroy {
     this.overlayError.set('');
     this.results.set([]);
     this.allResults.set([]);
+    this.scanErrors.set([]);
     this.loading.set(true);
     this.progress.set(null);
     this.scanDone.set(false);
+    this.showErrors = false;
     this._done = false;
 
     const token = this.auth.token ?? '';
-    const base  = this.api.scannerStreamUrl(this.categorie || undefined, undefined, -1); // on récupère tout
+    // min_score=-1 → on récupère tout côté backend, le filtre se fait dans applyFilter()
+    const base  = this.api.scannerStreamUrl(this.categorie || undefined, undefined, -1);
     const url   = `${base}&token=${encodeURIComponent(token)}`;
 
     this.es?.close();
@@ -70,9 +80,10 @@ export class ScannerComponent implements OnDestroy {
 
         } else if (msg.type === 'done') {
           this._done = true;
-          const all: ScanResult[] = msg.resultats ?? [];
+          const all: ScanResult[]  = msg.resultats ?? [];
+          const errs: ScanError[]  = msg.erreurs   ?? [];
           this.allResults.set(all);
-          // Filtre côté client selon minScore
+          this.scanErrors.set(errs);
           this.results.set(all.filter(r => r.score >= this.minScore));
           this.loading.set(false);
           this.progress.set(null);
@@ -86,7 +97,7 @@ export class ScannerComponent implements OnDestroy {
     };
 
     this.es.onerror = () => {
-      // Si on a déjà reçu 'done', la fermeture du stream est normale → ignorer
+      // La fermeture normale du stream déclenche onerror → l'ignorer si done reçu
       if (this._done) return;
       this.overlayError.set('Connexion interrompue. Réessaie.');
       this.loading.set(false);
