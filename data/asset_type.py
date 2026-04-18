@@ -76,6 +76,7 @@ AGENTS_PAR_TYPE = {
         "short_interest":   True,   # yfinance : données FINRA
         "earnings_surprise":True,   # EPS surprise via yfinance
         "volume_delta":     False,  # Binance API = crypto uniquement
+        "sector_risk":      True,   # driver sectoriel (pétrole, NASDAQ, taux…)
     },
     "eu_stock": {
         "fondamental":      True,
@@ -88,6 +89,7 @@ AGENTS_PAR_TYPE = {
         "short_interest":   True,   # yfinance en a pour certaines EU
         "earnings_surprise":True,   # yfinance en a pour la plupart des EU
         "volume_delta":     False,
+        "sector_risk":      True,   # secteur détecté via yfinance.info
     },
     "crypto": {
         "fondamental":      False,  # pas de PER / dividende
@@ -100,6 +102,7 @@ AGENTS_PAR_TYPE = {
         "short_interest":   False,
         "earnings_surprise":False,  # pas d'EPS
         "volume_delta":     True,   # API Binance — acheteurs vs vendeurs réels
+        "sector_risk":      True,   # BTC comme driver du marché crypto
     },
     "forex": {
         "fondamental":      False,
@@ -112,5 +115,6 @@ AGENTS_PAR_TYPE = {
         "short_interest":   False,
         "earnings_surprise":False,
         "volume_delta":     False,
+        "sector_risk":      False,  # macro suffit pour le forex
     },
 }

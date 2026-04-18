@@ -61,7 +61,8 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
                    insider: dict = None, macro: dict = None,
                    options_flow: dict = None, sec_filings: dict = None,
                    short_interest: dict = None, earnings_surprise: dict = None,
-                   volume_delta: dict = None) -> dict:
+                   volume_delta: dict = None,
+                   sector_risk: dict = None) -> dict:
     """
     Calcule le score pondéré global.
     Tous les agents sauf 'tech' et 'risk' sont optionnels (None = ignoré).
@@ -79,8 +80,9 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
     s_earnings = earnings_surprise.get("score_final", 0.0)                  if earnings_surprise else 0.0
     s_voldelta = volume_delta.get("score_final",      0.0)                  if volume_delta      else 0.0
 
-    mult_risk  = risk.get("multiplicateur", 1.0) if risk else 1.0
-    mult_macro = macro_en_multiplicateur(s_macro) if macro else 1.0
+    mult_risk    = risk.get("multiplicateur", 1.0)          if risk        else 1.0
+    mult_macro   = macro_en_multiplicateur(s_macro)          if macro       else 1.0
+    mult_secteur = sector_risk.get("mult_sectoriel", 1.0)   if sector_risk else 1.0
 
     P = _charger_poids()   # poids actifs (custom ou défauts)
 
@@ -112,7 +114,7 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
         s_voldelta * (P["volume_delta"]      if volume_delta      else 0)
     ) / poids_actifs
 
-    score_final = round(score_brut * mult_risk * mult_macro, 4)
+    score_final = round(score_brut * mult_risk * mult_macro * mult_secteur, 4)
     score_final = max(-1.0, min(1.0, score_final))
 
     if score_final >= SEUIL_ACHAT:
@@ -137,6 +139,7 @@ def calculer_score(tech: dict, fund: dict = None, sent: dict = None,
             "volume_delta":      round(s_voldelta, 4),
             "multiplicateur":    mult_risk,
             "mult_macro":        mult_macro,
+            "mult_secteur":      mult_secteur,
         },
         "poids":       P,
         "score_final": score_final,
