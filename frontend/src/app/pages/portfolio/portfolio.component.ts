@@ -60,6 +60,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
 
   // ── Achat form ────────────────────────────────────────────────────────────
   achat = { ticker: '', customTicker: '', prix: 0, quantite: 1, date: '', frais: 1, notes: '' };
+  achatMontant = 0;   // champ "Montant investi" — pas envoyé à l'API
   prixLoading = false;
   private _tickerChange$ = new Subject<string>();
 
@@ -102,6 +103,12 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       this.prixLoading = false;
       if (res?.prix) {
         this.achat.prix = res.prix;
+        // Si montant déjà renseigné → recalcule la quantité avec le nouveau prix
+        if (this.achatMontant > 0) {
+          this.achat.quantite = Math.round((this.achatMontant / this.achat.prix) * 10000) / 10000;
+        } else {
+          this.achatMontant = Math.round(this.achat.prix * this.achat.quantite * 100) / 100;
+        }
         this._autoFrais();
       }
     });
@@ -172,6 +179,37 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this._fetchPrix(this.effectiveTicker);
   }
 
+  /** Prix changé → si montant renseigné, recalcule quantité ; sinon met à jour montant */
+  onPrixChange(): void {
+    if (this.achat.prix > 0) {
+      if (this.achatMontant > 0) {
+        // Le montant est la référence → recalcule la quantité
+        this.achat.quantite = Math.round((this.achatMontant / this.achat.prix) * 10000) / 10000;
+      } else {
+        // La quantité est la référence → met à jour le montant
+        this.achatMontant = Math.round(this.achat.prix * this.achat.quantite * 100) / 100;
+      }
+    }
+    this._autoFrais();
+    this._fetchPrix(this.effectiveTicker);
+  }
+
+  /** Montant investi changé → recalcule la quantité si le prix est connu */
+  onMontantChange(): void {
+    if (this.achat.prix > 0 && this.achatMontant > 0) {
+      this.achat.quantite = Math.round((this.achatMontant / this.achat.prix) * 10000) / 10000;
+    }
+    this._autoFrais();
+  }
+
+  /** Quantité changée manuellement → met à jour le montant */
+  onQuantiteChange(): void {
+    if (this.achat.prix > 0 && this.achat.quantite > 0) {
+      this.achatMontant = Math.round(this.achat.prix * this.achat.quantite * 100) / 100;
+    }
+    this._autoFrais();
+  }
+
   private _autoFrais(): void {
     const montant = this.achat.prix * this.achat.quantite;
     const calc = BROKER_CALC[this.selectedBroker];
@@ -221,6 +259,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
       next: () => {
         this.showAchat = false;
         this.achat = { ticker: '', customTicker: '', prix: 0, quantite: 1, date: '', frais: 1, notes: '' };
+        this.achatMontant = 0;
         this.loadPositions();
         this._toast('Achat enregistré.');
       },

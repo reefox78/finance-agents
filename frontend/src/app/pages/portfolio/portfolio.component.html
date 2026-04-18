@@ -153,14 +153,32 @@
               <input class="fa-input" type="number" [(ngModel)]="achat.prix" name="prix"
                      required step="0.01" placeholder="Chargement…"
                      [class.loading-input]="prixLoading"
-                     (ngModelChange)="onAchatChange()" />
+                     (ngModelChange)="onPrixChange()" />
             </div>
+
+            <!-- Montant investi → calcule la quantité automatiquement -->
             <div class="field">
-              <label class="ctrl-label">Quantité</label>
+              <label class="ctrl-label">
+                Montant investi (€)
+                <span class="auto-hint">calcule la quantité</span>
+              </label>
+              <input class="fa-input" type="number" [(ngModel)]="achatMontant" name="achatMontant"
+                     step="0.01" min="0" placeholder="ex : 500"
+                     (ngModelChange)="onMontantChange()" />
+            </div>
+
+            <div class="field">
+              <label class="ctrl-label">
+                Quantité
+                @if (achatMontant > 0 && achat.prix > 0) {
+                  <span class="auto-hint">= {{ achatMontant }} ÷ {{ achat.prix }}</span>
+                }
+              </label>
               <input class="fa-input" type="number" [(ngModel)]="achat.quantite" name="quantite"
                      required step="0.0001" placeholder="10"
-                     (ngModelChange)="onAchatChange()" />
+                     (ngModelChange)="onQuantiteChange()" />
             </div>
+
             <div class="field">
               <label class="ctrl-label">Date</label>
               <input class="fa-input" type="date" [(ngModel)]="achat.date" name="date" />
