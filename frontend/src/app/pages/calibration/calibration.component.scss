@@ -132,6 +132,23 @@
   font-size: 13px;
   color: var(--text-muted);
   margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-debug {
+  display: inline-block;
+  padding: 6px 16px;
+  background: rgba(0, 200, 255, 0.08);
+  border: 1px solid rgba(0, 200, 255, 0.3);
+  border-radius: 6px;
+  color: #00c8ff;
+  font-size: 12px;
+  text-decoration: none;
+  transition: background 0.2s;
+  &:hover { background: rgba(0, 200, 255, 0.18); }
 }
 
 /* ── Calibration table ───────────────────────────────────────────────────── */

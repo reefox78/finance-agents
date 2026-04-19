@@ -62,6 +62,9 @@
       @if (cr.nb_points_total === 0) {
         <div class="empty-state">
           Pas encore assez de données historiques. Lancez des analyses depuis la page Analyse pour alimenter l'historique.
+          <a class="btn-debug"
+             href="https://finance-agents-api.onrender.com/api/calibration/debug"
+             target="_blank">🔍 Diagnostic DB</a>
         </div>
       } @else {
         <div class="calib-table-wrap">
