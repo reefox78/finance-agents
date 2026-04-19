@@ -37,8 +37,10 @@ __pycache__/
 .idea/
 *.swp
 
-# Claude Code (settings locaux)
+# Claude Code (settings locaux — sauf les slash commands partagés)
 .claude/
+!.claude/commands/
+!.claude/commands/*.md
 
 # OS
 .DS_Store
