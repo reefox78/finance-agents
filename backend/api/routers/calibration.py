@@ -110,3 +110,73 @@ def reset_weights(current_user: AdminUser):
     """Supprime les poids custom — retour aux poids par défaut."""
     supprimer_poids_custom()
     return {"ok": True, "mode": "default"}
+
+
+@router.get("/debug")
+def debug_history(current_user: CurrentUser):
+    """
+    Diagnostic : inspecte ce qui est en base pour cet utilisateur.
+    Permet de comprendre pourquoi la calibration trouve 0 points.
+    """
+    from db.client import execute as db_exec
+    from datetime import datetime, timedelta
+
+    uid = current_user["sub"]
+    HORIZON = 7
+
+    try:
+        # Nombre total d'entrées
+        total = db_exec(
+            "SELECT COUNT(*) AS n FROM score_history WHERE user_id = %s",
+            (uid,), fetch="one"
+        )
+        # Entrées avec scores_agents renseigné
+        with_agents = db_exec(
+            "SELECT COUNT(*) AS n FROM score_history WHERE user_id = %s AND scores_agents IS NOT NULL",
+            (uid,), fetch="one"
+        )
+        # Entrées avec prix renseigné
+        with_prix = db_exec(
+            "SELECT COUNT(*) AS n FROM score_history WHERE user_id = %s AND prix IS NOT NULL",
+            (uid,), fetch="one"
+        )
+        # Entrées assez anciennes (> HORIZON jours)
+        cutoff = (datetime.utcnow() - timedelta(days=HORIZON)).isoformat()
+        old_enough = db_exec(
+            "SELECT COUNT(*) AS n FROM score_history WHERE user_id = %s AND ts < %s",
+            (uid, cutoff), fetch="one"
+        )
+        # Tickers distincts
+        tickers = db_exec(
+            "SELECT DISTINCT ticker FROM score_history WHERE user_id = %s ORDER BY ticker",
+            (uid,), fetch="all"
+        )
+        # 5 entrées les plus récentes
+        recents = db_exec(
+            "SELECT ticker, ts, score, decision, prix, scores_agents IS NOT NULL AS has_agents "
+            "FROM score_history WHERE user_id = %s ORDER BY ts DESC LIMIT 5",
+            (uid,), fetch="all"
+        )
+
+        return _jsonify({
+            "user_id":        uid,
+            "total_entries":  total["n"] if total else 0,
+            "with_agents":    with_agents["n"] if with_agents else 0,
+            "with_prix":      with_prix["n"] if with_prix else 0,
+            "old_enough":     old_enough["n"] if old_enough else 0,
+            "horizon_jours":  HORIZON,
+            "tickers":        [r["ticker"] for r in tickers] if tickers else [],
+            "recents": [
+                {
+                    "ticker":     r["ticker"],
+                    "ts":         str(r["ts"]),
+                    "score":      float(r["score"]),
+                    "decision":   r["decision"],
+                    "prix":       float(r["prix"]) if r["prix"] else None,
+                    "has_agents": r["has_agents"],
+                }
+                for r in (recents or [])
+            ],
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur diagnostic : {e}")
