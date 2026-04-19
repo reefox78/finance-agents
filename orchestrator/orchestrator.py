@@ -309,19 +309,23 @@ def run(ticker: str, with_llm: bool = True, user_id: str = None) -> dict:
     # --- Sauvegarde historique du score (avec scores par agent + prix) ---
     try:
         prix_actuel = tech.get("prix_actuel")
+        # Conversion explicite en float Python — scoring["scores"] peut contenir
+        # des numpy.float64 qui cassent psycopg2 ("schema np does not exist")
         scores_agents = {
-            k: v for k, v in scoring["scores"].items()
+            k: float(v) for k, v in scoring["scores"].items()
             if k not in ("multiplicateur", "mult_macro")
         }
+        score_final_py = float(scoring["score_final"])
+        prix_actuel_py = float(prix_actuel) if prix_actuel is not None else None
         if user_id:
             # Sauvegarde PostgreSQL (multi-utilisateur)
-            _enregistrer_score_db(user_id, ticker, scoring["score_final"],
-                                  scoring["decision"], prix=prix_actuel,
+            _enregistrer_score_db(user_id, ticker, score_final_py,
+                                  scoring["decision"], prix=prix_actuel_py,
                                   scores_agents=scores_agents)
         else:
             # Sauvegarde locale JSON (fallback sans session)
-            _enregistrer_score_local(ticker, scoring["score_final"],
-                                     scoring["decision"], prix=prix_actuel,
+            _enregistrer_score_local(ticker, score_final_py,
+                                     scoring["decision"], prix=prix_actuel_py,
                                      scores_agents=scores_agents)
     except Exception as save_err:
         logger.error("Échec sauvegarde score_history — ticker=%s user_id=%s : %s",
