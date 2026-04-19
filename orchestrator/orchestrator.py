@@ -1,6 +1,9 @@
 import os
+import logging
 from dotenv import load_dotenv
 from groq import Groq, RateLimitError as GroqRateLimitError
+
+logger = logging.getLogger(__name__)
 
 from data.asset_type import detect_asset_type, AGENTS_PAR_TYPE
 from agents.technical import analyze_technical
@@ -320,8 +323,9 @@ def run(ticker: str, with_llm: bool = True, user_id: str = None) -> dict:
             _enregistrer_score_local(ticker, scoring["score_final"],
                                      scoring["decision"], prix=prix_actuel,
                                      scores_agents=scores_agents)
-    except Exception:
-        pass   # non bloquant
+    except Exception as save_err:
+        logger.error("Échec sauvegarde score_history — ticker=%s user_id=%s : %s",
+                     ticker, user_id, save_err, exc_info=True)
 
     return {
         "ticker":           ticker,

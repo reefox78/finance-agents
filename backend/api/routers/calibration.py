@@ -158,6 +158,25 @@ def debug_history(current_user: CurrentUser):
             (uid,), fetch="all"
         )
 
+        # Test d'insertion pour vérifier que les INSERTs fonctionnent
+        insert_ok  = False
+        insert_err = None
+        try:
+            import json as _json
+            db_exec(
+                """INSERT INTO score_history (user_id, ticker, score, decision, prix, scores_agents)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (uid, "__DEBUG__", 0.0, "NEUTRE", 0.0, _json.dumps({"test": 0.0}))
+            )
+            # Supprime aussitôt l'entrée de test
+            db_exec(
+                "DELETE FROM score_history WHERE user_id = %s AND ticker = '__DEBUG__'",
+                (uid,)
+            )
+            insert_ok = True
+        except Exception as ie:
+            insert_err = str(ie)
+
         return _jsonify({
             "user_id":        uid,
             "total_entries":  total["n"] if total else 0,
@@ -166,6 +185,7 @@ def debug_history(current_user: CurrentUser):
             "old_enough":     old_enough["n"] if old_enough else 0,
             "horizon_jours":  HORIZON,
             "tickers":        [r["ticker"] for r in tickers] if tickers else [],
+            "insert_test":    "OK" if insert_ok else f"ERREUR : {insert_err}",
             "recents": [
                 {
                     "ticker":     r["ticker"],
