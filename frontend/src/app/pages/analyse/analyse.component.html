@@ -386,6 +386,17 @@
           <div class="ac-detail">CVD {{ r.volume_delta.cvd_tendance }}</div>
         </div>
       }
+      @if (r.momentum_ct && !r.momentum_ct['erreur']) {
+        <div class="agent-card" [class]="signalClass(r.momentum_ct['signal'])">
+          <div class="ac-name">Momentum 5j
+            <span class="help-tip">?<span class="help-text">Analyse les 5 dernières bougies daily : variation de prix, ratio bougies haussières/baissières, tendance du volume, accélération du mouvement et force de la dernière bougie. CONFIRME = le momentum court terme valide le signal principal.</span></span>
+          </div>
+          <div class="ac-signal">{{ r.momentum_ct['signal'] }}</div>
+          <div class="ac-detail">
+            {{ r.momentum_ct['variation_5j'] }}% · {{ r.momentum_ct['nb_haussières'] }}/{{ r.momentum_ct['n_candles'] }} 🟢 · ×{{ r.momentum_ct['mult_momentum'] }}
+          </div>
+        </div>
+      }
 
     </div>
 

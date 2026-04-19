@@ -258,8 +258,8 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   signalClass(sig: string): string {
     if (!sig) return '';
     const s = sig.toUpperCase();
-    if (s.includes('ACHE') || s === 'HAUSSIER' || s === 'FAIBLE' || s === 'POSITIF') return 'sig-buy';
-    if (s.includes('VEND') || s === 'BAISSIER' || s === 'ÉLEVÉ'  || s === 'NEGATIF') return 'sig-sell';
+    if (s.includes('ACHE') || s === 'HAUSSIER' || s === 'FAIBLE' || s === 'POSITIF' || s === 'CONFIRME') return 'sig-buy';
+    if (s.includes('VEND') || s === 'BAISSIER' || s === 'ÉLEVÉ'  || s === 'NEGATIF' || s === 'INVALIDE') return 'sig-sell';
     return 'sig-neutral';
   }
   assetLabel(t: string): string {
