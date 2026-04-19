@@ -15,7 +15,8 @@ export class CalibrationComponent implements OnInit {
   // ── State ──────────────────────────────────────────────────────────────────
   status      = signal<any>(null);       // GET /status response
   calibResult = signal<any>(null);       // POST /run response
-  loading     = signal<'' | 'status' | 'running' | 'saving' | 'resetting'>('');
+  debugResult = signal<any>(null);       // GET /debug response
+  loading     = signal<'' | 'status' | 'running' | 'saving' | 'resetting' | 'debug'>('');
   error       = signal('');
   saved       = signal(false);
 
@@ -127,6 +128,16 @@ export class CalibrationComponent implements OnInit {
         this.error.set(e.error?.detail ?? 'Erreur sauvegarde');
         this.loading.set('');
       },
+    });
+  }
+
+  runDebug(): void {
+    this.loading.set('debug');
+    this.debugResult.set(null);
+    this.error.set('');
+    this.api.getCalibrationDebug().subscribe({
+      next: r => { this.debugResult.set(r); this.loading.set(''); },
+      error: e => { this.error.set(e.error?.detail ?? 'Erreur debug'); this.loading.set(''); },
     });
   }
 

@@ -62,10 +62,41 @@
       @if (cr.nb_points_total === 0) {
         <div class="empty-state">
           Pas encore assez de données historiques. Lancez des analyses depuis la page Analyse pour alimenter l'historique.
-          <a class="btn-debug"
-             href="https://finance-agents-api.onrender.com/api/calibration/debug"
-             target="_blank">🔍 Diagnostic DB</a>
+          <button class="btn-debug" (click)="runDebug()" [disabled]="loading() === 'debug'">
+            {{ loading() === 'debug' ? '⟳ Chargement…' : '🔍 Diagnostic DB' }}
+          </button>
         </div>
+      @if (debugResult(); as d) {
+        <div class="debug-panel">
+          <div class="debug-title">🔍 Diagnostic — historique en base</div>
+          <div class="debug-grid">
+            <div class="debug-row"><span>Entrées totales</span><strong>{{ d.total_entries }}</strong></div>
+            <div class="debug-row"><span>Avec scores agents</span><strong [style.color]="d.with_agents === 0 ? '#e74c3c' : '#2ecc71'">{{ d.with_agents }}</strong></div>
+            <div class="debug-row"><span>Avec prix</span><strong [style.color]="d.with_prix === 0 ? '#e74c3c' : '#2ecc71'">{{ d.with_prix }}</strong></div>
+            <div class="debug-row"><span>Assez anciennes (&gt; {{ d.horizon_jours }}j)</span><strong [style.color]="d.old_enough === 0 ? '#e74c3c' : '#2ecc71'">{{ d.old_enough }}</strong></div>
+            <div class="debug-row"><span>Tickers distincts</span><strong>{{ d.tickers.join(', ') || '—' }}</strong></div>
+          </div>
+          @if (d.recents?.length > 0) {
+            <div class="debug-title" style="margin-top:1rem">5 dernières analyses</div>
+            <table class="debug-table">
+              <thead><tr><th>Ticker</th><th>Date</th><th>Score</th><th>Décision</th><th>Prix</th><th>Agents</th></tr></thead>
+              <tbody>
+                @for (r of d.recents; track r.ts) {
+                  <tr>
+                    <td>{{ r.ticker }}</td>
+                    <td>{{ r.ts | slice:0:16 }}</td>
+                    <td>{{ r.score }}</td>
+                    <td>{{ r.decision }}</td>
+                    <td>{{ r.prix ?? '—' }}</td>
+                    <td [style.color]="r.has_agents ? '#2ecc71' : '#e74c3c'">{{ r.has_agents ? '✓' : '✗' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      }
+
       } @else {
         <div class="calib-table-wrap">
           <table class="calib-table">

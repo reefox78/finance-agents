@@ -128,6 +128,10 @@ export class ApiService {
     return this.http.get<any>(`${this.base}/calibration/status`);
   }
 
+  getCalibrationDebug(): Observable<any> {
+    return this.http.get<any>(`${this.base}/calibration/debug`);
+  }
+
   runCalibration(): Observable<any> {
     return this.http.post<any>(`${this.base}/calibration/run`, {});
   }
