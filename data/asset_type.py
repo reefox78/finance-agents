@@ -77,6 +77,7 @@ AGENTS_PAR_TYPE = {
         "earnings_surprise":True,   # EPS surprise via yfinance
         "volume_delta":     False,  # Binance API = crypto uniquement
         "sector_risk":      True,   # driver sectoriel (pétrole, NASDAQ, taux…)
+        "momentum_ct":      True,   # momentum 5 bougies daily
     },
     "eu_stock": {
         "fondamental":      True,
@@ -90,6 +91,7 @@ AGENTS_PAR_TYPE = {
         "earnings_surprise":True,   # yfinance en a pour la plupart des EU
         "volume_delta":     False,
         "sector_risk":      True,   # secteur détecté via yfinance.info
+        "momentum_ct":      True,   # momentum 5 bougies daily
     },
     "crypto": {
         "fondamental":      False,  # pas de PER / dividende
@@ -103,6 +105,7 @@ AGENTS_PAR_TYPE = {
         "earnings_surprise":False,  # pas d'EPS
         "volume_delta":     True,   # API Binance — acheteurs vs vendeurs réels
         "sector_risk":      True,   # BTC comme driver du marché crypto
+        "momentum_ct":      True,   # momentum 5 bougies daily
     },
     "forex": {
         "fondamental":      False,
@@ -116,5 +119,6 @@ AGENTS_PAR_TYPE = {
         "earnings_surprise":False,
         "volume_delta":     False,
         "sector_risk":      False,  # macro suffit pour le forex
+        "momentum_ct":      False,  # momentum peu pertinent sur forex
     },
 }

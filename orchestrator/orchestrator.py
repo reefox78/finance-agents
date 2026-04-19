@@ -16,6 +16,7 @@ from agents.short_interest import analyze_short_interest
 from agents.earnings_surprise import analyze_earnings_surprise
 from agents.volume_delta import analyze_volume_delta
 from agents.sector_risk import analyze_sector_risk
+from agents.momentum_court_terme import analyze_momentum_court_terme
 from orchestrator.scoring import calculer_score
 from data.score_history import enregistrer_score as _enregistrer_score_local
 from db.score_history   import enregistrer_score as _enregistrer_score_db
@@ -38,7 +39,8 @@ def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
                   macro: dict, options_flow: dict, sec_filings: dict,
                   short_interest: dict, earnings_surprise: dict,
                   volume_delta: dict, scoring: dict,
-                  sector_risk: dict = None) -> str:
+                  sector_risk: dict = None,
+                  momentum_ct: dict = None) -> str:
     """Construit le prompt LLM en n'incluant que les agents actifs."""
 
     label = _ASSET_LABELS.get(asset_type, asset_type)
@@ -180,6 +182,19 @@ def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
             f"- Signal        : {sector_risk['signal']}\n",
         ]
 
+    # --- Momentum Court Terme ---
+    if momentum_ct and "erreur" not in momentum_ct:
+        lines += [
+            "MOMENTUM COURT TERME (5 dernières bougies) :",
+            f"- Variation 5j      : {momentum_ct.get('variation_5j')} %",
+            f"- Variations/j      : {momentum_ct.get('variations_j')}",
+            f"- Bougies haussières: {momentum_ct.get('nb_haussières')}/{momentum_ct.get('n_candles')}",
+            f"- Volume ratio      : {momentum_ct.get('vol_ratio')}x (fin vs début)",
+            f"- Force last bougie : {momentum_ct.get('force_bougie')} %",
+            f"- Mult momentum     : {momentum_ct.get('mult_momentum')}",
+            f"- Signal            : {momentum_ct.get('signal')}\n",
+        ]
+
     # --- Volume Delta (crypto) ---
     if volume_delta and "erreur" not in volume_delta:
         lines += [
@@ -218,6 +233,7 @@ def _build_prompt(ticker: str, asset_type: str, tech: dict, fund: dict,
         f"- Mult risque  : {scoring['scores']['multiplicateur']}",
         f"- Mult macro   : {scoring['scores']['mult_macro']}",
         f"- Mult sectoriel: {scoring['scores']['mult_secteur']}",
+        f"- Mult momentum : {scoring['scores']['mult_momentum']}",
         f"- Score final  : {scoring['score_final']} / 1.0",
         f"- Décision   : {scoring['decision']}\n",
     ]
@@ -258,13 +274,14 @@ def run(ticker: str, with_llm: bool = True, user_id: str = None) -> dict:
     short_interest   = analyze_short_interest(ticker)        if config["short_interest"]    else None
     earnings_surprise= analyze_earnings_surprise(ticker)     if config["earnings_surprise"] else None
     volume_delta     = analyze_volume_delta(ticker)           if config["volume_delta"]      else None
-    sector_risk_data = analyze_sector_risk(ticker)            if config["sector_risk"]       else None
+    sector_risk_data = analyze_sector_risk(ticker)              if config["sector_risk"]       else None
+    momentum_ct_data = analyze_momentum_court_terme(ticker)    if config["momentum_ct"]       else None
 
     # --- Scoring (gère les None automatiquement) ---
     scoring = calculer_score(
         tech, fund, sent, risk, trends, insider, macro,
         options_flow, sec_filings, short_interest, earnings_surprise,
-        volume_delta, sector_risk_data
+        volume_delta, sector_risk_data, momentum_ct_data
     )
 
     # --- Risque sectoriel dans le prompt LLM ---
@@ -278,7 +295,7 @@ def run(ticker: str, with_llm: bool = True, user_id: str = None) -> dict:
                                risk, trends, insider, macro,
                                options_flow, sec_filings, short_interest,
                                earnings_surprise, volume_delta, scoring,
-                               sector_risk_data)
+                               sector_risk_data, momentum_ct_data)
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
@@ -324,6 +341,7 @@ def run(ticker: str, with_llm: bool = True, user_id: str = None) -> dict:
         "earnings_surprise":earnings_surprise,
         "volume_delta":     volume_delta,
         "sector_risk":      sector_risk_data,
+        "momentum_ct":      momentum_ct_data,
     }
 
 
