@@ -165,13 +165,31 @@
             <div class="modal-field">
               <label>Prix unitaire (€)</label>
               <input type="number" [(ngModel)]="achatForm.prix" step="0.01" min="0"
-                     (ngModelChange)="onAchatFormChange()" />
+                     (ngModelChange)="onPrixChange()" />
             </div>
             <div class="modal-field">
-              <label>Quantité</label>
-              <input type="number" [(ngModel)]="achatForm.quantite" step="0.0001" min="0.0001"
-                     (ngModelChange)="onAchatFormChange()" />
+              <label>
+                Montant investi (€)
+                <span class="auto-hint">→ quantité auto</span>
+              </label>
+              <input type="number" [(ngModel)]="achatMontant" step="0.01" min="0"
+                     placeholder="ex : 120"
+                     (ngModelChange)="onMontantChange()" />
             </div>
+          </div>
+
+          <div class="modal-row">
+            <div class="modal-field">
+              <label>
+                Quantité
+                @if (achatMontant > 0 && achatForm.prix > 0) {
+                  <span class="auto-hint">= {{ achatMontant }} ÷ {{ achatForm.prix }}</span>
+                }
+              </label>
+              <input type="number" [(ngModel)]="achatForm.quantite" step="0.0001" min="0.0001"
+                     (ngModelChange)="onQuantiteChange()" />
+            </div>
+            <div class="modal-field"><!-- spacer --></div>
           </div>
 
           <div class="modal-row">

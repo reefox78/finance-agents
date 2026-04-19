@@ -107,20 +107,53 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   achatSubmitting = false;
   achatToast = '';
   achatError = '';
-  brokerList   = Object.keys(BROKERS_INFO);
+  brokerList    = Object.keys(BROKERS_INFO);
   selectedBroker = 'Trade Republic';
-  achatForm = { prix: 0, quantite: 1, frais: 0, notes: '' };
+  achatForm     = { prix: 0, quantite: 1, frais: 0, notes: '' };
+  achatMontant  = 0;   // "Montant investi" — pas envoyé à l'API
 
   ouvrirAchat(): void {
     const r = this.result();
     const prix = r?.tech?.prix_actuel ?? 0;
-    this.achatForm = { prix: Number(prix) || 0, quantite: 1, frais: 0, notes: '' };
+    this.achatForm   = { prix: Number(prix) || 0, quantite: 1, frais: 0, notes: '' };
+    this.achatMontant = Math.round((this.achatForm.prix * this.achatForm.quantite) * 100) / 100;
     this._recalcFrais();
     this.achatError = '';
     this.showAchatModal = true;
   }
 
-  fermerAchat(): void { this.showAchatModal = false; }
+  fermerAchat(): void {
+    this.showAchatModal = false;
+    this.achatMontant = 0;
+  }
+
+  /** Prix changé → si montant renseigné, recalcule la quantité */
+  onPrixChange(): void {
+    if (this.achatForm.prix > 0) {
+      if (this.achatMontant > 0) {
+        this.achatForm.quantite = Math.round((this.achatMontant / this.achatForm.prix) * 10000) / 10000;
+      } else {
+        this.achatMontant = Math.round(this.achatForm.prix * this.achatForm.quantite * 100) / 100;
+      }
+    }
+    this._recalcFrais();
+  }
+
+  /** Montant investi changé → recalcule la quantité */
+  onMontantChange(): void {
+    if (this.achatForm.prix > 0 && this.achatMontant > 0) {
+      this.achatForm.quantite = Math.round((this.achatMontant / this.achatForm.prix) * 10000) / 10000;
+    }
+    this._recalcFrais();
+  }
+
+  /** Quantité changée manuellement → met à jour le montant */
+  onQuantiteChange(): void {
+    if (this.achatForm.prix > 0 && this.achatForm.quantite > 0) {
+      this.achatMontant = Math.round(this.achatForm.prix * this.achatForm.quantite * 100) / 100;
+    }
+    this._recalcFrais();
+  }
 
   onAchatFormChange(): void { this._recalcFrais(); }
 
