@@ -337,6 +337,7 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   }
 
   private _buildCharts(c: any): void {
+    this._destroyCharts();   // always destroy before recreating to avoid canvas reuse errors
     const dates = c.dates as string[];
     const xy = (arr: (number | null)[]) =>
       arr.map((y, i) => ({ x: dates[i], y: y ?? undefined }));
