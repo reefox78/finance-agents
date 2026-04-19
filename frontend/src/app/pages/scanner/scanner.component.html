@@ -1,22 +1,137 @@
 <div class="page">
-  <h2 class="page-title">📡 Scanner</h2>
 
+  <!-- ── Header ── -->
+  <div class="scanner-header">
+    <h2 class="page-title">📡 Scanner</h2>
+
+    <!-- Mode toggle -->
+    <div class="mode-toggle">
+      <button [class.active]="mode === 'watchlist'" (click)="mode = 'watchlist'">
+        📋 Watchlist
+      </button>
+      <button [class.active]="mode === 'custom'" (click)="mode = 'custom'">
+        ✏️ Ma sélection
+        @if (basket.length > 0) { <span class="basket-badge">{{ basket.length }}</span> }
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Barre de lancement ── -->
   <div class="controls">
-    <select [(ngModel)]="categorie">
-      <option value="us_stocks">US Stocks</option>
-      <option value="eu_stocks">EU Stocks</option>
-      <option value="crypto">Crypto</option>
-      <option value="forex">Forex</option>
-    </select>
+    @if (mode === 'watchlist') {
+      <select [(ngModel)]="categorie">
+        <option value="us_stocks">US Stocks</option>
+        <option value="eu_stocks">EU Stocks</option>
+        <option value="crypto">Crypto</option>
+        <option value="forex">Forex</option>
+      </select>
+    } @else {
+      <span class="basket-info">
+        @if (basket.length === 0) { <span class="muted">Aucun ticker sélectionné</span> }
+        @else { <strong>{{ basket.length }}</strong> ticker(s) dans le panier }
+      </span>
+    }
     <label class="score-filter">
       Score min :
       <input type="number" [(ngModel)]="minScore" (ngModelChange)="applyFilter()" step="0.05" min="-1" max="1" />
     </label>
-    <button (click)="startScan()" [disabled]="loading()">
-      {{ loading() ? 'Scan en cours…' : 'Lancer le scan' }}
+    <button class="btn-scan" (click)="startScan()" [disabled]="!canScan">
+      {{ loading() ? 'Scan en cours…' : '▶ Lancer le scan' }}
     </button>
   </div>
 
+  <!-- ── Panneau sélection custom ── -->
+  @if (mode === 'custom') {
+    <div class="custom-panel">
+
+      <!-- Colonne gauche : checklist -->
+      <div class="checklist-col">
+        <div class="checklist-header">
+          <input class="search-input" type="text" [(ngModel)]="tickerSearch"
+                 placeholder="🔍 Rechercher un ticker…" />
+        </div>
+
+        <div class="checklist-groups">
+          @for (group of filteredGroups; track group.label) {
+            <div class="ticker-group">
+              <div class="group-header">
+                <span class="group-label">{{ group.label }}</span>
+                <div class="group-actions">
+                  <button class="btn-grp" (click)="selectAll(group.tickers)">Tout</button>
+                  <button class="btn-grp" (click)="deselectAll(group.tickers)">Aucun</button>
+                </div>
+              </div>
+              @for (t of group.tickers; track t) {
+                <label class="ticker-row" [class.checked]="selectedTickers.has(t)">
+                  <input type="checkbox" [checked]="selectedTickers.has(t)"
+                         (change)="toggleTicker(t)" />
+                  <span class="t-symbol">{{ t }}</span>
+                  @if (tickerName(t)) {
+                    <span class="t-name">{{ tickerName(t) }}</span>
+                  }
+                </label>
+              }
+            </div>
+          }
+
+          @if (filteredGroups.length === 0) {
+            <div class="muted" style="padding: 1rem; text-align:center;">Aucun résultat</div>
+          }
+        </div>
+
+        <!-- Bouton ajouter sélection au panier -->
+        <div class="add-to-basket">
+          <button class="btn-add-basket"
+                  [disabled]="selectedTickers.size === 0"
+                  (click)="addToBasket()">
+            + Ajouter {{ selectedTickers.size > 0 ? selectedTickers.size + ' ticker(s)' : '' }} au panier →
+          </button>
+        </div>
+
+        <!-- Ajout ticker custom -->
+        <div class="custom-ticker-row">
+          <input class="fa-input custom-ticker-input" type="text"
+                 [(ngModel)]="customInput"
+                 placeholder="Ticker manuel : TSMC, BABA…"
+                 (keyup.enter)="addCustomTicker()" />
+          <button class="btn-grp btn-add-custom" (click)="addCustomTicker()">+</button>
+        </div>
+      </div>
+
+      <!-- Colonne droite : panier -->
+      <div class="basket-col">
+        <div class="basket-header">
+          <span class="basket-title">🧺 Panier <span class="basket-count">{{ basket.length }}</span></span>
+          @if (basket.length > 0) {
+            <button class="btn-grp btn-clear" (click)="clearBasket()">Vider</button>
+          }
+        </div>
+
+        @if (basket.length === 0) {
+          <div class="basket-empty">
+            <div class="basket-empty-icon">🗂️</div>
+            <div>Coche des tickers à gauche<br>puis clique <em>Ajouter au panier</em></div>
+          </div>
+        } @else {
+          <div class="basket-list">
+            @for (t of basket; track t; let i = $index) {
+              <div class="basket-item">
+                <button class="btn-move" (click)="moveUp(i)" [disabled]="i === 0" title="Monter">↑</button>
+                <span class="bi-symbol">{{ t }}</span>
+                @if (tickerName(t)) {
+                  <span class="bi-name">{{ tickerName(t) }}</span>
+                }
+                <button class="btn-remove" (click)="removeFromBasket(t)" title="Supprimer">✕</button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+    </div>
+  }
+
+  <!-- ── Overlay loading ── -->
   <app-loading-overlay
     [active]="loading()"
     label="SCAN EN COURS…"
@@ -37,8 +152,8 @@
     <div class="error-box">{{ error() }}</div>
   }
 
+  <!-- ── Résultats ── -->
   @if (scanDone()) {
-    <!-- Résumé du scan -->
     <div class="scan-summary">
       <span class="summary-total">{{ scanTotal() }} analysés</span>
       <span class="summary-sep">·</span>
@@ -46,14 +161,13 @@
       @if (scanErrors().length > 0) {
         <span class="summary-sep">·</span>
         <span class="summary-err" (click)="showErrors = !showErrors" style="cursor:pointer">
-          {{ scanErrors().length }} erreurs {{ showErrors ? '▲' : '▼' }}
+          {{ scanErrors().length }} erreur(s) {{ showErrors ? '▲' : '▼' }}
         </span>
       }
       <span class="summary-sep">·</span>
       <span class="summary-match">{{ results().length }} affichés (score ≥ {{ minScore }})</span>
     </div>
 
-    <!-- Détail des erreurs (masqué par défaut) -->
     @if (showErrors && scanErrors().length > 0) {
       <div class="errors-panel">
         @for (e of scanErrors(); track e.ticker) {
@@ -80,6 +194,7 @@
             <tr class="result-row" (click)="goToAnalyse(r.ticker)" title="Voir l'analyse de {{ r.ticker }}">
               <td class="ticker">
                 {{ r.ticker }}
+                @if (tickerName(r.ticker)) { <span class="t-name-small">{{ tickerName(r.ticker) }}</span> }
                 <span class="detail-hint">→ détail</span>
               </td>
               <td class="score" [style.color]="scoreColor(r.score)">{{ r.score | number:'1.4-4' }}</td>
@@ -98,24 +213,17 @@
         <div class="empty-icon">🔍</div>
         @if (allResults().length === 0 && scanErrors().length > 0) {
           <div class="empty-title">Tous les actifs ont échoué</div>
-          <div class="empty-sub">
-            {{ scanErrors().length }} erreurs sur {{ scanTotal() }} actifs.<br>
-            Clique sur "erreurs" ci-dessus pour voir le détail.
-          </div>
+          <div class="empty-sub">Clique sur "erreur(s)" ci-dessus pour voir le détail.</div>
         } @else if (allResults().length === 0) {
           <div class="empty-title">Aucun résultat</div>
           <div class="empty-sub">Le scan n'a retourné aucune donnée.</div>
         } @else {
           <div class="empty-title">Aucun actif ne correspond au filtre</div>
-          <div class="empty-sub">
-            {{ allResults().length }} actifs analysés · tous ont un score &lt; {{ minScore }}<br>
-            Baisse le score minimum pour voir plus de résultats.
-          </div>
-          <button class="btn-show-all" (click)="minScore = -1; applyFilter()">
-            Afficher tous les résultats
-          </button>
+          <div class="empty-sub">{{ allResults().length }} analysés · tous ont un score &lt; {{ minScore }}</div>
+          <button class="btn-show-all" (click)="minScore = -1; applyFilter()">Afficher tout</button>
         }
       </div>
     }
   }
+
 </div>

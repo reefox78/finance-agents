@@ -1,10 +1,11 @@
-import { Component, OnDestroy, signal } from '@angular/core';
+import { Component, OnDestroy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Router } from '@angular/router';
 import { LoadingOverlayComponent } from '../../shared/components/loading-overlay/loading-overlay.component';
+import { WATCHLIST, TICKER_NAMES } from '../../core/constants/watchlist';
 
 interface ScanResult {
   ticker:    string;
@@ -27,9 +28,90 @@ interface ScanError {
   styleUrl: './scanner.component.scss',
 })
 export class ScannerComponent implements OnDestroy {
-  categorie = 'us_stocks';
-  minScore  = 0;
 
+  // ── Mode ──────────────────────────────────────────────────────────────────
+  mode: 'watchlist' | 'custom' = 'watchlist';
+
+  // ── Mode watchlist ────────────────────────────────────────────────────────
+  categorie = 'us_stocks';
+  minScore  = -1;   // défaut -1 = tout afficher
+
+  // ── Mode custom — sélection ───────────────────────────────────────────────
+  tickerSearch    = '';
+  selectedTickers = new Set<string>();   // tickers cochés dans la checklist
+  basket: string[] = [];                 // panier validé (ordre de la sélection)
+  customInput     = '';                  // saisie ticker manuel
+
+  /** Groupes de la watchlist pour la checklist */
+  readonly watchlistGroups = Object.entries(WATCHLIST).map(([label, tickers]) => ({
+    label,
+    tickers,
+  }));
+
+  get filteredGroups() {
+    const q = this.tickerSearch.trim().toLowerCase();
+    if (!q) return this.watchlistGroups;
+    return this.watchlistGroups.map(g => ({
+      label: g.label,
+      tickers: g.tickers.filter(t =>
+        t.toLowerCase().includes(q) ||
+        (TICKER_NAMES[t] ?? '').toLowerCase().includes(q)
+      ),
+    })).filter(g => g.tickers.length > 0);
+  }
+
+  tickerName(t: string): string {
+    return TICKER_NAMES[t] ?? '';
+  }
+
+  toggleTicker(t: string): void {
+    if (this.selectedTickers.has(t)) {
+      this.selectedTickers.delete(t);
+    } else {
+      this.selectedTickers.add(t);
+    }
+  }
+
+  selectAll(tickers: string[]): void {
+    tickers.forEach(t => this.selectedTickers.add(t));
+  }
+
+  deselectAll(tickers: string[]): void {
+    tickers.forEach(t => this.selectedTickers.delete(t));
+  }
+
+  allSelected(tickers: string[]): boolean {
+    return tickers.length > 0 && tickers.every(t => this.selectedTickers.has(t));
+  }
+
+  addToBasket(): void {
+    // Ajoute les tickers cochés qui ne sont pas déjà dans le panier
+    for (const t of this.selectedTickers) {
+      if (!this.basket.includes(t)) this.basket.push(t);
+    }
+    this.selectedTickers.clear();
+  }
+
+  addCustomTicker(): void {
+    const t = this.customInput.trim().toUpperCase();
+    if (!t) return;
+    if (!this.basket.includes(t)) this.basket.push(t);
+    this.customInput = '';
+  }
+
+  removeFromBasket(t: string): void {
+    this.basket = this.basket.filter(x => x !== t);
+  }
+
+  clearBasket(): void { this.basket = []; }
+
+  moveUp(i: number): void {
+    if (i === 0) return;
+    [this.basket[i - 1], this.basket[i]] = [this.basket[i], this.basket[i - 1]];
+    this.basket = [...this.basket];
+  }
+
+  // ── Scan state ────────────────────────────────────────────────────────────
   loading      = signal(false);
   progress     = signal<{ current: number; total: number; ticker: string } | null>(null);
   results      = signal<ScanResult[]>([]);
@@ -50,7 +132,14 @@ export class ScannerComponent implements OnDestroy {
     this.router.navigate(['/dashboard/analyse'], { queryParams: { ticker } });
   }
 
+  get canScan(): boolean {
+    if (this.loading()) return false;
+    if (this.mode === 'custom') return this.basket.length > 0;
+    return true;
+  }
+
   startScan(): void {
+    if (!this.canScan) return;
     this.error.set('');
     this.overlayError.set('');
     this.results.set([]);
@@ -63,25 +152,29 @@ export class ScannerComponent implements OnDestroy {
     this._done = false;
 
     const token = this.auth.token ?? '';
-    // min_score=-1 → on récupère tout côté backend, le filtre se fait dans applyFilter()
-    const base  = this.api.scannerStreamUrl(this.categorie || undefined, undefined, -1);
-    const url   = `${base}&token=${encodeURIComponent(token)}`;
+    let base: string;
 
+    if (this.mode === 'custom') {
+      // On passe la liste de tickers du panier via le paramètre tickers
+      base = this.api.scannerStreamUrl(undefined, this.basket.join(','), -1);
+    } else {
+      base = this.api.scannerStreamUrl(this.categorie || undefined, undefined, -1);
+    }
+
+    const url = `${base}&token=${encodeURIComponent(token)}`;
     this.es?.close();
     this.es = new EventSource(url);
 
     this.es.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
-
         if (msg.type === 'progress') {
           this.progress.set({ current: msg.current, total: msg.total, ticker: msg.ticker });
           this.scanTotal.set(msg.total);
-
         } else if (msg.type === 'done') {
           this._done = true;
-          const all: ScanResult[]  = msg.resultats ?? [];
-          const errs: ScanError[]  = msg.erreurs   ?? [];
+          const all: ScanResult[] = msg.resultats ?? [];
+          const errs: ScanError[] = msg.erreurs   ?? [];
           this.allResults.set(all);
           this.scanErrors.set(errs);
           this.results.set(all.filter(r => r.score >= this.minScore));
@@ -97,7 +190,6 @@ export class ScannerComponent implements OnDestroy {
     };
 
     this.es.onerror = () => {
-      // La fermeture normale du stream déclenche onerror → l'ignorer si done reçu
       if (this._done) return;
       this.overlayError.set('Connexion interrompue. Réessaie.');
       this.loading.set(false);
@@ -124,7 +216,5 @@ export class ScannerComponent implements OnDestroy {
     return '#ffd740';
   }
 
-  ngOnDestroy(): void {
-    this.es?.close();
-  }
+  ngOnDestroy(): void { this.es?.close(); }
 }
