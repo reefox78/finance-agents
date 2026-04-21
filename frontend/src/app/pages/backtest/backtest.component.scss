@@ -114,8 +114,9 @@
 }
 .hint-dot {
   width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-  &.multi { background: #00c8ff; box-shadow: 0 0 6px rgba(0,200,255,0.6); }
-  &.tech  { background: #f1c40f; box-shadow: 0 0 6px rgba(241,196,15,0.6); }
+  &.agents { background: #2ecc71; box-shadow: 0 0 6px rgba(46,204,113,0.6); }
+  &.multi  { background: #00c8ff; box-shadow: 0 0 6px rgba(0,200,255,0.6); }
+  &.tech   { background: #f1c40f; box-shadow: 0 0 6px rgba(241,196,15,0.6); }
 }
 
 // ── CTA ───────────────────────────────────────────────────────────────────────
@@ -185,8 +186,9 @@
   color: var(--text-secondary); border-radius: 6px;
   padding: 4px 12px; font-size: 11px; font-weight: 600;
 }
-.ticker-badge { color: var(--primary); border-color: rgba(0,200,255,0.3); font-size: 13px; }
-.mode-badge   { text-transform: none; }
+.ticker-badge  { color: var(--primary); border-color: rgba(0,200,255,0.3); font-size: 13px; }
+.mode-badge    { text-transform: none; }
+.agents-badge  { color: #7ab89a; border-color: rgba(46,204,113,0.2); background: rgba(46,204,113,0.05); max-width: 100%; white-space: normal; }
 
 // ── Charts ────────────────────────────────────────────────────────────────────
 .chart-card { padding: 1.1rem 1.25rem 0.85rem; }

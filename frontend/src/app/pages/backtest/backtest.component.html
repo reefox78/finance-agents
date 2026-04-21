@@ -12,7 +12,7 @@
       <div class="bt-icon">📊</div>
       <div>
         <div class="bt-title">Backtest historique</div>
-        <div class="bt-subtitle">Simulez une stratégie sur des données passées</div>
+        <div class="bt-subtitle">Rejoue les vrais agents sur données passées — compare vs Buy &amp; Hold</div>
       </div>
     </div>
   </div>
@@ -59,31 +59,27 @@
 
     </div>
 
-    <!-- Mode -->
+    <!-- Mode — cartes dynamiques -->
     <div class="mode-section">
       <label class="field-label"><span class="field-icon">⚙️</span> Mode de stratégie</label>
       <div class="mode-cards">
-        <button class="mode-card" [class.active]="mode==='multi'" (click)="mode='multi'">
-          <div class="mode-card-icon">🤖</div>
-          <div class="mode-card-body">
-            <div class="mode-card-title">Multi-agents</div>
-            <div class="mode-card-desc">Technique + Macro FRED + Risque</div>
-          </div>
-          <div class="mode-card-check">✓</div>
-        </button>
-        <button class="mode-card" [class.active]="mode==='technique'" (click)="mode='technique'">
-          <div class="mode-card-icon">📈</div>
-          <div class="mode-card-body">
-            <div class="mode-card-title">Technique seul</div>
-            <div class="mode-card-desc">SMA · RSI · MACD · Bollinger</div>
-          </div>
-          <div class="mode-card-check">✓</div>
-        </button>
+        @for (m of modes; track m.value) {
+          <button class="mode-card" [class.active]="mode === m.value" (click)="mode = m.value">
+            <div class="mode-card-body">
+              <div class="mode-card-title">{{ m.label }}</div>
+              <div class="mode-card-desc">{{ m.desc }}</div>
+            </div>
+            <div class="mode-card-check">✓</div>
+          </button>
+        }
       </div>
       <div class="mode-hint">
-        @if (mode==='multi') {
+        @if (mode === 'agents') {
+          <span class="hint-dot agents"></span>
+          Mode <b>Agents complets</b> : réplique fidèle des 6 agents historicisables. Même formule et poids que le vrai scoring. Résultat comparable au live. 30–90&nbsp;s.
+        } @else if (mode === 'multi') {
           <span class="hint-dot multi"></span>
-          Mode <b>Multi-agents</b> : combine technique (25&nbsp;%), macro FRED (10&nbsp;%) et risque. Plus réaliste, 15–60&nbsp;s.
+          Mode <b>Multi-agents basique</b> : technique (25&nbsp;%) + macro FRED (10&nbsp;%) + risque rolling. 15–60&nbsp;s.
         } @else {
           <span class="hint-dot tech"></span>
           Mode <b>Technique seul</b> : signaux SMA, RSI, MACD et Bollinger Bands. Rapide.
@@ -109,7 +105,7 @@
   <!-- ── Résultats ── -->
   <div [class.hidden]="!result()">
 
-    <!-- Metrics -->
+    <!-- Metrics principales -->
     <div class="metrics-row">
       <div class="metric-card">
         <div class="metric-label">Capital départ</div>
@@ -120,9 +116,21 @@
         <div class="metric-value" [class]="rendClass()">{{ result()?.valeur_fin | number:'1.0-0' }}&nbsp;€</div>
       </div>
       <div class="metric-card highlight">
-        <div class="metric-label">Rendement</div>
+        <div class="metric-label">Rendement stratégie</div>
         <div class="metric-value rend" [class]="rendClass()">
           {{ (result()?.rendement ?? 0) >= 0 ? '+' : '' }}{{ result()?.rendement | number:'1.2-2' }}&nbsp;%
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Buy &amp; Hold</div>
+        <div class="metric-value" [class]="pnlClass(result()?.bh_rendement ?? 0)">
+          {{ (result()?.bh_rendement ?? 0) >= 0 ? '+' : '' }}{{ result()?.bh_rendement | number:'1.2-2' }}&nbsp;%
+        </div>
+      </div>
+      <div class="metric-card" [class.highlight]="(result()?.alpha ?? 0) > 0">
+        <div class="metric-label">Alpha (vs B&amp;H)</div>
+        <div class="metric-value" [class]="pnlClass(result()?.alpha ?? 0)">
+          {{ (result()?.alpha ?? 0) >= 0 ? '+' : '' }}{{ result()?.alpha | number:'1.2-2' }}&nbsp;pp
         </div>
       </div>
       <div class="metric-card">
@@ -153,7 +161,16 @@
     <div class="result-meta">
       <span class="meta-badge ticker-badge">{{ result()?.ticker }}</span>
       <span class="meta-badge">📅 {{ result()?.debut }} → {{ result()?.fin }}</span>
-      <span class="meta-badge mode-badge">{{ result()?.mode === 'multi' ? '🤖 Multi-agents' : '📈 Technique' }}</span>
+      <span class="meta-badge mode-badge">
+        @if (result()?.mode === 'agents')    { 🤖 Agents complets }
+        @else if (result()?.mode === 'multi') { 📊 Multi-agents }
+        @else { 📈 Technique }
+      </span>
+      @if (result()?.agents_used?.length > 0) {
+        <span class="meta-badge agents-badge">
+          Agents : {{ result()?.agents_used?.join(' · ') }}
+        </span>
+      }
     </div>
 
     <!-- Chart 1 : Prix + signaux -->
@@ -170,10 +187,11 @@
       </div>
     </div>
 
-    <!-- Chart 2 : Courbe de capital -->
+    <!-- Chart 2 : Courbe de capital + B&H -->
     <div class="card chart-card">
       <div class="chart-header">
         <span class="chart-title">Courbe de capital</span>
+        <span class="chart-hint">─── Stratégie &nbsp;&nbsp; ╌╌╌ Buy &amp; Hold</span>
       </div>
       <div class="chart-wrap medium"><canvas #equityCanvas></canvas></div>
     </div>

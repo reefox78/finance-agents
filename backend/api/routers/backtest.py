@@ -46,8 +46,8 @@ class BacktestRequest(BaseModel):
     @field_validator("mode")
     @classmethod
     def _check_mode(cls, v: str) -> str:
-        if v not in ("multi", "technique"):
-            raise ValueError("mode doit être 'multi' ou 'technique'")
+        if v not in ("multi", "technique", "agents"):
+            raise ValueError("mode doit être 'multi', 'technique' ou 'agents'")
         return v
 
     @field_validator("capital")
@@ -116,10 +116,14 @@ def run(req: BacktestRequest, current_user: CurrentUser):
     max_perte = min((t.get("pnlnet", 0) for t in trades), default=0)
     pnl_total = sum(t.get("pnlnet", 0) for t in trades)
 
-    result["nb_trades"] = nb_trades
-    result["win_rate"]  = win_rate
-    result["max_gain"]  = round(max_gain, 2)
-    result["max_perte"] = round(max_perte, 2)
-    result["pnl_total"] = round(pnl_total, 2)
+    result["nb_trades"]   = nb_trades
+    result["win_rate"]    = win_rate
+    result["max_gain"]    = round(max_gain, 2)
+    result["max_perte"]   = round(max_perte, 2)
+    result["pnl_total"]   = round(pnl_total, 2)
+
+    # Alpha vs benchmark buy & hold
+    bh_rend = result.get("bh_rendement", 0.0)
+    result["alpha"] = round(result.get("rendement", 0.0) - bh_rend, 2)
 
     return _jsonify(result)

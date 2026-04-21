@@ -55,7 +55,13 @@ export class BacktestComponent implements OnDestroy {
   debut   = '2023-01-01';
   fin     = '2024-12-31';
   capital = 10000;
-  mode    = 'multi';
+  mode    = 'agents';
+
+  readonly modes = [
+    { value: 'agents',    label: '🤖 Agents complets',           desc: 'Technique + Macro FRED + Risque + Momentum 5j + Secteur + Earnings Surprise' },
+    { value: 'multi',     label: '📊 Multi-agents (basique)',     desc: 'Technique + Macro FRED + Risque rolling' },
+    { value: 'technique', label: '📈 Technique seul',             desc: 'RSI + MACD + Bollinger + SMA uniquement' },
+  ];
 
   loading      = signal(false);
   result       = signal<any>(null);
@@ -178,13 +184,12 @@ export class BacktestComponent implements OnDestroy {
       this._charts.push(c1);
     }
 
-    // ── Chart 2 : Courbe de capital avec marqueurs alignés ───────────────
+    // ── Chart 2 : Courbe de capital + benchmark Buy & Hold ──────────────
     if (equity.length > 1) {
-      // Equity utilise les indices — pas de dates scatter mal alignées
-      const eLabels = equity.map((p: any) => p.date);
-      const eValues = equity.map((p: any) => ({ x: p.date, y: p.valeur }));
+      const eValues   = equity.map((p: any)     => ({ x: p.date, y: p.valeur }));
+      const benchmark: any[] = r.benchmark ?? [];
+      const bhValues  = benchmark.map((p: any)  => ({ x: p.date, y: p.valeur }));
 
-      // Buy = equity[i] (capital avant le trade i), Sell = equity[i+1]
       const buyEq  = trades.map((t: any, i: number) => ({
         x: t.date_achat,
         y: equity[i]?.valeur ?? equity[0].valeur,
@@ -199,14 +204,25 @@ export class BacktestComponent implements OnDestroy {
         data: {
           datasets: [
             {
-              label: 'Capital (€)',
+              label: 'Stratégie',
               data: eValues,
               borderColor: lineColor,
-              backgroundColor: positive ? 'rgba(46,204,113,0.10)' : 'rgba(231,76,60,0.10)',
+              backgroundColor: positive ? 'rgba(46,204,113,0.08)' : 'rgba(231,76,60,0.08)',
               fill: true, borderWidth: 2,
               pointRadius: 5, pointBackgroundColor: lineColor,
               tension: 0.3, order: 3,
             },
+            ...(bhValues.length > 1 ? [{
+              label: 'Buy & Hold',
+              data: bhValues,
+              borderColor: 'rgba(150,150,200,0.55)',
+              backgroundColor: 'transparent',
+              borderWidth: 1.5,
+              borderDash: [5, 4],
+              pointRadius: 0,
+              tension: 0.1,
+              order: 4,
+            }] : []),
             {
               label: 'Achat ▲',
               data: buyEq,
