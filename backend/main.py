@@ -51,7 +51,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routers import auth, analyse, scanner, portfolio, alerts, admin, logs, backtest, calendar
+from api.routers import auth, analyse, scanner, portfolio, alerts, admin, logs, backtest, calendar, dashboard
 from db.alert_rules import init_table as _init_alert_rules
 _init_alert_rules()
 
@@ -164,7 +164,8 @@ app.include_router(alerts.router,    prefix="/api/alerts",    tags=["alerts"])
 app.include_router(admin.router,     prefix="/api/admin",     tags=["admin"])
 app.include_router(logs.router,      prefix="/api/logs",      tags=["logs"])
 app.include_router(backtest.router,  prefix="/api/backtest",  tags=["backtest"])
-app.include_router(calendar.router,  prefix="/api/calendar",  tags=["calendar"])
+app.include_router(calendar.router,   prefix="/api/calendar",   tags=["calendar"])
+app.include_router(dashboard.router,  prefix="/api/dashboard",  tags=["dashboard"])
 if _calibration_ok and _calibration_mod:
     app.include_router(_calibration_mod.router, prefix="/api/calibration", tags=["calibration"])
 

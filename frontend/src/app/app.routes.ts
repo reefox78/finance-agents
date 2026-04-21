@@ -12,7 +12,11 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/dashboard/dashboard.component').then(m => m.DashboardComponent),
     canActivate: [authGuard],
     children: [
-      { path: '', redirectTo: 'analyse', pathMatch: 'full' },
+      { path: '', redirectTo: 'home', pathMatch: 'full' },
+      {
+        path: 'home',
+        loadComponent: () => import('./pages/home/home.component').then(m => m.HomeComponent),
+      },
       {
         path: 'analyse',
         loadComponent: () => import('./pages/analyse/analyse.component').then(m => m.AnalyseComponent),

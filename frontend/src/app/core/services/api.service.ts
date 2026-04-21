@@ -132,6 +132,12 @@ export class ApiService {
     return this.http.get<any>(`${this.base}/calibration/debug`);
   }
 
+  // ── Dashboard ─────────────────────────────────────────────────────────────
+
+  getDashboardSummary(): Observable<any> {
+    return this.http.get<any>(`${this.base}/dashboard/summary`);
+  }
+
   runCalibration(): Observable<any> {
     return this.http.post<any>(`${this.base}/calibration/run`, {});
   }

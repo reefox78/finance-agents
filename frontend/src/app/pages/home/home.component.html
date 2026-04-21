@@ -1,0 +1,178 @@
+<div class="home-page">
+
+  @if (loading()) {
+    <div class="home-loading">
+      <div class="loader-ring"></div>
+      <span>Chargement du dashboard…</span>
+    </div>
+  }
+
+  @if (!loading() && summary(); as s) {
+
+    <!-- ── Stats globales ── -->
+    <div class="stats-bar">
+      <div class="stat-chip">
+        <span class="stat-val">{{ s.stats.total_analyses }}</span>
+        <span class="stat-lbl">analyses totales</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-val">{{ s.stats.tickers_suivis }}</span>
+        <span class="stat-lbl">tickers (7j)</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-val">{{ s.stats.positions }}</span>
+        <span class="stat-lbl">positions</span>
+      </div>
+      @if (s.stats.last_ticker) {
+        <div class="stat-chip stat-last">
+          <span class="stat-lbl">dernière analyse</span>
+          <span class="stat-val">{{ s.stats.last_ticker }}</span>
+          <span class="stat-lbl">il y a {{ timeAgo(s.stats.last_ts) }}</span>
+        </div>
+      }
+    </div>
+
+    @if (!hasData) {
+      <!-- État vide -->
+      <div class="empty-home">
+        <div class="empty-icon">🚀</div>
+        <div class="empty-title">Bienvenue sur Finance Agents</div>
+        <div class="empty-sub">Lance des analyses pour alimenter le dashboard</div>
+        <div class="empty-actions">
+          <button class="btn-primary" (click)="goAnalyse('AAPL')">🔍 Analyser un ticker</button>
+          <button class="btn-secondary" (click)="goScanner()">📡 Lancer un scan</button>
+        </div>
+      </div>
+    } @else {
+
+      <div class="home-grid">
+
+        <!-- ── Opportunités ACHETER ── -->
+        <div class="home-card">
+          <div class="card-header buy-header">
+            <span class="card-title">🟢 Top ACHETER</span>
+            <span class="card-sub">7 derniers jours</span>
+          </div>
+          @if (s.opportunites.acheter.length === 0) {
+            <div class="card-empty">Aucun signal ACHETER récent</div>
+          } @else {
+            <div class="opp-list">
+              @for (o of s.opportunites.acheter; track o.ticker) {
+                <div class="opp-row" (click)="goAnalyse(o.ticker)">
+                  <span class="opp-ticker">{{ o.ticker }}</span>
+                  <span class="opp-score" [style.color]="scoreColor(o.score)">
+                    {{ o.score | number:'1.3-3' }}
+                  </span>
+                  <span class="opp-badge buy">ACHETER</span>
+                  <span class="opp-age">{{ timeAgo(o.ts) }}</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- ── Opportunités VENDRE ── -->
+        <div class="home-card">
+          <div class="card-header sell-header">
+            <span class="card-title">🔴 Top VENDRE</span>
+            <span class="card-sub">7 derniers jours</span>
+          </div>
+          @if (s.opportunites.vendre.length === 0) {
+            <div class="card-empty">Aucun signal VENDRE récent</div>
+          } @else {
+            <div class="opp-list">
+              @for (o of s.opportunites.vendre; track o.ticker) {
+                <div class="opp-row" (click)="goAnalyse(o.ticker)">
+                  <span class="opp-ticker">{{ o.ticker }}</span>
+                  <span class="opp-score" [style.color]="scoreColor(o.score)">
+                    {{ o.score | number:'1.3-3' }}
+                  </span>
+                  <span class="opp-badge sell">VENDRE</span>
+                  <span class="opp-age">{{ timeAgo(o.ts) }}</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- ── Portfolio snapshot ── -->
+        @if (s.portfolio.length > 0) {
+          <div class="home-card portfolio-card">
+            <div class="card-header">
+              <span class="card-title">💼 Portefeuille</span>
+              <button class="card-link" (click)="goPortfolio()">Voir tout →</button>
+            </div>
+            <div class="opp-list">
+              @for (p of s.portfolio; track p.ticker) {
+                <div class="opp-row" (click)="goAnalyse(p.ticker)">
+                  <span class="opp-ticker">{{ p.ticker }}</span>
+                  <span class="opp-qty">{{ p.quantite | number:'1.0-4' }} ×
+                    {{ p.prix_moyen | number:'1.2-2' }}€</span>
+                  @if (p.last_decision) {
+                    <span class="opp-badge" [class]="decisionClass(p.last_decision)">
+                      {{ p.last_decision }}
+                    </span>
+                    <span class="opp-score" [style.color]="scoreColor(p.last_score)">
+                      {{ p.last_score | number:'1.3-3' }}
+                    </span>
+                  } @else {
+                    <span class="opp-no-score">Pas encore analysé</span>
+                  }
+                  @if (p.last_ts) {
+                    <span class="opp-age">{{ timeAgo(p.last_ts) }}</span>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- ── Calendrier du jour ── -->
+        <div class="home-card calendar-card">
+          <div class="card-header">
+            <span class="card-title">📅 Macro aujourd'hui</span>
+            <a class="card-link" routerLink="/dashboard/calendar">Calendrier →</a>
+          </div>
+          @if (calendar().length === 0) {
+            <div class="card-empty">Aucun événement macro aujourd'hui</div>
+          } @else {
+            <div class="cal-list">
+              @for (e of calendar().slice(0, 6); track e.title) {
+                <div class="cal-row" [class]="'cal-' + impactClass(e.impact)">
+                  <span class="cal-time">{{ e.time }}</span>
+                  <span class="cal-flag">{{ e.flag }}</span>
+                  <span class="cal-title">{{ e.title }}</span>
+                  <span class="cal-impact" [class]="'imp-' + impactClass(e.impact)">
+                    {{ e.impact }}
+                  </span>
+                </div>
+              }
+              @if (calendar().length > 6) {
+                <div class="cal-more">+{{ calendar().length - 6 }} autres événements</div>
+              }
+            </div>
+          }
+        </div>
+
+      </div>
+
+      <!-- ── Actions rapides ── -->
+      <div class="quick-actions">
+        <button class="qa-btn" (click)="goAnalyse('')">
+          <span class="qa-icon">🔍</span>
+          <span class="qa-label">Analyser</span>
+        </button>
+        <button class="qa-btn" (click)="goScanner()">
+          <span class="qa-icon">📡</span>
+          <span class="qa-label">Scanner</span>
+        </button>
+        <button class="qa-btn" (click)="goPortfolio()">
+          <span class="qa-icon">💼</span>
+          <span class="qa-label">Portfolio</span>
+        </button>
+      </div>
+
+    }
+  }
+
+</div>

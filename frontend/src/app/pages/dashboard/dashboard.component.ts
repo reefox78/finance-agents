@@ -19,8 +19,9 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   canScrollR  = signal(false);
 
   tabs = [
+    { label: 'Accueil',      path: 'home',        icon: '🏠' },
     { label: 'Analyse',      path: 'analyse',     icon: '🔍' },
-    { label: 'Scanner',      path: 'scanner',     icon: '📋' },
+    { label: 'Scanner',      path: 'scanner',     icon: '📡' },
     { label: 'Portefeuille', path: 'portfolio',   icon: '💼' },
     { label: 'Calendrier',   path: 'calendar',    icon: '📅' },
     { label: 'Backtest',     path: 'backtest',    icon: '📊' },
