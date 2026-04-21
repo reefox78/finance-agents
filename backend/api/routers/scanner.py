@@ -1,10 +1,13 @@
 """
 Scanner router — scan watchlist or custom tickers (Server-Sent Events for progress).
+Exécution parallèle : jusqu'à CONCURRENCY tickers simultanément via asyncio + ThreadPoolExecutor.
 """
+import asyncio
 import json
 import logging
 import re
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -15,6 +18,12 @@ from orchestrator.orchestrator import run as orchestrer
 from api.deps import CurrentUser, decode_token
 
 logger = logging.getLogger(__name__)
+
+# ── Concurrence ──────────────────────────────────────────────────────────────
+# 5 tickers en parallèle — suffisant pour x5–8 speedup sans flood yfinance/FRED
+CONCURRENCY = 5
+# ThreadPoolExecutor module-level pour réutilisation entre requêtes
+_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="scanner")
 
 # ── CORS for SSE (StreamingResponse bypasses the global CORSMiddleware) ─────
 _ALLOWED_ORIGINS = {"http://localhost:4200", "http://localhost:80"}
@@ -53,43 +62,74 @@ async def _scan_stream(
     tickers: list[str],
     user_id: str,
 ) -> AsyncGenerator[str, None]:
-    """Génère des événements SSE — un par ticker analysé."""
+    """
+    Génère des événements SSE — analyses exécutées en parallèle.
+
+    Flux d'événements :
+      progress  → chaque fois qu'un ticker est terminé (current/total)
+      result    → résultat individuel (ok ou erreur)
+      done      → résultats triés + erreurs, fin du stream
+    """
     total     = len(tickers)
-    resultats = []
-    erreurs   = []
+    resultats: list[dict] = []
+    erreurs:   list[dict] = []
+    completed = 0
 
-    for i, ticker in enumerate(tickers):
-        # Événement de progression
-        yield f"data: {_dumps({'type': 'progress', 'current': i + 1, 'total': total, 'ticker': ticker})}\n\n"
+    loop = asyncio.get_running_loop()
+    sem  = asyncio.Semaphore(CONCURRENCY)
+    queue: asyncio.Queue = asyncio.Queue()
 
-        try:
-            r     = orchestrer(ticker, with_llm=False, user_id=user_id)
-            score = r["scoring"]["score_final"]
-            resultats.append({
-                "ticker":    ticker,
-                "score":     round(score, 4),
-                "decision":  r["scoring"]["decision"],
-                "technique": r["scoring"]["scores"].get("technique", 0),
-                "risque":    r["scoring"]["scores"].get("multiplicateur", 1),
-            })
-            logger.info("Scanner OK: %s score=%.4f", ticker, score)
-            yield f"data: {_dumps({'type': 'result', 'ticker': ticker, 'score': round(score, 4), 'ok': True})}\n\n"
+    # ── Worker asynchrone pour un ticker ────────────────────────────────────
+    async def _run_one(ticker: str) -> None:
+        async with sem:
+            try:
+                # orchestrer() est synchrone (I/O bloquant) → thread pool
+                r = await loop.run_in_executor(
+                    _executor,
+                    lambda: orchestrer(ticker, with_llm=False, user_id=user_id),
+                )
+                score = r["scoring"]["score_final"]
+                await queue.put(("ok", ticker, {
+                    "ticker":    ticker,
+                    "score":     round(float(score), 4),
+                    "decision":  r["scoring"]["decision"],
+                    "technique": float(r["scoring"]["scores"].get("technique", 0)),
+                    "risque":    float(r["scoring"]["scores"].get("multiplicateur", 1)),
+                }))
+            except Exception as exc:
+                # L'exception est capturée ici — garantit qu'un item arrive
+                # toujours dans la queue (pas de deadlock possible)
+                logger.warning("Scanner FAIL: %s → %s", ticker, exc)
+                await queue.put(("err", ticker, str(exc)))
 
-        except Exception as e:
-            err_msg = str(e)
-            logger.warning("Scanner FAIL: %s → %s", ticker, err_msg)
-            erreurs.append({"ticker": ticker, "error": err_msg})
-            yield f"data: {_dumps({'type': 'result', 'ticker': ticker, 'ok': False, 'error': err_msg})}\n\n"
+    # ── Lance toutes les tâches (le semaphore régule la concurrence) ─────────
+    tasks = [asyncio.create_task(_run_one(t)) for t in tickers]
 
-    # Événement final avec tous les résultats triés + erreurs
-    logger.info("Scanner done: %d OK, %d erreurs sur %d tickers", len(resultats), len(erreurs), total)
-    done_event = {
-        "type":      "done",
-        "resultats": sorted(resultats, key=lambda x: x["score"], reverse=True),
-        "erreurs":   erreurs,
-        "total":     total,
-    }
-    yield f"data: {_dumps(done_event)}\n\n"
+    # ── Collecte les résultats dans l'ordre d'arrivée ────────────────────────
+    for _ in range(total):
+        status, ticker, payload = await queue.get()
+        completed += 1
+
+        # Événement de progression — ticker qui vient de terminer
+        yield f"data: {_dumps({'type': 'progress', 'current': completed, 'total': total, 'ticker': ticker})}\n\n"
+
+        if status == "ok":
+            resultats.append(payload)
+            logger.info("Scanner OK: %s score=%.4f", ticker, payload["score"])
+            yield f"data: {_dumps({'type': 'result', 'ticker': ticker, 'score': payload['score'], 'ok': True})}\n\n"
+        else:
+            erreurs.append({"ticker": ticker, "error": payload})
+            yield f"data: {_dumps({'type': 'result', 'ticker': ticker, 'ok': False, 'error': payload})}\n\n"
+
+    # Attend la fin propre de toutes les tâches (normalement déjà terminées)
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    # ── Événement final ───────────────────────────────────────────────────────
+    logger.info(
+        "Scanner done: %d OK, %d erreurs sur %d tickers",
+        len(resultats), len(erreurs), total,
+    )
+    yield f"data: {_dumps({'type': 'done', 'resultats': sorted(resultats, key=lambda x: x['score'], reverse=True), 'erreurs': erreurs, 'total': total})}\n\n"
 
 
 @router.get("/stream")
@@ -102,8 +142,8 @@ async def scanner_stream(
 ):
     """
     Scan en streaming (SSE).
-    Chaque ticker envoie 2 événements : progress + result.
-    Un événement 'done' final contient tous les résultats triés.
+    Analyses parallèles (CONCURRENCY={CONCURRENCY} simultanés).
+    Événements : progress (par ticker terminé) + result + done final.
     """
     current_user = decode_token(token)
 
