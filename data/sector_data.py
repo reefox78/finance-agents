@@ -1,13 +1,13 @@
-import yfinance as yf
 import pandas as pd
+from data.market_data import get_ticker_raw_info, get_stock_data
 
 SECTEURS = {
-    "Technology":           ["MSFT", "GOOGL", "META", "NVDA", "AMZN"],
-    "Financial Services":   ["JPM", "BAC", "GS", "MS", "WFC"],
-    "Healthcare":           ["JNJ", "PFE", "UNH", "MRK", "ABT"],
-    "Energy":               ["XOM", "CVX", "COP", "SLB", "EOG"],
-    "Consumer Defensive":   ["MCD", "KO", "PG", "WMT", "COST"],
-    "Industrials":          ["BA", "CAT", "HON", "UPS", "GE"],
+    "Technology":             ["MSFT", "GOOGL", "META", "NVDA", "AMZN"],
+    "Financial Services":     ["JPM", "BAC", "GS", "MS", "WFC"],
+    "Healthcare":             ["JNJ", "PFE", "UNH", "MRK", "ABT"],
+    "Energy":                 ["XOM", "CVX", "COP", "SLB", "EOG"],
+    "Consumer Defensive":     ["MCD", "KO", "PG", "WMT", "COST"],
+    "Industrials":            ["BA", "CAT", "HON", "UPS", "GE"],
     "Communication Services": ["DIS", "NFLX", "T", "VZ", "CMCSA"],
 }
 
@@ -21,6 +21,8 @@ def get_sector_averages(secteur: str) -> dict:
     """
     Calcule les moyennes fondamentales et de risque
     des entreprises de référence du secteur.
+    Utilise le cache centralisé market_data (TTL 30 min + stale 24 h)
+    pour éviter d'envoyer 5-10 requêtes yfinance supplémentaires par analyse.
     """
     peers = get_sector_peers(secteur)
 
@@ -34,8 +36,7 @@ def get_sector_averages(secteur: str) -> dict:
 
     for ticker in peers:
         try:
-            stock = yf.Ticker(ticker)
-            info  = stock.info
+            info = get_ticker_raw_info(ticker)
 
             per = info.get("trailingPE")
             div = info.get("dividendYield")
@@ -48,11 +49,11 @@ def get_sector_averages(secteur: str) -> dict:
             if cap and cap > 0:
                 caps.append(cap)
 
-            # Volatilité sur 3 mois
-            hist = stock.history(period="3mo")
+            # Volatilité sur 3 mois — données OHLCV via cache
+            hist = get_stock_data(ticker, period="3mo")
             if not hist.empty:
-                rendements  = hist["Close"].pct_change().dropna()
-                volatilite  = rendements.std() * (252 ** 0.5) * 100
+                rendements = hist["Close"].pct_change().dropna()
+                volatilite = rendements.std() * (252 ** 0.5) * 100
                 volatilites.append(volatilite)
 
         except Exception:

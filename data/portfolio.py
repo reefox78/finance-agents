@@ -47,6 +47,7 @@ from pathlib import Path
 from datetime import datetime
 
 import yfinance as yf
+from data.market_data import get_ticker_raw_info, get_stock_data
 
 PORTFOLIO_PATH = Path("data/portfolio.json")
 
@@ -390,12 +391,12 @@ def lister_transactions(ticker: str) -> list[dict]:
 
 def _prix_actuel(ticker: str) -> float | None:
     try:
-        info = yf.Ticker(ticker).info
+        info = get_ticker_raw_info(ticker)
         prix = info.get("regularMarketPrice") or info.get("currentPrice")
         if prix:
             return float(prix)
-        hist = yf.Ticker(ticker).history(period="1d")
-        return float(hist["Close"].iloc[-1]) if not hist.empty else None
+        df = get_stock_data(ticker, period="1d")
+        return float(df["Close"].iloc[-1]) if not df.empty else None
     except Exception:
         return None
 

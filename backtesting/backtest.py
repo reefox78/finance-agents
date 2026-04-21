@@ -329,12 +329,13 @@ def _build_sector_lookup(ticker: str, debut: str, fin: str) -> dict:
     Pour chaque journée de trading, calcule la perf rolling 5j du driver ETF.
     dict date_str -> mult_sectoriel
     """
+    from data.market_data import get_ticker_raw_info
     t_upper = ticker.upper()
     if "-" in t_upper and not t_upper.endswith("=X"):
         sector = "Cryptocurrency"
     else:
         try:
-            info   = yf.Ticker(ticker).info
+            info   = get_ticker_raw_info(ticker)
             sector = info.get("sector", "") or ""
         except Exception:
             return {}

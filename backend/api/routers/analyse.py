@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from orchestrator.orchestrator import run as orchestrer
 from api.deps import CurrentUser
+from data.market_data import get_stock_data
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,10 @@ def _safe(series: pd.Series, digits: int = 4) -> list:
 def _build_chart(ticker: str, period: str) -> dict:
     """Télécharge l'historique et calcule SMA, BB, RSI, MACD, Volume."""
     try:
-        df = yf.download(ticker, period=period, auto_adjust=True,
-                         multi_level_index=False, progress=False)
-    except TypeError:
-        df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+        # Utilise le cache centralisé (TTL 30 min + stale fallback 24 h)
+        df = get_stock_data(ticker, period=period)
+    except Exception:
+        return {}
 
     # Flatten multi-level columns (yfinance < 0.2.18)
     if isinstance(df.columns, pd.MultiIndex):

@@ -117,16 +117,16 @@ def supprimer_tx(tx_id: str, current_user: CurrentUser):
 @router.get("/price/{ticker}")
 def get_price(ticker: str, current_user: CurrentUser):
     """Retourne le prix actuel d'un ticker (léger, pour pré-remplir le formulaire d'achat)."""
+    from data.market_data import get_ticker_raw_info, get_stock_data
     ticker = ticker.upper().strip()
     try:
-        import yfinance as yf
-        info = yf.Ticker(ticker).info
+        info = get_ticker_raw_info(ticker)
         prix = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
         if prix:
             return {"ticker": ticker, "prix": round(float(prix), 4)}
-        hist = yf.Ticker(ticker).history(period="1d")
-        if not hist.empty:
-            return {"ticker": ticker, "prix": round(float(hist["Close"].iloc[-1]), 4)}
+        df = get_stock_data(ticker, period="1d")
+        if not df.empty:
+            return {"ticker": ticker, "prix": round(float(df["Close"].iloc[-1]), 4)}
         raise HTTPException(status_code=404, detail=f"Prix introuvable pour {ticker}")
     except HTTPException:
         raise

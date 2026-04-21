@@ -11,14 +11,15 @@ les actions qui battent les attentes continuent de monter 1 à 3 mois après
 la publication. Celles qui déçoivent continuent de baisser.
 """
 
-import yfinance as yf
 import pandas as pd
-from datetime import datetime
+from data.market_data import get_earnings_dates
 
 
 def get_earnings_surprise(ticker: str, quarters: int = 4) -> dict:
     """
     Récupère les données de surprise bénéfice des `quarters` derniers trimestres.
+
+    Utilise le cache centralisé market_data (TTL 30 min + stale 24 h).
 
     Retourne un dict avec :
       - surprises      : liste des surprises % (du plus récent au plus ancien)
@@ -28,8 +29,7 @@ def get_earnings_surprise(ticker: str, quarters: int = 4) -> dict:
       - next_earnings  : date du prochain earnings (si disponible)
     """
     try:
-        stock = yf.Ticker(ticker)
-        df    = stock.earnings_dates
+        df = get_earnings_dates(ticker)
 
         if df is None or df.empty:
             return {"disponible": False, "raison": "Pas de données earnings"}
@@ -45,8 +45,8 @@ def get_earnings_surprise(ticker: str, quarters: int = 4) -> dict:
 
         surprises = []
         for _, row in past_df.iterrows():
-            reported = row.get("Reported EPS")
-            estimate = row.get("EPS Estimate")
+            reported    = row.get("Reported EPS")
+            estimate    = row.get("EPS Estimate")
             surprise_col = row.get("Surprise(%)")
 
             # Priorité à la colonne Surprise(%) si disponible

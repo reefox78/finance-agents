@@ -10,7 +10,7 @@ Champs utilisés depuis yf.Ticker.info :
 Mise à jour bi-mensuelle par FINRA (yfinance reflète la dernière publication).
 """
 
-import yfinance as yf
+from data.market_data import get_ticker_raw_info
 
 
 def get_short_interest(ticker: str) -> dict:
@@ -18,9 +18,10 @@ def get_short_interest(ticker: str) -> dict:
     Récupère les données de short interest pour un ticker.
 
     Retourne un dict avec les métriques brutes et la variation mensuelle.
+    Utilise le cache centralisé market_data (TTL 30 min + stale 24 h).
     """
     try:
-        info = yf.Ticker(ticker).info
+        info = get_ticker_raw_info(ticker)
 
         short_pct   = info.get("shortPercentOfFloat")   # ex : 0.025 = 2.5%
         days_cover  = info.get("shortRatio")             # ex : 3.5 jours
@@ -33,12 +34,12 @@ def get_short_interest(ticker: str) -> dict:
             mom_change = round((shares_now - shares_prev) / shares_prev * 100, 2)
 
         return {
-            "disponible":     True,
-            "short_pct":      round(short_pct * 100, 2) if short_pct is not None else None,
-            "days_to_cover":  round(days_cover, 2) if days_cover is not None else None,
-            "shares_short":   shares_now,
+            "disponible":        True,
+            "short_pct":         round(short_pct * 100, 2) if short_pct is not None else None,
+            "days_to_cover":     round(days_cover, 2) if days_cover is not None else None,
+            "shares_short":      shares_now,
             "shares_short_prev": shares_prev,
-            "mom_change_pct": mom_change,
+            "mom_change_pct":    mom_change,
         }
 
     except Exception as e:

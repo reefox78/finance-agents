@@ -19,6 +19,7 @@ import logging
 from datetime import date, timedelta
 
 import yfinance as yf
+from data.market_data import get_ticker_raw_info, get_yf_download_cached
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +75,12 @@ def _get_driver_perf(driver_ticker: str, days: int = 5) -> float | None:
     """
     Retourne la performance sur `days` séances du driver.
     Télécharge 20 jours calendaire pour avoir assez de barres (week-ends, jours fériés).
+    Utilise le cache centralisé market_data (TTL 30 min + stale 24 h).
     """
     try:
         start = (date.today() - timedelta(days=days * 3)).isoformat()
         end   = date.today().isoformat()
-        df    = yf.download(driver_ticker, start=start, end=end,
-                            progress=False, auto_adjust=True)
+        df    = get_yf_download_cached(driver_ticker, start=start, end=end)
         if df is None or df.empty:
             return None
         closes = df["Close"].dropna()
@@ -131,9 +132,7 @@ def analyze_sector_risk(ticker: str) -> dict:
         sector = "Cryptocurrency"
     else:
         try:
-            info   = yf.Ticker(ticker).fast_info
-            # fast_info ne contient pas sector → fallback sur .info
-            info2  = yf.Ticker(ticker).info
+            info2  = get_ticker_raw_info(ticker)
             sector = info2.get("sector", "") or info2.get("quoteType", "") or ""
         except Exception:
             sector = ""

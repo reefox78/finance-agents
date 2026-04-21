@@ -5,6 +5,7 @@ Disponible pour les actions US uniquement.
 
 import yfinance as yf
 import pandas as pd
+from data.market_data import get_ticker_raw_info
 
 
 def get_options_flow(ticker: str, nb_expirations: int = 2) -> dict:
@@ -15,6 +16,8 @@ def get_options_flow(ticker: str, nb_expirations: int = 2) -> dict:
     - Le skew IV (prime de risque baissier vs haussier)
 
     Retourne un dict avec les métriques brutes.
+    Le prix spot est récupéré via le cache centralisé (TTL 30 min).
+    Les chaînes d'options sont dynamiques : toujours fraîches.
     """
     try:
         stock = yf.Ticker(ticker)
@@ -23,7 +26,13 @@ def get_options_flow(ticker: str, nb_expirations: int = 2) -> dict:
         if not expirations:
             return {"disponible": False, "raison": "Pas d'options listées"}
 
-        current_price = stock.info.get("regularMarketPrice") or stock.info.get("currentPrice")
+        # Prix spot depuis cache centralisé
+        try:
+            raw_info    = get_ticker_raw_info(ticker)
+            current_price = raw_info.get("regularMarketPrice") or raw_info.get("currentPrice")
+        except Exception:
+            current_price = None
+
         if not current_price:
             hist = stock.history(period="1d")
             current_price = float(hist["Close"].iloc[-1]) if not hist.empty else None
@@ -67,16 +76,16 @@ def get_options_flow(ticker: str, nb_expirations: int = 2) -> dict:
                     skew_iv = round(float(otm_puts.mean()) - float(otm_calls.mean()), 4)
 
         return {
-            "disponible":     True,
-            "call_volume":    int(total_call_vol),
-            "put_volume":     int(total_put_vol),
-            "call_oi":        int(total_call_oi),
-            "put_oi":         int(total_put_oi),
-            "pc_ratio_vol":   round(total_put_vol / total_call_vol, 3) if total_call_vol > 0 else None,
-            "pc_ratio_oi":    round(total_put_oi  / total_call_oi,  3) if total_call_oi  > 0 else None,
-            "unusual_calls":  unusual_calls,
-            "unusual_puts":   unusual_puts,
-            "skew_iv":        skew_iv,
+            "disponible":   True,
+            "call_volume":  int(total_call_vol),
+            "put_volume":   int(total_put_vol),
+            "call_oi":      int(total_call_oi),
+            "put_oi":       int(total_put_oi),
+            "pc_ratio_vol": round(total_put_vol / total_call_vol, 3) if total_call_vol > 0 else None,
+            "pc_ratio_oi":  round(total_put_oi  / total_call_oi,  3) if total_call_oi  > 0 else None,
+            "unusual_calls":unusual_calls,
+            "unusual_puts": unusual_puts,
+            "skew_iv":      skew_iv,
         }
 
     except Exception as e:
