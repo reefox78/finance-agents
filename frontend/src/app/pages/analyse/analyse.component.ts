@@ -26,10 +26,11 @@ const NAMES = TICKER_NAMES;
   styleUrl: './analyse.component.scss',
 })
 export class AnalyseComponent implements OnInit, OnDestroy {
-  @ViewChild('priceCanvas',  { static: true }) priceCanvas!:  ElementRef<HTMLCanvasElement>;
-  @ViewChild('volumeCanvas', { static: true }) volumeCanvas!: ElementRef<HTMLCanvasElement>;
-  @ViewChild('rsiCanvas',    { static: true }) rsiCanvas!:    ElementRef<HTMLCanvasElement>;
-  @ViewChild('macdCanvas',   { static: true }) macdCanvas!:   ElementRef<HTMLCanvasElement>;
+  @ViewChild('priceCanvas',   { static: true }) priceCanvas!:   ElementRef<HTMLCanvasElement>;
+  @ViewChild('volumeCanvas',  { static: true }) volumeCanvas!:  ElementRef<HTMLCanvasElement>;
+  @ViewChild('rsiCanvas',     { static: true }) rsiCanvas!:     ElementRef<HTMLCanvasElement>;
+  @ViewChild('macdCanvas',    { static: true }) macdCanvas!:    ElementRef<HTMLCanvasElement>;
+  @ViewChild('historyCanvas', { static: false }) historyCanvas!: ElementRef<HTMLCanvasElement>;
 
   watchlist    = WATCHLIST;
   categories   = WATCHLIST_CATEGORIES;
@@ -45,11 +46,14 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   overlayError = signal('');
 
   // Bannière calendrier économique
-  todayEvents  = signal<any[]>([]);
+  todayEvents   = signal<any[]>([]);
+  // Historique des scores
+  scoreHistory  = signal<any[]>([]);
 
   private _sub: Subscription | null = null;
 
   private _charts: Chart<any, any, any>[] = [];
+  private _historyChart: Chart<any, any, any> | null = null;
   private _syncing = false;
 
   constructor(
@@ -210,6 +214,7 @@ export class AnalyseComponent implements OnInit, OnDestroy {
         if (r.chart?.dates?.length > 1) {
           setTimeout(() => this._buildCharts(r.chart), 0);
         }
+        this._loadHistory(t);
       },
       error: e => {
         const status = e.status ? ` (${e.status})` : '';
@@ -271,6 +276,129 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   private _destroyCharts(): void {
     this._charts.forEach(c => c.destroy());
     this._charts = [];
+    this._historyChart?.destroy();
+    this._historyChart = null;
+  }
+
+  private _loadHistory(ticker: string): void {
+    this.api.getAnalyseHistory(ticker).subscribe({
+      next: (entries: any[]) => {
+        this.scoreHistory.set(entries);
+        if (entries.length >= 2) {
+          // Attend que le canvas soit rendu (il est dans un @if)
+          setTimeout(() => this._buildHistoryChart(entries), 50);
+        }
+      },
+      error: () => {},
+    });
+  }
+
+  private _buildHistoryChart(entries: any[]): void {
+    const canvas = this.historyCanvas?.nativeElement;
+    if (!canvas) return;
+
+    this._historyChart?.destroy();
+    this._historyChart = null;
+
+    // Du plus ancien au plus récent (l'API retourne du + récent au + ancien)
+    const sorted = [...entries].reverse();
+
+    const data = sorted.map(e => ({ x: e.ts, y: e.score }));
+    const pointColors = sorted.map(e =>
+      e.decision === 'ACHETER' ? '#2ecc71' :
+      e.decision === 'VENDRE'  ? '#e74c3c' : '#f1c40f'
+    );
+
+    this._historyChart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        datasets: [
+          // Zone verte (seuil ACHETER)
+          {
+            label: 'Seuil ACHETER (0.10)',
+            data: sorted.map(e => ({ x: e.ts, y: 0.10 })),
+            borderColor: 'rgba(46,204,113,0.25)', backgroundColor: 'transparent',
+            borderWidth: 1, borderDash: [4, 4], pointRadius: 0, order: 5,
+          },
+          // Zone rouge (seuil VENDRE)
+          {
+            label: 'Seuil VENDRE (-0.10)',
+            data: sorted.map(e => ({ x: e.ts, y: -0.10 })),
+            borderColor: 'rgba(231,76,60,0.25)', backgroundColor: 'transparent',
+            borderWidth: 1, borderDash: [4, 4], pointRadius: 0, order: 5,
+          },
+          // Ligne zéro
+          {
+            label: '',
+            data: sorted.map(e => ({ x: e.ts, y: 0 })),
+            borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'transparent',
+            borderWidth: 1, pointRadius: 0, order: 6,
+          },
+          // Score
+          {
+            label: 'Score',
+            data,
+            borderColor: 'rgba(0,200,255,0.7)',
+            backgroundColor: 'rgba(0,200,255,0.06)',
+            fill: true,
+            borderWidth: 2,
+            pointRadius: 5,
+            pointBackgroundColor: pointColors,
+            pointBorderColor: 'rgba(0,0,0,0.4)',
+            pointBorderWidth: 1,
+            tension: 0.3,
+            order: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          title: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(10,15,30,0.92)',
+            borderColor: 'rgba(0,200,255,0.25)',
+            borderWidth: 1,
+            titleColor: '#c8d6f0',
+            bodyColor: '#7a9bbb',
+            padding: 8,
+            callbacks: {
+              label: (ctx) => {
+                if (ctx.datasetIndex !== 3) return '';
+                const idx = ctx.dataIndex;
+                const entry = sorted[idx];
+                return ` Score : ${entry.score.toFixed(4)}  →  ${entry.decision}`;
+              },
+              afterLabel: (ctx) => {
+                if (ctx.datasetIndex !== 3) return '';
+                const idx = ctx.dataIndex;
+                const entry = sorted[idx];
+                return entry.prix ? ` Prix : ${entry.prix}` : '';
+              },
+            },
+          },
+          zoom: { zoom: { wheel: { enabled: false }, pinch: { enabled: false }, mode: 'x' } },
+        },
+        scales: {
+          x: {
+            type: 'time',
+            time: { unit: 'day' },
+            adapters: { date: {} },
+            ticks: { color: '#4a6a8a', font: { size: 9 } },
+            grid: { color: 'rgba(255,255,255,0.04)' },
+          },
+          y: {
+            min: -1, max: 1,
+            ticks: { color: '#4a6a8a', font: { size: 9 }, stepSize: 0.5 },
+            grid: { color: 'rgba(255,255,255,0.06)' },
+          },
+        },
+      },
+    });
   }
 
   /** Appelé sur zoom/pan — synchronise les bornes X de tous les autres charts */

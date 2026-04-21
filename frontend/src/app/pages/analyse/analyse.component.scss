@@ -365,6 +365,27 @@
   text-transform: uppercase;
 }
 
+/* ── Score history chart ─────────────────────────────────────────────────── */
+.history-chart-wrap {
+  background: rgba(13,27,52,0.7);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.2rem 0.8rem;
+  height: 220px;
+  position: relative;
+
+  canvas { display: block; width: 100% !important; height: 100% !important; }
+}
+
+.section-sub {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .hidden { display: none !important; }
 
 @media (max-width: 900px) {

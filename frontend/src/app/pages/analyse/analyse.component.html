@@ -400,6 +400,17 @@
 
     </div>
 
+    <!-- ── Historique du score ── -->
+    @if (scoreHistory().length >= 2) {
+      <div class="section-header" style="margin-top:1.5rem">
+        <span>Historique du score</span>
+        <span class="section-sub">{{ scoreHistory().length }} analyse(s)</span>
+      </div>
+      <div class="history-chart-wrap">
+        <canvas #historyCanvas></canvas>
+      </div>
+    }
+
     <!-- LLM Report -->
     @if (r.rapport) {
       <div class="section-header" style="margin-top:1.5rem"><span>Rapport de décision IA</span></div>
