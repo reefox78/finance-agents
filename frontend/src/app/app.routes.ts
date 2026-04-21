@@ -34,6 +34,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/alerts/alerts.component').then(m => m.AlertsComponent),
       },
       {
+        path: 'compare',
+        loadComponent: () => import('./pages/compare/compare.component').then(m => m.CompareComponent),
+      },
+      {
         path: 'backtest',
         loadComponent: () => import('./pages/backtest/backtest.component').then(m => m.BacktestComponent),
       },

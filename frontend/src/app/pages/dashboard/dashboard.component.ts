@@ -21,6 +21,7 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   tabs = [
     { label: 'Accueil',      path: 'home',        icon: '🏠' },
     { label: 'Analyse',      path: 'analyse',     icon: '🔍' },
+    { label: 'Comparer',     path: 'compare',     icon: '⚖️' },
     { label: 'Scanner',      path: 'scanner',     icon: '📡' },
     { label: 'Portefeuille', path: 'portfolio',   icon: '💼' },
     { label: 'Calendrier',   path: 'calendar',    icon: '📅' },

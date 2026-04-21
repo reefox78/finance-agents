@@ -1,0 +1,259 @@
+<div class="page">
+
+  <!-- ── Header ── -->
+  <div class="cmp-header">
+    <div class="cmp-title">⚖️ Comparaison de tickers</div>
+    <div class="cmp-subtitle">Analysez 2 ou 3 actifs en parallèle et comparez leurs signaux côte à côte</div>
+  </div>
+
+  <!-- ── Sélecteurs ── -->
+  <div class="selectors-card">
+
+    <div class="slots-row">
+      @for (slot of slots; track $index; let i = $index) {
+        <div class="slot" [style.--slot-color]="colors[i].hex">
+          <div class="slot-badge" [style.background]="colors[i].hex">{{ i + 1 }}</div>
+          <select class="fa-select slot-select" [(ngModel)]="slots[i]">
+            <option value="" disabled>Sélectionner…</option>
+            @for (cat of categories; track cat) {
+              <optgroup [label]="cat">
+                @for (t of watchlist[cat]; track t) {
+                  <option [value]="t">{{ label(t) }}</option>
+                }
+              </optgroup>
+            }
+          </select>
+          @if (slots.length > 2) {
+            <button class="slot-remove" (click)="removeSlot(i)" title="Retirer">✕</button>
+          }
+        </div>
+      }
+
+      @if (slots.length < 3) {
+        <button class="btn-add-slot" (click)="addSlot()">
+          <span>＋</span> Ajouter un ticker
+        </button>
+      }
+    </div>
+
+    <div class="selectors-footer">
+      <div class="period-row">
+        <label class="ctrl-label">Période</label>
+        <select class="fa-select period-sel" [(ngModel)]="period">
+          <option value="1mo">1 mois</option>
+          <option value="3mo">3 mois</option>
+          <option value="6mo">6 mois</option>
+          <option value="1y">1 an</option>
+        </select>
+      </div>
+      <button class="btn-compare" [disabled]="!canCompare" (click)="compare()">
+        @if (loading()) { <span class="btn-spin"></span> Analyse en cours… }
+        @else { ⚖️ Comparer }
+      </button>
+    </div>
+
+  </div>
+
+  @if (error()) {
+    <div class="error-box">{{ error() }}</div>
+  }
+
+  <!-- ── Résultats ── -->
+  @if (results().length >= 2) {
+
+    <!-- ── Score cards ── -->
+    <div class="score-cards" [class.three]="results().length === 3">
+      @for (r of results(); track r.ticker; let i = $index) {
+        <div class="score-card" [style.--card-color]="colors[i].hex">
+
+          <!-- Header ticker -->
+          <div class="sc-header">
+            <span class="sc-ticker" [style.color]="colors[i].hex">{{ r.ticker }}</span>
+            <span class="sc-type">{{ r.asset_type }}</span>
+            <button class="sc-link" (click)="goAnalyse(r.ticker)">Analyser →</button>
+          </div>
+
+          <!-- Prix + RSI -->
+          <div class="sc-prix">
+            <span class="sc-prix-val">{{ r.tech?.prix_actuel }}</span>
+            <span class="sc-rsi">RSI {{ r.tech?.rsi }}</span>
+          </div>
+
+          <!-- Mini gauge SVG -->
+          <div class="sc-gauge-wrap">
+            <svg viewBox="0 0 130 75" class="sc-gauge-svg">
+              <path d="M 12 65 A 52 52 0 0 1 38 12 L 48 22 A 38 38 0 0 0 22 65 Z" fill="#e74c3c" opacity="0.7"/>
+              <path d="M 38 12 A 52 52 0 0 1 92 12 L 82 22 A 38 38 0 0 0 48 22 Z" fill="#f1c40f" opacity="0.7"/>
+              <path d="M 92 12 A 52 52 0 0 1 118 65 L 108 65 A 38 38 0 0 0 82 22 Z" fill="#2ecc71" opacity="0.7"/>
+              <line x1="65" y1="65"
+                    [attr.x2]="needle(r.scoring.score_final).x2"
+                    [attr.y2]="needle(r.scoring.score_final).y2"
+                    stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="65" cy="65" r="5" fill="#0d1b2e" stroke="white" stroke-width="2"/>
+              <text x="65" y="57" text-anchor="middle"
+                    [attr.fill]="scoreColor(r.scoring.score_final)"
+                    font-size="9" font-weight="800" font-family="'Courier New',monospace">
+                {{ r.scoring.score_final | number:'1.4-4' }}
+              </text>
+            </svg>
+          </div>
+
+          <!-- Décision -->
+          <div class="sc-decision" [style.color]="decisionColor(r.scoring.decision)">
+            {{ r.scoring.decision }}
+          </div>
+
+        </div>
+      }
+    </div>
+
+    <!-- ── Corps principal : table + radar ── -->
+    <div class="compare-body">
+
+      <!-- ── Tableau de comparaison ── -->
+      <div class="compare-table-wrap">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th class="agent-col">Agent</th>
+              @for (r of results(); track r.ticker; let i = $index) {
+                <th class="ticker-col" [style.color]="colors[i].hex">{{ r.ticker }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+
+            <!-- Score final -->
+            <tr class="row-score">
+              <td class="agent-name">Score final</td>
+              @for (r of results(); track r.ticker) {
+                <td class="score-cell" [class.best]="isBestFinal(r)">
+                  <span class="score-val" [style.color]="scoreColor(r.scoring.score_final)">
+                    {{ r.scoring.score_final | number:'1.4-4' }}
+                  </span>
+                  @if (isBestFinal(r)) { <span class="best-crown">👑</span> }
+                </td>
+              }
+            </tr>
+
+            <!-- Séparateur -->
+            <tr class="row-sep"><td [attr.colspan]="results().length + 1"></td></tr>
+
+            <!-- Agents additifs -->
+            @for (ag of agents; track ag.key) {
+              @if (results().some(r => agentScore(r, ag.key) !== null)) {
+                <tr>
+                  <td class="agent-name">{{ ag.label }}</td>
+                  @for (r of results(); track r.ticker) {
+                    <td class="score-cell" [class.best]="isBest(r, ag.key)">
+                      @if (agentScore(r, ag.key) !== null) {
+                        <div class="score-val-wrap">
+                          <span class="score-val" [style.color]="scoreColor(agentScore(r, ag.key))">
+                            {{ agentScore(r, ag.key) | number:'1.3-3' }}
+                          </span>
+                          <div class="score-bar-bg">
+                            <div class="score-bar-fill"
+                                 [style.width.%]="scoreBar(agentScore(r, ag.key)!)"
+                                 [style.background]="scoreColor(agentScore(r, ag.key))">
+                            </div>
+                          </div>
+                        </div>
+                        @if (isBest(r, ag.key)) {
+                          <span class="best-crown" title="Meilleur score">👑</span>
+                        }
+                      } @else {
+                        <span class="na">N/A</span>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            }
+
+            <!-- Séparateur multiplicateurs -->
+            <tr class="row-sep"><td [attr.colspan]="results().length + 1"></td></tr>
+
+            <!-- Multiplicateurs -->
+            @for (m of mults; track m.key) {
+              @if (results().some(r => r?.scoring?.scores?.[m.key] !== undefined)) {
+                <tr class="row-mult">
+                  <td class="agent-name mult-label">{{ m.label }}</td>
+                  @for (r of results(); track r.ticker) {
+                    <td class="score-cell" [class.best]="isBestMult(r, m.key)">
+                      @if (r?.scoring?.scores?.[m.key] !== undefined) {
+                        <span class="mult-val"
+                              [class.mult-pos]="r.scoring.scores[m.key] > 1"
+                              [class.mult-neg]="r.scoring.scores[m.key] < 1">
+                          ×{{ r.scoring.scores[m.key] | number:'1.2-2' }}
+                        </span>
+                        @if (isBestMult(r, m.key)) {
+                          <span class="best-crown">👑</span>
+                        }
+                      } @else {
+                        <span class="na">N/A</span>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            }
+
+            <!-- Séparateur technique -->
+            <tr class="row-sep"><td [attr.colspan]="results().length + 1"></td></tr>
+
+            <!-- Prix actuel -->
+            <tr class="row-tech">
+              <td class="agent-name">Prix actuel</td>
+              @for (r of results(); track r.ticker) {
+                <td class="score-cell">
+                  <span class="tech-val">{{ r.tech?.prix_actuel }}</span>
+                </td>
+              }
+            </tr>
+
+            <!-- RSI -->
+            <tr class="row-tech">
+              <td class="agent-name">RSI</td>
+              @for (r of results(); track r.ticker) {
+                <td class="score-cell">
+                  <span class="tech-val"
+                        [style.color]="r.tech?.rsi <= 30 ? '#2ecc71' : r.tech?.rsi >= 70 ? '#e74c3c' : '#7a9bbb'">
+                    {{ r.tech?.rsi }}
+                  </span>
+                </td>
+              }
+            </tr>
+
+            <!-- MACD -->
+            <tr class="row-tech">
+              <td class="agent-name">MACD</td>
+              @for (r of results(); track r.ticker) {
+                <td class="score-cell">
+                  <span class="tech-val"
+                        [style.color]="r.tech?.macd > 0 ? '#2ecc71' : '#e74c3c'">
+                    {{ r.tech?.macd }}
+                  </span>
+                </td>
+              }
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ── Radar Chart ── -->
+      <div class="radar-wrap">
+        <div class="radar-title">Vue radar des agents</div>
+        <div class="radar-canvas-wrap">
+          <canvas #radarCanvas></canvas>
+        </div>
+        <div class="radar-hint">
+          Valeurs normalisées 0–100 (50 = neutre, 100 = signal maximum achat)
+        </div>
+      </div>
+
+    </div>
+
+  }
+
+</div>
