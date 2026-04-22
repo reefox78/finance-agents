@@ -180,6 +180,36 @@ export class ApiService {
     });
   }
 
+  // ── Journal de trading ────────────────────────────────────────────────────
+
+  getJournalTrades(status?: string, strategy?: string, ticker?: string): Observable<any[]> {
+    let params = new HttpParams();
+    if (status)   params = params.set('status', status);
+    if (strategy) params = params.set('strategy', strategy);
+    if (ticker)   params = params.set('ticker', ticker);
+    return this.http.get<any[]>(`${this.base}/journal`, { params });
+  }
+
+  addJournalTrade(body: any): Observable<any> {
+    return this.http.post<any>(`${this.base}/journal`, body);
+  }
+
+  closeJournalTrade(id: string, body: { exit_price: number; exit_date: string }): Observable<any> {
+    return this.http.patch<any>(`${this.base}/journal/${id}/close`, body);
+  }
+
+  patchJournalNotes(id: string, notes: string): Observable<any> {
+    return this.http.patch<any>(`${this.base}/journal/${id}/notes`, { notes });
+  }
+
+  deleteJournalTrade(id: string): Observable<any> {
+    return this.http.delete(`${this.base}/journal/${id}`);
+  }
+
+  getJournalStats(): Observable<any> {
+    return this.http.get<any>(`${this.base}/journal/stats`);
+  }
+
   // ── Logs ──────────────────────────────────────────────────────────────────
 
   getLogFiles(): Observable<any[]> {

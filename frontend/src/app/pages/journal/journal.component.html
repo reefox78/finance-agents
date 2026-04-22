@@ -1,0 +1,393 @@
+<div class="page">
+
+  <!-- ── Header ── -->
+  <div class="jnl-header">
+    <div>
+      <div class="jnl-title">📓 Journal de trading</div>
+      <div class="jnl-sub">Enregistrez chaque trade, suivez votre performance et identifiez vos meilleures stratégies</div>
+    </div>
+    <button class="btn-add" (click)="openAdd()">＋ Nouveau trade</button>
+  </div>
+
+  @if (error()) {
+    <div class="error-box">{{ error() }}</div>
+  }
+
+  <!-- ── Dashboard stats ── -->
+  @if (stats()) {
+    <div class="stats-section">
+
+      <!-- Cartes métriques -->
+      <div class="metrics-grid">
+
+        <div class="metric-card" [class.positive]="(stats().total_pnl ?? 0) > 0" [class.negative]="(stats().total_pnl ?? 0) < 0">
+          <div class="metric-label">P&amp;L Total</div>
+          <div class="metric-val" [style.color]="pnlColor(stats().total_pnl)">
+            {{ (stats().total_pnl ?? 0) >= 0 ? '+' : '' }}{{ stats().total_pnl | number:'1.2-2' }}€
+          </div>
+          <div class="metric-sub">{{ stats().closed_trades }} trades clôturés</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Win Rate</div>
+          <div class="metric-val" [style.color]="winRateColor(stats().win_rate ?? 0)">
+            {{ stats().win_rate !== null ? (stats().win_rate | number:'1.1-1') + '%' : '—' }}
+          </div>
+          <div class="metric-sub">{{ stats().open_trades }} trade{{ stats().open_trades > 1 ? 's' : '' }} ouvert{{ stats().open_trades > 1 ? 's' : '' }}</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Profit Factor</div>
+          <div class="metric-val" [style.color]="pnlColor(stats().profit_factor ? stats().profit_factor - 1 : null)">
+            {{ stats().profit_factor !== null ? (stats().profit_factor | number:'1.2-2') : '—' }}
+          </div>
+          <div class="metric-sub">≥ 1.5 = bonne stratégie</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Max Drawdown</div>
+          <div class="metric-val" [style.color]="pnlColor(stats().max_drawdown ?? 0)">
+            {{ stats().max_drawdown !== null ? (stats().max_drawdown | number:'1.2-2') + '€' : '—' }}
+          </div>
+          <div class="metric-sub">Perte max en séquence</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Meilleur trade</div>
+          <div class="metric-val positive-text">
+            {{ stats().best_trade ? stats().best_trade.ticker : '—' }}
+          </div>
+          <div class="metric-sub" [style.color]="'#2ecc71'">
+            {{ stats().best_trade ? '+' + (stats().best_trade.pnl | number:'1.2-2') + '€' : '' }}
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Streak actuelle</div>
+          <div class="metric-val streak-val">{{ streakLabel(stats().current_streak) }}</div>
+          <div class="metric-sub">Série en cours</div>
+        </div>
+
+      </div>
+
+      <!-- Dashboard tabs : equity curve + par stratégie -->
+      <div class="dash-tabs-wrap">
+        <div class="dash-tabs">
+          <button class="dash-tab" [class.active]="dashTab === 'curve'"    (click)="dashTab = 'curve'">📈 Equity Curve</button>
+          <button class="dash-tab" [class.active]="dashTab === 'strategy'" (click)="dashTab = 'strategy'">🎯 Par stratégie</button>
+        </div>
+
+        @if (dashTab === 'curve') {
+          <div class="chart-wrap">
+            @if ((stats().equity_curve?.length ?? 0) === 0) {
+              <div class="chart-empty">Clôturez des trades pour voir l'equity curve</div>
+            } @else {
+              <canvas #equityCanvas></canvas>
+            }
+          </div>
+        }
+
+        @if (dashTab === 'strategy') {
+          <div class="strategy-table-wrap">
+            @if (!stats().by_strategy || (stats().by_strategy | keyvalue).length === 0) {
+              <div class="chart-empty">Aucune donnée par stratégie</div>
+            } @else {
+              <table class="strat-table">
+                <thead>
+                  <tr>
+                    <th>Stratégie</th>
+                    <th>Trades</th>
+                    <th>Win Rate</th>
+                    <th>P&amp;L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (entry of stats().by_strategy | keyvalue; track entry.key) {
+                    <tr>
+                      <td>
+                        <span class="strat-badge" [style.color]="strategyColor(entry.key)" [style.border-color]="strategyColor(entry.key)">
+                          {{ entry.key }}
+                        </span>
+                      </td>
+                      <td class="num">{{ entry.value.trades }}</td>
+                      <td class="num" [style.color]="winRateColor(entry.value.win_rate)">{{ entry.value.win_rate | number:'1.1-1' }}%</td>
+                      <td class="num" [style.color]="pnlColor(entry.value.pnl)">
+                        {{ entry.value.pnl >= 0 ? '+' : '' }}{{ entry.value.pnl | number:'1.2-2' }}€
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        }
+
+      </div>
+    </div>
+  }
+
+  <!-- ── Filtres ── -->
+  <div class="filters-bar">
+    <div class="filter-group">
+      <label>Statut</label>
+      <select class="fa-select" [(ngModel)]="filterStatus" (change)="applyFilters()">
+        <option value="">Tous</option>
+        <option value="OPEN">Ouverts</option>
+        <option value="CLOSED">Clôturés</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Stratégie</label>
+      <select class="fa-select" [(ngModel)]="filterStrategy" (change)="applyFilters()">
+        <option value="">Toutes</option>
+        @for (s of strategies; track s) {
+          <option [value]="s">{{ s }}</option>
+        }
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Ticker</label>
+      <input class="fa-input" [(ngModel)]="filterTicker" placeholder="AAPL…" (keyup.enter)="applyFilters()" />
+    </div>
+    <button class="btn-ghost" (click)="resetFilters()">Réinitialiser</button>
+  </div>
+
+  <!-- ── Table des trades ── -->
+  <div class="trades-wrap">
+    @if (loading()) {
+      <div class="loading-row">Chargement…</div>
+    } @else if (trades().length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">📓</div>
+        <div>Aucun trade enregistré</div>
+        <button class="btn-add-sm" (click)="openAdd()">Ajouter votre premier trade →</button>
+      </div>
+    } @else {
+      <table class="trades-table">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Dir.</th>
+            <th>Stratégie</th>
+            <th>Entrée</th>
+            <th>Date entrée</th>
+            <th>Sortie</th>
+            <th>Date sortie</th>
+            <th>Qté</th>
+            <th>P&amp;L</th>
+            <th>P&amp;L %</th>
+            <th>Score</th>
+            <th>Statut</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (t of trades(); track t.id) {
+            <tr [class.row-open]="t.status === 'OPEN'" [class.row-win]="t.pnl > 0" [class.row-loss]="t.pnl < 0">
+              <td class="cell-ticker" (click)="goAnalyse(t.ticker)">{{ t.ticker }}</td>
+
+              <td>
+                <span class="dir-badge" [style.color]="directionColor(t.direction)">{{ t.direction }}</span>
+              </td>
+
+              <td>
+                @if (t.strategy) {
+                  <span class="strat-mini" [style.color]="strategyColor(t.strategy)">{{ t.strategy }}</span>
+                } @else { <span class="na">—</span> }
+              </td>
+
+              <td class="num">{{ t.entry_price | number:'1.2-4' }}</td>
+              <td class="date-cell">{{ t.entry_date }}</td>
+
+              <td class="num">
+                @if (t.exit_price) { {{ t.exit_price | number:'1.2-4' }} }
+                @else { <span class="na">—</span> }
+              </td>
+              <td class="date-cell">{{ t.exit_date ?? '—' }}</td>
+
+              <td class="num">{{ t.quantity | number:'1.0-2' }}</td>
+
+              <td class="num" [style.color]="pnlColor(t.pnl)">
+                @if (t.pnl !== null) {
+                  {{ t.pnl >= 0 ? '+' : '' }}{{ t.pnl | number:'1.2-2' }}€
+                } @else { <span class="na">—</span> }
+              </td>
+
+              <td class="num" [style.color]="pnlColor(t.pnl_pct)">
+                @if (t.pnl_pct !== null) {
+                  {{ t.pnl_pct >= 0 ? '+' : '' }}{{ t.pnl_pct | number:'1.2-2' }}%
+                } @else { <span class="na">—</span> }
+              </td>
+
+              <td class="num">
+                @if (t.score_at_entry !== null) {
+                  <span [style.color]="pnlColor(t.score_at_entry)">{{ t.score_at_entry | number:'1.3-3' }}</span>
+                } @else { <span class="na">—</span> }
+              </td>
+
+              <td>
+                <span class="status-badge" [class.open]="t.status === 'OPEN'" [class.closed]="t.status === 'CLOSED'">
+                  {{ t.status === 'OPEN' ? '🟢 Ouvert' : '⚫ Clôturé' }}
+                </span>
+              </td>
+
+              <td class="actions-cell">
+                @if (t.status === 'OPEN') {
+                  <button class="btn-action close-btn" (click)="openClose(t)" title="Clôturer">✓</button>
+                }
+                <button class="btn-action notes-btn" (click)="openNotes(t)" title="Notes">✎</button>
+                <button class="btn-action del-btn"   (click)="deleteTrade(t)" title="Supprimer">✕</button>
+              </td>
+            </tr>
+
+            <!-- Notes inline sous le trade si présentes -->
+            @if (t.notes) {
+              <tr class="notes-row">
+                <td colspan="13" class="notes-cell">💬 {{ t.notes }}</td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MODAL : Ajouter un trade                                        -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+@if (showAddModal) {
+  <div class="modal-overlay" (click)="showAddModal = false">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <span>＋ Nouveau trade</span>
+        <button class="modal-close" (click)="showAddModal = false">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Ticker *</label>
+            <input class="fa-input" [(ngModel)]="form.ticker" placeholder="AAPL" style="text-transform:uppercase" />
+          </div>
+          <div class="form-group">
+            <label>Direction *</label>
+            <select class="fa-select" [(ngModel)]="form.direction">
+              <option value="LONG">LONG 📈</option>
+              <option value="SHORT">SHORT 📉</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Prix d'entrée *</label>
+            <input class="fa-input" type="number" step="0.01" [(ngModel)]="form.entry_price" placeholder="150.00" />
+          </div>
+          <div class="form-group">
+            <label>Quantité *</label>
+            <input class="fa-input" type="number" step="0.01" [(ngModel)]="form.quantity" placeholder="1" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date d'entrée *</label>
+            <input class="fa-input" type="date" [(ngModel)]="form.entry_date" />
+          </div>
+          <div class="form-group">
+            <label>Stratégie</label>
+            <select class="fa-select" [(ngModel)]="form.strategy">
+              <option value="">Aucune</option>
+              @for (s of strategies; track s) {
+                <option [value]="s">{{ s }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Score app (optionnel)</label>
+            <input class="fa-input" type="number" step="0.001" min="-1" max="1" [(ngModel)]="form.score_at_entry" placeholder="0.350" />
+          </div>
+          <div class="form-group">
+            <label>Signal app</label>
+            <select class="fa-select" [(ngModel)]="form.decision_at_entry">
+              <option value="">—</option>
+              <option value="ACHETER">ACHETER</option>
+              <option value="NEUTRE">NEUTRE</option>
+              <option value="VENDRE">VENDRE</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group full">
+          <label>Notes</label>
+          <textarea class="fa-textarea" [(ngModel)]="form.notes" rows="3" placeholder="Raison du trade, setup identifié…"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-ghost" (click)="showAddModal = false">Annuler</button>
+        <button class="btn-primary" (click)="submitAdd()" [disabled]="!form.ticker || !form.entry_price">
+          Enregistrer le trade
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MODAL : Clôturer un trade                                       -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+@if (showCloseModal) {
+  <div class="modal-overlay" (click)="showCloseModal = false">
+    <div class="modal modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <span>✓ Clôturer {{ activeTicker }}</span>
+        <button class="modal-close" (click)="showCloseModal = false">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Prix de sortie *</label>
+          <input class="fa-input" type="number" step="0.01" [(ngModel)]="closeForm.exit_price" placeholder="160.00" />
+        </div>
+        <div class="form-group">
+          <label>Date de sortie *</label>
+          <input class="fa-input" type="date" [(ngModel)]="closeForm.exit_date" />
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-ghost" (click)="showCloseModal = false">Annuler</button>
+        <button class="btn-primary" (click)="submitClose()" [disabled]="!closeForm.exit_price">
+          Clôturer et calculer P&amp;L
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MODAL : Notes                                                    -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+@if (showNotesModal) {
+  <div class="modal-overlay" (click)="showNotesModal = false">
+    <div class="modal modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <span>✎ Notes — {{ activeTicker }}</span>
+        <button class="modal-close" (click)="showNotesModal = false">✕</button>
+      </div>
+      <div class="modal-body">
+        <textarea class="fa-textarea" [(ngModel)]="notesValue" rows="5" placeholder="Setup, raison d'entrée/sortie, leçon apprise…"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" (click)="showNotesModal = false">Annuler</button>
+        <button class="btn-primary" (click)="submitNotes()">Sauvegarder</button>
+      </div>
+    </div>
+  </div>
+}

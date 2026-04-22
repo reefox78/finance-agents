@@ -51,6 +51,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/calibration/calibration.component').then(m => m.CalibrationComponent),
       },
       {
+        path: 'journal',
+        loadComponent: () => import('./pages/journal/journal.component').then(m => m.JournalComponent),
+      },
+      {
         path: 'logs',
         loadComponent: () => import('./pages/activity-logs/activity-logs.component').then(m => m.ActivityLogsComponent),
       },

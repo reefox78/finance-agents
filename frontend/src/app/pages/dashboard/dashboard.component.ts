@@ -29,6 +29,7 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     { label: 'Portefeuille', path: 'portfolio',   icon: '💼' },
     { label: 'Calendrier',   path: 'calendar',    icon: '📅' },
     { label: 'Backtest',     path: 'backtest',    icon: '📊' },
+    { label: 'Journal',      path: 'journal',     icon: '📓' },
     { label: 'Calibration',  path: 'calibration', icon: '⚙️' },
     { label: 'Logs',         path: 'logs',        icon: '🪵' },
   ];
