@@ -297,8 +297,9 @@ export class JournalComponent implements OnInit, OnDestroy {
                 const p = curve[ctx.dataIndex];
                 if (!p) return '';
                 const sign = p.pnl >= 0 ? '+' : '';
+                const y = ctx.parsed.y ?? 0;
                 return [
-                  ` Cumul : ${ctx.parsed.y.toFixed(2)}€`,
+                  ` Cumul : ${y.toFixed(2)}€`,
                   ` Trade : ${sign}${p.pnl.toFixed(2)}€`,
                 ];
               },

@@ -89,7 +89,7 @@
 
         @if (dashTab === 'strategy') {
           <div class="strategy-table-wrap">
-            @if (!stats().by_strategy || (stats().by_strategy | keyvalue).length === 0) {
+            @if (!stats().by_strategy || ((stats().by_strategy | keyvalue)?.length ?? 0) === 0) {
               <div class="chart-empty">Aucune donnée par stratégie</div>
             } @else {
               <table class="strat-table">
@@ -105,7 +105,7 @@
                   @for (entry of stats().by_strategy | keyvalue; track entry.key) {
                     <tr>
                       <td>
-                        <span class="strat-badge" [style.color]="strategyColor(entry.key)" [style.border-color]="strategyColor(entry.key)">
+                        <span class="strat-badge" [style.color]="strategyColor($any(entry.key))" [style.border-color]="strategyColor($any(entry.key))">
                           {{ entry.key }}
                         </span>
                       </td>
