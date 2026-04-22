@@ -106,6 +106,58 @@
   thead th { color: var(--text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 }
 
+// ── Coaching journal ──────────────────────────────────────────────────────────
+.coach-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: rgba(155,89,182,0.3); color: #c9a6e0;
+  font-size: 9px; font-weight: 800; margin-left: 4px;
+}
+
+.coach-wrap { padding: 0.85rem; display: flex; flex-direction: column; gap: 0.6rem; }
+
+.coach-niveau {
+  font-size: 11px; color: var(--text-muted);
+  strong { color: var(--primary); }
+}
+
+.coach-synthese {
+  font-size: 12px; color: var(--text-secondary);
+  font-style: italic; line-height: 1.5;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.coach-tips { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.coach-tip {
+  border-radius: 8px; padding: 0.65rem 0.9rem;
+  border-left: 3px solid;
+
+  &.tip-success { border-color: #2ecc71; background: rgba(46,204,113,0.05); }
+  &.tip-warning { border-color: #f1c40f; background: rgba(241,196,15,0.05); }
+  &.tip-danger  { border-color: #e74c3c; background: rgba(231,76,60,0.06); }
+  &.tip-info    { border-color: #00c8ff; background: rgba(0,200,255,0.04); }
+}
+
+.tip-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 5px; flex-wrap: wrap;
+}
+
+.tip-badge {
+  font-size: 9px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.06em; padding: 2px 6px; border-radius: 4px;
+  &.tip-badge-success { color: #2ecc71; background: rgba(46,204,113,0.12); }
+  &.tip-badge-warning { color: #f1c40f; background: rgba(241,196,15,0.12); }
+  &.tip-badge-danger  { color: #e74c3c; background: rgba(231,76,60,0.12); }
+  &.tip-badge-info    { color: #00c8ff; background: rgba(0,200,255,0.10); }
+}
+
+.tip-title   { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.tip-message { font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 4px; }
+.tip-action  { font-size: 11px; color: var(--primary); font-weight: 600; margin-bottom: 3px; }
+.tip-rule    { font-size: 10px; color: var(--text-muted); font-style: italic; line-height: 1.4; }
+
 .strat-badge {
   display: inline-block;
   padding: 2px 8px;

@@ -42,6 +42,9 @@ export class AnalyseComponent implements OnInit, OnDestroy {
   withLlm      = true;
   loading      = signal(false);
   result       = signal<any>(null);
+  coaching     = signal<any>(null);
+  coachLoading = signal(false);
+  showCoach    = false;
   error        = signal('');
   overlayError = signal('');
 
@@ -205,6 +208,8 @@ export class AnalyseComponent implements OnInit, OnDestroy {
     this.error.set('');
     this.overlayError.set('');
     this.result.set(null);
+    this.coaching.set(null);
+    this.showCoach = false;
     this._destroyCharts();
     this.loading.set(true);
     this._sub = this.api.analyse(t, this.withLlm, false, this.period).subscribe({
@@ -215,6 +220,8 @@ export class AnalyseComponent implements OnInit, OnDestroy {
           setTimeout(() => this._buildCharts(r.chart), 0);
         }
         this._loadHistory(t);
+        // Coaching automatique après chaque analyse
+        this._loadCoaching(r);
       },
       error: e => {
         const status = e.status ? ` (${e.status})` : '';
@@ -223,6 +230,16 @@ export class AnalyseComponent implements OnInit, OnDestroy {
       },
     });
   }
+
+  private _loadCoaching(result: any): void {
+    this.coachLoading.set(true);
+    this.api.coachAnalyse(result).subscribe({
+      next: c => { this.coaching.set(c); this.coachLoading.set(false); },
+      error: () => this.coachLoading.set(false),
+    });
+  }
+
+  toggleCoach(): void { this.showCoach = !this.showCoach; }
 
   cancelLoading(): void {
     this._sub?.unsubscribe();

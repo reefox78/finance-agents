@@ -75,6 +75,10 @@
         <div class="dash-tabs">
           <button class="dash-tab" [class.active]="dashTab === 'curve'"    (click)="dashTab = 'curve'">📈 Equity Curve</button>
           <button class="dash-tab" [class.active]="dashTab === 'strategy'" (click)="dashTab = 'strategy'">🎯 Par stratégie</button>
+          <button class="dash-tab" [class.active]="dashTab === 'coach'"    (click)="dashTab = 'coach'">
+            📚 Coaching
+            @if (coaching()?.nb_tips) { <span class="coach-count">{{ coaching().nb_tips }}</span> }
+          </button>
         </div>
 
         @if (dashTab === 'curve') {
@@ -118,6 +122,39 @@
                   }
                 </tbody>
               </table>
+            }
+          </div>
+        }
+
+        @if (dashTab === 'coach') {
+          <div class="coach-wrap">
+            @if (coachLoading()) {
+              <div class="chart-empty">Analyse en cours…</div>
+            } @else if (!coaching()) {
+              <div class="chart-empty">Aucun coaching disponible</div>
+            } @else {
+              <div class="coach-niveau">
+                Niveau détecté : <strong>{{ coaching().niveau }}</strong>
+              </div>
+              <div class="coach-synthese">{{ coaching().synthese }}</div>
+              <div class="coach-tips">
+                @for (tip of coaching().tips; track $index) {
+                  <div class="coach-tip" [class]="'tip-' + tip.type">
+                    <div class="tip-header">
+                      <span class="tip-badge tip-badge-{{ tip.type }}">
+                        {{ tip.type === 'success' ? '✅' :
+                           tip.type === 'warning' ? '⚠️' :
+                           tip.type === 'danger'  ? '🚨' : 'ℹ️' }}
+                        {{ tip.category }}
+                      </span>
+                      <strong class="tip-title">{{ tip.title }}</strong>
+                    </div>
+                    <div class="tip-message">{{ tip.message }}</div>
+                    <div class="tip-action">→ {{ tip.action }}</div>
+                    <div class="tip-rule">📖 {{ tip.rule }}</div>
+                  </div>
+                }
+              </div>
             }
           </div>
         }

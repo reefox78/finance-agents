@@ -283,6 +283,40 @@
       </div>
     </div>
 
+    <!-- ── Coaching ── -->
+    <div class="coaching-bar">
+      <button class="coach-toggle" (click)="toggleCoach()">
+        @if (coachLoading()) { <span class="coach-spin"></span> Analyse en cours… }
+        @else if (coaching()) {
+          📚 {{ showCoach ? 'Masquer' : 'Voir' }} le coaching
+          ({{ coaching().nb_insights }} insights)
+        }
+      </button>
+    </div>
+
+    @if (showCoach && coaching()) {
+      <div class="coaching-panel">
+        <div class="coach-resume">{{ coaching().resume }}</div>
+        <div class="coach-insights">
+          @for (ins of coaching().insights; track $index) {
+            <div class="coach-card" [class]="'coach-' + ins.type">
+              <div class="coach-card-header">
+                <span class="coach-category">{{ ins.category }}</span>
+                <span class="coach-type-badge coach-badge-{{ ins.type }}">
+                  {{ ins.type === 'bullish' ? '📈 Haussier' :
+                     ins.type === 'bearish' ? '📉 Baissier' :
+                     ins.type === 'warning' ? '⚠️ Attention' :
+                     ins.type === 'info'    ? 'ℹ️ Info' : '➖ Neutre' }}
+                </span>
+              </div>
+              <div class="coach-message">{{ ins.message }}</div>
+              <div class="coach-rule">📖 {{ ins.rule }}</div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
     <!-- Agent signals grid -->
     <div class="section-header"><span>Signaux des agents</span></div>
     <div class="agents-grid">

@@ -180,6 +180,16 @@ export class ApiService {
     });
   }
 
+  // ── Coach ────────────────────────────────────────────────────────────────
+
+  coachAnalyse(result: any): Observable<any> {
+    return this.http.post<any>(`${this.base}/coach/analyse`, { result });
+  }
+
+  coachJournal(): Observable<any> {
+    return this.http.get<any>(`${this.base}/coach/journal`);
+  }
+
   // ── Journal de trading ────────────────────────────────────────────────────
 
   getJournalTrades(status?: string, strategy?: string, ticker?: string): Observable<any[]> {

@@ -65,7 +65,10 @@ export class JournalComponent implements OnInit, OnDestroy {
   notesValue = '';
 
   // Onglet dashboard
-  dashTab: 'curve' | 'strategy' = 'curve';
+  dashTab: 'curve' | 'strategy' | 'coach' = 'curve';
+
+  coaching     = signal<any>(null);
+  coachLoading = signal(false);
 
   private _chart: Chart | null = null;
 
@@ -106,8 +109,17 @@ export class JournalComponent implements OnInit, OnDestroy {
         this.stats.set(s);
         this.statsLoading.set(false);
         setTimeout(() => this._buildChart(s), 80);
+        this._loadCoaching();
       },
       error: () => this.statsLoading.set(false),
+    });
+  }
+
+  private _loadCoaching(): void {
+    this.coachLoading.set(true);
+    this.api.coachJournal().subscribe({
+      next: c => { this.coaching.set(c); this.coachLoading.set(false); },
+      error: () => this.coachLoading.set(false),
     });
   }
 
