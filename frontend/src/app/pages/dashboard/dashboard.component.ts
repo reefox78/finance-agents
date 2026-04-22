@@ -12,11 +12,14 @@ import { ApiService } from '../../core/services/api.service';
   styleUrl: './dashboard.component.scss',
 })
 export class DashboardComponent implements OnInit, AfterViewInit {
-  @ViewChild('bottomNav') bottomNavRef!: ElementRef<HTMLElement>;
+  @ViewChild('bottomNav')  bottomNavRef!:  ElementRef<HTMLElement>;
+  @ViewChild('desktopNav') desktopNavRef!: ElementRef<HTMLElement>;
 
-  alertCount  = signal(0);
-  canScrollL  = signal(false);
-  canScrollR  = signal(false);
+  alertCount     = signal(0);
+  canScrollL     = signal(false);
+  canScrollR     = signal(false);
+  canDeskScrollL = signal(false);
+  canDeskScrollR = signal(false);
 
   tabs = [
     { label: 'Accueil',      path: 'home',        icon: '🏠' },
@@ -41,7 +44,10 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit(): void {
     this.updateArrows();
+    this.updateDeskArrows();
   }
+
+  // ── Bottom nav (mobile) ──────────────────────────────────────────────────
 
   onNavScroll(): void {
     this.updateArrows();
@@ -59,5 +65,25 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     if (!el) return;
     el.scrollBy({ left: dir === 'left' ? -120 : 120, behavior: 'smooth' });
     setTimeout(() => this.updateArrows(), 300);
+  }
+
+  // ── Desktop nav (top bar) ────────────────────────────────────────────────
+
+  onDeskNavScroll(): void {
+    this.updateDeskArrows();
+  }
+
+  private updateDeskArrows(): void {
+    const el = this.desktopNavRef?.nativeElement;
+    if (!el) return;
+    this.canDeskScrollL.set(el.scrollLeft > 4);
+    this.canDeskScrollR.set(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }
+
+  scrollDeskNav(dir: 'left' | 'right'): void {
+    const el = this.desktopNavRef?.nativeElement;
+    if (!el) return;
+    el.scrollBy({ left: dir === 'left' ? -160 : 160, behavior: 'smooth' });
+    setTimeout(() => this.updateDeskArrows(), 300);
   }
 }

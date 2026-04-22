@@ -11,17 +11,28 @@
       </div>
     </div>
 
-    <!-- Tab nav (desktop only) -->
-    <nav class="tab-nav desktop-nav">
-      @for (tab of tabs; track tab.path) {
-        <a [routerLink]="tab.path" routerLinkActive="active" class="tab-link">
-          {{ tab.icon }} {{ tab.label }}
-          @if (tab.path === 'portfolio' && alertCount() > 0) {
-            <span class="tab-badge">🔔 {{ alertCount() }}</span>
-          }
-        </a>
+    <!-- Tab nav (desktop) avec flèches de scroll -->
+    <div class="desk-nav-wrap">
+      @if (canDeskScrollL()) {
+        <button class="desk-arrow desk-arrow-left" (click)="scrollDeskNav('left')">‹</button>
       }
-    </nav>
+
+      <nav class="tab-nav desktop-nav" #desktopNav (scroll)="onDeskNavScroll()">
+        @for (tab of tabs; track tab.path) {
+          <a [routerLink]="tab.path" routerLinkActive="active" class="tab-link">
+            <span class="tab-icon">{{ tab.icon }}</span>
+            <span class="tab-label">{{ tab.label }}</span>
+            @if (tab.path === 'portfolio' && alertCount() > 0) {
+              <span class="tab-badge">{{ alertCount() }}</span>
+            }
+          </a>
+        }
+      </nav>
+
+      @if (canDeskScrollR()) {
+        <button class="desk-arrow desk-arrow-right" (click)="scrollDeskNav('right')">›</button>
+      }
+    </div>
 
     <!-- User zone -->
     <div class="header-user">
