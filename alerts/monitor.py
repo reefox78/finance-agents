@@ -18,7 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from data.portfolio    import lister_positions as _lister_pos_local, _prix_actuel
+from data.portfolio    import lister_positions as _lister_pos_local
+from data.price_api    import get_current_price as _prix_actuel
 from data.alerts_store import creer_alerte, lister_alertes as _lister_alertes_local
 from db.portfolio      import lister_positions as _lister_pos_db
 from db.alerts_store   import ajouter_alerte   as _ajouter_alerte_db

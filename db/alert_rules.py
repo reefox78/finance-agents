@@ -132,12 +132,10 @@ def maj_derniere_alerte(regle_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _get_prix(ticker: str) -> float | None:
-    """Retourne le prix courant via yfinance fast_info."""
+    """Retourne le prix courant via Twelve Data → Finnhub → yfinance."""
     try:
-        import yfinance as yf
-        info = yf.Ticker(ticker).fast_info
-        price = getattr(info, "last_price", None) or getattr(info, "regularMarketPrice", None)
-        return float(price) if price else None
+        from data.price_api import get_current_price
+        return get_current_price(ticker)
     except Exception as e:
         log.warning("Impossible de récupérer le prix de %s : %s", ticker, e)
         return None

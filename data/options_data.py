@@ -6,6 +6,7 @@ Disponible pour les actions US uniquement.
 import yfinance as yf
 import pandas as pd
 from data.market_data import get_ticker_raw_info
+from data.price_api import get_current_price
 
 
 def get_options_flow(ticker: str, nb_expirations: int = 2) -> dict:
@@ -26,16 +27,8 @@ def get_options_flow(ticker: str, nb_expirations: int = 2) -> dict:
         if not expirations:
             return {"disponible": False, "raison": "Pas d'options listées"}
 
-        # Prix spot depuis cache centralisé
-        try:
-            raw_info    = get_ticker_raw_info(ticker)
-            current_price = raw_info.get("regularMarketPrice") or raw_info.get("currentPrice")
-        except Exception:
-            current_price = None
-
-        if not current_price:
-            hist = stock.history(period="1d")
-            current_price = float(hist["Close"].iloc[-1]) if not hist.empty else None
+        # Prix spot — Twelve Data → Finnhub → yfinance
+        current_price = get_current_price(ticker)
 
         total_call_vol = 0
         total_put_vol  = 0

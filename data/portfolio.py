@@ -391,12 +391,8 @@ def lister_transactions(ticker: str) -> list[dict]:
 
 def _prix_actuel(ticker: str) -> float | None:
     try:
-        info = get_ticker_raw_info(ticker)
-        prix = info.get("regularMarketPrice") or info.get("currentPrice")
-        if prix:
-            return float(prix)
-        df = get_stock_data(ticker, period="1d")
-        return float(df["Close"].iloc[-1]) if not df.empty else None
+        from data.price_api import get_current_price
+        return get_current_price(ticker)
     except Exception:
         return None
 
