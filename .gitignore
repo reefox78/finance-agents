@@ -21,6 +21,7 @@ logs/
 
 # Cache et données générées automatiquement
 data/cache/
+cache/          # cache disque yfinance (JSON persistants, régénérés automatiquement)
 output/scan_*.csv
 output/rapport_*.txt
 output/*.png
