@@ -164,7 +164,10 @@ def _fallback(stale_store, disk_key, label: str, is_df=False):
 # ── get_stock_data ────────────────────────────────────────────────────────────
 
 def get_stock_data(ticker: str, period: str = "3mo") -> pd.DataFrame:
-    """Données historiques OHLCV — cache mémoire 30 min + disque 7 jours."""
+    """
+    Données historiques OHLCV.
+    Cascade : Twelve Data → yfinance (cache mémoire 30 min + disque 7 jours).
+    """
     key = (ticker, period)
 
     cached = _cache_get(_cache_data, key)
@@ -177,6 +180,19 @@ def get_stock_data(ticker: str, period: str = "3mo") -> pd.DataFrame:
         if cached is not None:
             return cached
 
+        # ── 1. Twelve Data (pas de 429, données fraîches) ────────────────────
+        try:
+            from data.price_api import get_ohlcv_td
+            df_td = get_ohlcv_td(ticker, period)
+            if df_td is not None and not df_td.empty:
+                _cache_set(_cache_data, _stale_data, key, df_td)
+                _disk_set_df(key, df_td)
+                logger.debug("get_stock_data %s via Twelve Data (%d lignes)", ticker, len(df_td))
+                return df_td
+        except Exception as e:
+            logger.debug("Twelve Data get_stock_data %s : %s", ticker, e)
+
+        # ── 2. yfinance (avec cache disque fallback) ──────────────────────────
         for attempt in range(3):
             try:
                 stock = yf.Ticker(ticker)
