@@ -245,6 +245,69 @@ def get_quote_finnhub(ticker: str) -> dict | None:
     return None
 
 
+# ── Finnhub — fondamentaux (fallback anti-429 yfinance) ──────────────────────
+
+def get_fundamentals_finnhub(ticker: str) -> dict | None:
+    """
+    Données fondamentales via Finnhub — utilisé en fallback quand yfinance est
+    rate-limité. Couvre : nom, secteur, industrie, pays, capitalisation, P/E, dividende.
+    Retourne None si Finnhub ne connaît pas le ticker (crypto exotique, etc.).
+    """
+    if not _FINNHUB_KEY:
+        return None
+
+    profile  = {}
+    metrics  = {}
+
+    try:
+        r = requests.get(
+            f"{_FINNHUB_BASE}/stock/profile2",
+            params={"symbol": ticker, "token": _FINNHUB_KEY},
+            timeout=_TIMEOUT,
+        )
+        if r.status_code == 200:
+            profile = r.json() or {}
+    except Exception as e:
+        logger.debug("Finnhub profile2 %s : %s", ticker, e)
+
+    try:
+        r = requests.get(
+            f"{_FINNHUB_BASE}/stock/metric",
+            params={"symbol": ticker, "metric": "all", "token": _FINNHUB_KEY},
+            timeout=_TIMEOUT,
+        )
+        if r.status_code == 200:
+            metrics = r.json().get("metric", {}) or {}
+    except Exception as e:
+        logger.debug("Finnhub metric %s : %s", ticker, e)
+
+    # Si Finnhub ne connaît pas le ticker → profil vide
+    if not profile.get("name") and not metrics:
+        return None
+
+    # Capitalisation : Finnhub donne en millions USD → convertir en unités
+    market_cap = profile.get("marketCapitalization")
+    if market_cap:
+        market_cap = int(float(market_cap) * 1_000_000)
+
+    # P/E : peBasicExclExtraTTM est le plus proche du trailingPE yfinance
+    pe = metrics.get("peBasicExclExtraTTM") or metrics.get("peTTM")
+
+    # Dividende : Finnhub donne en % → yfinance donne en décimal (0.015 = 1.5%)
+    div_raw = metrics.get("dividendYieldIndicatedAnnual")
+    div = round(div_raw / 100, 6) if div_raw else "N/A"
+
+    return {
+        "nom":            profile.get("name", "N/A"),
+        "secteur":        profile.get("finnhubIndustry", "N/A"),
+        "industrie":      profile.get("finnhubIndustry", "N/A"),
+        "capitalisation": market_cap or "N/A",
+        "per":            pe if pe else "N/A",
+        "dividende":      div,
+        "pays":           profile.get("country", "N/A"),
+    }
+
+
 # ── Diagnostique ──────────────────────────────────────────────────────────────
 
 def api_status() -> dict:

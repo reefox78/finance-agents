@@ -221,8 +221,18 @@ def get_stock_data(ticker: str, period: str = "3mo") -> pd.DataFrame:
 
 # ── get_stock_info ────────────────────────────────────────────────────────────
 
+_INFO_DEGRADED = {
+    "nom": "N/A", "secteur": "N/A", "industrie": "N/A",
+    "capitalisation": "N/A", "per": "N/A", "dividende": "N/A", "pays": "N/A",
+}
+
+
 def get_stock_info(ticker: str) -> dict:
-    """Infos fondamentales formatées — cache mémoire 30 min + disque 7 jours."""
+    """
+    Infos fondamentales formatées.
+    Cascade sur 429 : stale mémoire → cache disque → Finnhub → dict dégradé.
+    Ne lève jamais d'exception sur 429 (l'analyse continue avec N/A).
+    """
     cached = _cache_get(_cache_info, ticker)
     if cached is not None:
         return cached
@@ -254,18 +264,35 @@ def get_stock_info(ticker: str) -> dict:
                     if attempt < 2:
                         time.sleep(5 * (attempt + 1))
                         continue
+                    # 1. Stale mémoire / cache disque
                     fb = _fallback(_stale_info, f"info_{ticker}", f"{ticker} info")
                     if fb is not None:
                         return fb
+                    # 2. Finnhub
+                    try:
+                        from data.price_api import get_fundamentals_finnhub
+                        fh = get_fundamentals_finnhub(ticker)
+                        if fh is not None:
+                            logger.warning("429 yf get_stock_info %s — Finnhub utilisé", ticker)
+                            _cache_set(_cache_info, _stale_info, ticker, fh)
+                            return fh
+                    except Exception:
+                        pass
+                    # 3. Dict dégradé — l'analyse continue avec N/A
+                    logger.warning("429 yf get_stock_info %s — dict dégradé (N/A)", ticker)
+                    return dict(_INFO_DEGRADED)
                 raise
 
-        raise RuntimeError(f"Impossible de récupérer les infos pour {ticker} après 3 tentatives")
+        return dict(_INFO_DEGRADED)
 
 
 # ── get_ticker_raw_info ───────────────────────────────────────────────────────
 
 def get_ticker_raw_info(ticker: str) -> dict:
-    """Dict brut complet yf.Ticker.info — cache mémoire 30 min + disque 7 jours."""
+    """
+    Dict brut complet yf.Ticker.info — cache mémoire 30 min + disque 7 jours.
+    Sur 429 : stale mémoire → cache disque → dict vide (ne lève jamais d'exception).
+    """
     cached = _cache_get(_cache_raw_info, ticker)
     if cached is not None:
         return cached
@@ -287,10 +314,16 @@ def get_ticker_raw_info(ticker: str) -> dict:
                     if attempt < 2:
                         time.sleep(5 * (attempt + 1))
                         continue
+                    # 1. Stale mémoire / cache disque
                     fb = _fallback(_stale_raw_info, f"raw_{ticker}", f"{ticker} raw_info")
                     if fb is not None:
                         return fb
+                    # 2. Dict vide — les appelants gèrent les valeurs None
+                    logger.warning("429 yf get_ticker_raw_info %s — dict vide retourné", ticker)
+                    return {}
                 raise
+
+        return {}
 
         raise RuntimeError(f"Impossible de récupérer raw_info pour {ticker} après 3 tentatives")
 
