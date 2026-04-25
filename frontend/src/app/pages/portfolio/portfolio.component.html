@@ -96,9 +96,14 @@
         <input type="checkbox" [(ngModel)]="modeRapide" />
         Mode rapide (sans IA)
       </label>
-      <button class="btn-primary" (click)="analyserPositions()" [disabled]="analyzing() || positions().length === 0">
-        {{ analyzing() ? '⏳ Analyse…' : '🔍 Analyser mes positions' }}
-      </button>
+      <div class="analyse-btn-wrap">
+        <button class="btn-primary" (click)="analyserPositions()" [disabled]="analyzing() || positions().length === 0">
+          {{ analyzing() ? '⏳ Analyse…' : '🔍 Analyser mes positions' }}
+        </button>
+        @if (lastAnalysisAt()) {
+          <span class="analysis-ts">Dernière analyse : {{ lastAnalysisAt() }}</span>
+        }
+      </div>
     </div>
 
   </div>

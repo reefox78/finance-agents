@@ -27,13 +27,15 @@ const REGIMES = [
 export class PortfolioComponent implements OnInit, OnDestroy {
 
   // ── State ──────────────────────────────────────────────────────────────────
-  positions  = signal<any[]>([]);
-  historique = signal<any[]>([]);
+  positions      = signal<any[]>([]);
+  historique     = signal<any[]>([]);
   loading        = signal(false);
   analyzing      = signal(false);
   analyzingError = signal('');
   error          = signal('');
   toast          = signal('');
+  lastAnalysisAt = signal<string>('');   // date/heure du dernier "Analyser mes positions"
+  analysisActive = signal(false);        // true quand les positions portent des données d'analyse
 
   private _analysisSub: Subscription | null = null;
 
@@ -138,7 +140,11 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   loadPositions(): void {
     this.loading.set(true);
     this.api.getPositions().subscribe({
-      next: p => { this.positions.set(p); this.loading.set(false); },
+      next: p => {
+        this.positions.set(p);
+        this.loading.set(false);
+        this.analysisActive.set(false); // les données brutes du serveur n'ont pas d'analyse
+      },
       error: e => { this.error.set(e.error?.detail ?? 'Erreur'); this.loading.set(false); },
     });
   }
@@ -148,11 +154,24 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.analyzingError.set('');
     this.error.set('');
     this._analysisSub = this.api.evaluatePositions(!this.modeRapide).subscribe({
-      next: p => { this.positions.set(p); this.analyzing.set(false); this._toast('Positions mises à jour.'); },
+      next: p => {
+        this.positions.set(p);
+        this.analyzing.set(false);
+        this.analysisActive.set(true);
+        this.lastAnalysisAt.set(this._formatNow());
+        this._toast('Positions mises à jour.');
+      },
       error: e => {
         const status = e.status ? ` (${e.status})` : '';
         this.analyzingError.set((e.error?.detail ?? 'Erreur serveur') + status);
       },
+    });
+  }
+
+  private _formatNow(): string {
+    return new Date().toLocaleString('fr-FR', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
     });
   }
 
@@ -273,7 +292,23 @@ export class PortfolioComponent implements OnInit, OnDestroy {
     this.api.addVente({ ticker, prix_vente: v.prix, quantite: v.qty, date: v.date, notes: v.notes, frais: v.frais }).subscribe({
       next: () => {
         this.expandedPos[ticker] = 'none';
-        this.loadPositions();
+        if (this.analysisActive()) {
+          // Mise à jour en place pour conserver les analyses des autres positions
+          const qteRestante = (pos.quantite ?? 0) - (v.qty ?? 0);
+          if (qteRestante <= 0) {
+            // Position entièrement vendue → retirer de la liste
+            this.positions.update(ps => ps.filter(p => p.ticker !== ticker));
+          } else {
+            // Vente partielle → mettre à jour la quantité et recalculer la valeur
+            this.positions.update(ps => ps.map(p => p.ticker !== ticker ? p : {
+              ...p,
+              quantite: qteRestante,
+              valeur:   p.prix_actuel ? p.prix_actuel * qteRestante : undefined,
+            }));
+          }
+        } else {
+          this.loadPositions();
+        }
         this.api.getHistorique().subscribe({ next: h => this.historique.set(h), error: () => {} });
         this._toast(`Vente ${ticker} enregistrée.`);
       },
