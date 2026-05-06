@@ -54,8 +54,19 @@ from fastapi.responses import JSONResponse
 from api.routers import auth, analyse, scanner, portfolio, alerts, admin, logs, backtest, calendar, dashboard, journal, coach
 from db.alert_rules import init_table as _init_alert_rules
 from db.journal import init_table as _init_journal
-_init_alert_rules()
-_init_journal()
+
+# Initialisation BD — try/except pour ne pas crasher au démarrage si Supabase est
+# temporairement indisponible (ex: cold start Render + DNS Supabase lent).
+# Les tables seront créées à la première requête qui en a besoin.
+try:
+    _init_alert_rules()
+except Exception as _e:
+    logging.warning("DB alert_rules init échouée au démarrage (sera retentée) : %s", _e)
+
+try:
+    _init_journal()
+except Exception as _e:
+    logging.warning("DB journal init échouée au démarrage (sera retentée) : %s", _e)
 
 # ── CORS helpers (partagés avec le handler global) ────────────────────────────
 _CORS_ORIGINS = {

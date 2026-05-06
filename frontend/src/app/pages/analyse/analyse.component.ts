@@ -223,11 +223,7 @@ export class AnalyseComponent implements OnInit, OnDestroy {
         // Coaching automatique après chaque analyse
         this._loadCoaching(r);
       },
-      error: e => {
-        const status = e.status ? ` (${e.status})` : '';
-        const detail = e.error?.detail ?? 'Erreur serveur';
-        this.overlayError.set(`${detail}${status}`);
-      },
+      error: e => { this.overlayError.set(this._httpError(e)); },
     });
   }
 
@@ -624,5 +620,31 @@ export class AnalyseComponent implements OnInit, OnDestroy {
       },
     });
     this._charts.push(c4);
+  }
+
+  /** Traduit une erreur HTTP en message lisible pour l'utilisateur. */
+  private _httpError(e: any): string {
+    const status  = e?.status ?? 0;
+    const detail  = e?.error?.detail as string | undefined;
+
+    if (status === 0) {
+      return '⚡ Serveur injoignable — il redémarre peut-être. Réessayez dans 30 secondes.';
+    }
+    if (status === 429) {
+      return detail ?? '⏳ Yahoo Finance rate limit atteint — veuillez patienter 15-60 minutes avant de relancer une analyse.';
+    }
+    if (status === 503) {
+      return '🔧 Serveur temporairement indisponible (surcharge ou redémarrage). Réessayez dans quelques instants.';
+    }
+    if (status === 504) {
+      return '⌛ Le serveur n\'a pas répondu à temps (timeout). L\'analyse est peut-être longue — réessayez.';
+    }
+    if (status === 500) {
+      return `🛑 Erreur interne du serveur${detail ? ' : ' + detail : '.'} Consultez les logs si le problème persiste.`;
+    }
+    if (status === 401 || status === 403) {
+      return '🔒 Session expirée — veuillez vous reconnecter.';
+    }
+    return detail ? `Erreur (${status}) : ${detail}` : `Erreur serveur (${status})`;
   }
 }

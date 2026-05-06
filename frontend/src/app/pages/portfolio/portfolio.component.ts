@@ -161,10 +161,7 @@ export class PortfolioComponent implements OnInit, OnDestroy {
         this.lastAnalysisAt.set(this._formatNow());
         this._toast('Positions mises à jour.');
       },
-      error: e => {
-        const status = e.status ? ` (${e.status})` : '';
-        this.analyzingError.set((e.error?.detail ?? 'Erreur serveur') + status);
-      },
+      error: e => { this.analyzingError.set(this._httpError(e)); },
     });
   }
 
@@ -430,5 +427,17 @@ export class PortfolioComponent implements OnInit, OnDestroy {
   private _toast(msg: string): void {
     this.toast.set(msg);
     setTimeout(() => this.toast.set(''), 3500);
+  }
+
+  private _httpError(e: any): string {
+    const status = e?.status ?? 0;
+    const detail = e?.error?.detail as string | undefined;
+    if (status === 0)   return '⚡ Serveur injoignable — il redémarre peut-être. Réessayez dans 30 secondes.';
+    if (status === 429) return detail ?? '⏳ Yahoo Finance rate limit atteint — veuillez patienter 15-60 minutes.';
+    if (status === 503) return '🔧 Serveur temporairement indisponible. Réessayez dans quelques instants.';
+    if (status === 504) return '⌛ Le serveur n\'a pas répondu à temps. Réessayez.';
+    if (status === 500) return `🛑 Erreur interne${detail ? ' : ' + detail : '.'}`;
+    if (status === 401 || status === 403) return '🔒 Session expirée — veuillez vous reconnecter.';
+    return detail ? `Erreur (${status}) : ${detail}` : `Erreur serveur (${status})`;
   }
 }
